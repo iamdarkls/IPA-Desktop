@@ -938,6 +938,9 @@ namespace IpaDesktop
                 initialized = true;
                 if (!UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x00020016), console, new IntPtr(IntPtr.Size), IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception();
                 var start = new StartupEx(); start.Info.Size = Marshal.SizeOf(typeof(StartupEx)); start.Attributes = attributes;
+                // При запуске из перенаправленного host (включая CI) Windows иначе копирует его pipe handles.
+                // Явные нулевые std handles + STARTF_USESTDHANDLES дают ConPTY назначить собственный TTY.
+                start.Info.Flags = 0x00000100;
                 ProcessInfo info;
                 // Только фиксированная команда. Адрес, пароль и код передаются позже в терминальный канал.
                 if (!CreateProcess(executable, new StringBuilder(ProcessRunner.Quote(executable) + " auth login --format json"), IntPtr.Zero, IntPtr.Zero,
