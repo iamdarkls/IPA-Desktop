@@ -122,6 +122,26 @@ try {
    $priorEngine=$liveEngine.Settings.Current;$priorTools=$liveEngine.Settings.DeviceCurrent
    $liveEngine.Install($pinned,$ct).GetAwaiter().GetResult()
    if($liveEngine.Settings.Version -ne $tag -or $liveEngine.Settings.Source -ne 'Sorvigolova/ipatool' -or $liveEngine.Settings.DeviceCurrent -ne $priorTools){throw "ipatool $tag install affected tools or selected wrong release"}
+   # Only reach the password prompt: no Apple password/code is submitted and no login network request starts.
+   $loginStop=New-Object Threading.CancellationTokenSource;$loginStop.CancelAfter(10000)
+   $loginProcess=$null;$reachedPassword=$false
+   try {
+    $factory=New-Object IpaDesktop.ConPtyLoginFactory
+    $loginProcess=$factory.Start($liveEngine.Binary('ipatool*.exe'),$liveEngine.Downloads)
+    $protocol=New-Object IpaDesktop.AppleLoginProtocol
+    while(!$reachedPassword) {
+     $chunk=$loginProcess.ReadAsync($loginStop.Token).GetAwaiter().GetResult()
+     if($null -eq $chunk){throw 'Actual ipatool exited before interactive password prompt'}
+     $prompt=$protocol.Append($chunk)
+     if($prompt -eq [IpaDesktop.AppleLoginPrompt]::Identifier){
+      $identifier=New-Object Security.SecureString
+      try {foreach($character in 'fixture@example.com'.ToCharArray()){$identifier.AppendChar($character)};$identifier.MakeReadOnly();$loginProcess.SendAsync($identifier,$loginStop.Token).GetAwaiter().GetResult()}finally{$identifier.Dispose()}
+     }
+     elseif($prompt -eq [IpaDesktop.AppleLoginPrompt]::Password){$reachedPassword=$true}
+    }
+   }finally{if($loginProcess){$loginProcess.Dispose()};$loginStop.Dispose()}
+   if(!$reachedPassword){throw 'Actual ipatool does not support hidden interactive input'}
+   Write-Host ('PASS: actual ipatool '+$tag+' accepts ConPTY TTY and secret-free interactive email/password prompts; stopped before password/network login')
    $liveEngine.Rollback()
    if($liveEngine.Settings.Current -ne $priorEngine -or $liveEngine.Settings.DeviceCurrent -ne $priorTools){throw "ipatool $tag rollback lost independent state"}
    Write-Host ('PASS: actual Windows ipatool '+$tag+' archive, SHA-256, CLI command contract, install and rollback')

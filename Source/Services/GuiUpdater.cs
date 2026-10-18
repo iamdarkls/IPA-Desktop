@@ -41,7 +41,7 @@ namespace IpaDesktop
             "Tests/Verify-IpaMetadata.ps1",
             "Tests/Verify-Updater.ps1",
             "Tests/Verify-Design.ps1",
-            "Tests/Verify-Services.ps1", "Tests/Verify-Engine.ps1", "Tests/Verify-WorkflowFeatures.ps1",
+            "Tests/Verify-Services.ps1", "Tests/Verify-AppleLogin.ps1", "Tests/Verify-Engine.ps1", "Tests/Verify-WorkflowFeatures.ps1",
             "Tests/Verify-Layout.ps1",
             "Tests/Fixtures/Legacy-Update-App.ps1"
         };

@@ -5,11 +5,14 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows;
@@ -26,14 +29,17 @@ namespace IpaDesktop
         {
             On("Login", delegate
             {
-                Work("Вход: завершите авторизацию в открывшемся окне", async delegate(CancellationToken ct)
+                Work("Вход в Apple Account…", delegate(CancellationToken ct)
                 {
-                    var r = await engine.Run(engine.Binary("ipatool*.exe"), new[]
+                    using (var login = new AppleLoginWindow(w, engine.AppleLogin, ct))
                     {
-                        "auth", "login"
-                    }, ct, true, false);
-                    Engine.Ensure(r);
-                    await Account(ct);
+                        if (login.Window.ShowDialog() != true) throw new OperationCanceledException();
+                        signedIn = true;
+                        view.RegisterPrivate(login.SignedInEmail);
+                        C<TextBlock>("AccountLabel").Text = login.SignedInEmail;
+                        Log("Вход в Apple Account подтверждён.");
+                    }
+                    return Task.FromResult(0);
                 });
             });
             On("AccountInfo", delegate
@@ -138,6 +144,150 @@ namespace IpaDesktop
                 Environment.NewLine + "Bundle ID: " + (row.BundleID ?? "не указан") +
                 Environment.NewLine + "Сборка: " + (row.Build ?? "не указана") +
                 Environment.NewLine + "Размер: " + row.Size);
+        }
+    }
+}
+
+// Presentation/AppleLoginWindow.cs
+namespace IpaDesktop
+{
+    /// <summary>Модальный вход с отдельным этапом 2FA. Пароль и код находятся в PasswordBox и краткоживущих SecureString.</summary>
+    public sealed class AppleLoginWindow : IDisposable
+    {
+        public Window Window { get; private set; }
+        public TextBox EmailBox { get; private set; }
+        public PasswordBox PasswordBox { get; private set; }
+        public PasswordBox CodeBox { get; private set; }
+        public Button SubmitButton { get; private set; }
+        public Button CancelButton { get; private set; }
+        public TextBlock Status { get; private set; }
+        public string SignedInEmail { get; private set; }
+        readonly IAppleLoginService service;
+        readonly CancellationTokenSource lifetime;
+        CancellationTokenSource operation;
+        TaskCompletionSource<SecureString> codeSource;
+        readonly StackPanel credentials, codePanel;
+        bool loading, closing;
+        public AppleLoginWindow(Window owner, IAppleLoginService service, CancellationToken ct)
+        {
+            this.service = service; lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            Window = AppDialogs.Create(owner, "Вход в Apple Account", 560, 580);
+            Window.MinWidth = 480; Window.MinHeight = 480;
+            var layout = new Grid { Margin = new Thickness(22) };
+            layout.RowDefinitions.Add(new RowDefinition());
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock { Text = "Apple Account", FontSize = 25, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+            body.Children.Add(Note("Войдите под аккаунтом, для которого будете скачивать приложения. При запросе Apple подготовьте доверенное устройство.", 0));
+            credentials = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
+            credentials.Children.Add(Note("Apple Account — почта или номер телефона", 0));
+            EmailBox = new TextBox { MaxLength = 320, Margin = new Thickness(0, 6, 0, 12), MinHeight = 38 };
+            credentials.Children.Add(EmailBox);
+            credentials.Children.Add(Note("Пароль аккаунта", 0));
+            PasswordBox = SecretBox(1024); credentials.Children.Add(PasswordBox); body.Children.Add(credentials);
+            codePanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 16, 0, 0) };
+            codePanel.Children.Add(Note("Подтвердите вход на доверенном устройстве Apple и введите шестизначный код.", 0));
+            CodeBox = SecretBox(6); codePanel.Children.Add(CodeBox); body.Children.Add(codePanel);
+            Status = new TextBlock { Text = "Введите данные для входа.", TextWrapping = TextWrapping.Wrap, MinHeight = 46, Margin = new Thickness(0, 14, 0, 8), Foreground = Brush("#AFC6E7") };
+            body.Children.Add(Status);
+            body.Children.Add(Note("Пароль и код не передаются в командной строке и не записываются в журнал IPA Desktop. Сам ipatool сохраняет данные аккаунта, включая пароль, в зашифрованном файле профиля Windows. Кнопка «Выйти» завершает сохранённую сессию.", 12));
+            body.Children.Add(Note("Вход в окне: Windows 10 1809+ и Windows 11. Время одной попытки — до 5 минут.", 10));
+            layout.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
+            SubmitButton = new Button { Content = "Войти", IsDefault = true, Background = Brush("#3878E5") };
+            CancelButton = new Button { Content = "Отмена", Margin = new Thickness(0) };
+            SubmitButton.Click += Submit;
+            CancelButton.Click += delegate { RequestClose(); };
+            actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);
+            Window.Content = layout;
+            Window.RegisterName("AppleLoginEmail", EmailBox); Window.RegisterName("AppleLoginPassword", PasswordBox);
+            Window.RegisterName("AppleLoginCode", CodeBox); Window.RegisterName("AppleLoginSubmit", SubmitButton);
+            Window.RegisterName("AppleLoginCancel", CancelButton); Window.RegisterName("AppleLoginStatus", Status);
+            Window.Loaded += delegate { EmailBox.Focus(); };
+            Window.PreviewKeyDown += delegate(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; RequestClose(); } };
+            Window.Closing += delegate(object sender, System.ComponentModel.CancelEventArgs e)
+            {
+                if (loading) { e.Cancel = true; RequestClose(); }
+            };
+        }
+        static SolidColorBrush Brush(string color) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); }
+        static TextBlock Note(string text, double top) { return new TextBlock { Text = text, FontSize = 12, Foreground = Brush("#9BACBF"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) }; }
+        static PasswordBox SecretBox(int limit)
+        {
+            return new PasswordBox { MaxLength = limit, MinHeight = 38, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 6, 0, 0),
+                Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C"), CaretBrush = Brush("#EDF1F8") };
+        }
+        async void Submit(object sender, RoutedEventArgs e)
+        {
+            if (loading)
+            {
+                if (codeSource == null || codeSource.Task.IsCompleted) return;
+                var code = CodeBox.SecurePassword;
+                if (!ValidCode(code)) { code.Dispose(); Status.Text = "Введите шесть цифр без пробелов."; CodeBox.Focus(); return; }
+                CodeBox.Clear(); CodeBox.IsEnabled = false; SubmitButton.IsEnabled = false;
+                Status.Text = "Проверяем код…";
+                if (!codeSource.TrySetResult(code)) code.Dispose();
+                return;
+            }
+            using (var password = PasswordBox.SecurePassword)
+            {
+                if (String.IsNullOrWhiteSpace(EmailBox.Text) || password.Length == 0)
+                { Status.Text = "Введите Apple Account и пароль."; return; }
+                PasswordBox.Clear(); loading = true;
+                operation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                credentials.IsEnabled = false; SubmitButton.IsEnabled = false;
+                Status.Text = "Связываемся с Apple…";
+                bool success = false;
+                try
+                {
+                    SignedInEmail = await service.LoginAsync(EmailBox.Text.Trim(), password, RequestCode, operation.Token);
+                    success = true;
+                }
+                catch (OperationCanceledException) { Status.Text = "Вход отменён."; }
+                catch (AppleLoginException error) { Status.Text = error.Message; }
+                catch (Exception) { Status.Text = "Не удалось выполнить вход. Повторите попытку; детали авторизации не записываются в журнал."; }
+                finally
+                {
+                    loading = false; operation.Dispose(); operation = null;
+                    if (codeSource != null) codeSource.TrySetCanceled(); codeSource = null;
+                    CodeBox.Clear(); PasswordBox.Clear(); codePanel.Visibility = Visibility.Collapsed;
+                    credentials.Visibility = Visibility.Visible; credentials.IsEnabled = true;
+                    SubmitButton.IsEnabled = true; SubmitButton.Content = "Войти"; PasswordBox.Focus();
+                }
+                if (success) Window.DialogResult = true;
+                else if (closing || lifetime.IsCancellationRequested) Window.Close();
+            }
+        }
+        async Task<SecureString> RequestCode(CancellationToken ct)
+        {
+            var pending = new TaskCompletionSource<SecureString>();
+            using (ct.Register(delegate { pending.TrySetCanceled(); }))
+            {
+                Window.Dispatcher.BeginInvoke(new Action(delegate
+                {
+                    if (ct.IsCancellationRequested) return;
+                    codeSource = pending; credentials.Visibility = Visibility.Collapsed; codePanel.Visibility = Visibility.Visible;
+                    CodeBox.Clear(); CodeBox.IsEnabled = true; SubmitButton.Content = "Подтвердить"; SubmitButton.IsEnabled = true;
+                    Status.Text = "Apple запросила код подтверждения."; CodeBox.Focus();
+                }));
+                return await pending.Task.ConfigureAwait(false);
+            }
+        }
+        static bool ValidCode(SecureString code)
+        {
+            if (code.Length != 6) return false;
+            var pointer = Marshal.SecureStringToGlobalAllocUnicode(code);
+            try { for (int i = 0; i < 6; i++) { char c = (char)Marshal.ReadInt16(pointer, i * 2); if (c < '0' || c > '9') return false; } return true; }
+            finally { Marshal.ZeroFreeGlobalAllocUnicode(pointer); }
+        }
+        void RequestClose()
+        {
+            if (!loading) { Window.Close(); return; }
+            closing = true; SubmitButton.IsEnabled = false; CancelButton.IsEnabled = false; Status.Text = "Останавливаем вход…"; operation.Cancel();
+        }
+        public void Dispose()
+        {
+            lifetime.Cancel(); lifetime.Dispose(); PasswordBox.Clear(); CodeBox.Clear();
         }
     }
 }

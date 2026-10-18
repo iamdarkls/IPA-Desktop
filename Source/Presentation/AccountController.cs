@@ -21,14 +21,17 @@ namespace IpaDesktop
         {
             On("Login", delegate
             {
-                Work("Вход: завершите авторизацию в открывшемся окне", async delegate(CancellationToken ct)
+                Work("Вход в Apple Account…", delegate(CancellationToken ct)
                 {
-                    var r = await engine.Run(engine.Binary("ipatool*.exe"), new[]
+                    using (var login = new AppleLoginWindow(w, engine.AppleLogin, ct))
                     {
-                        "auth", "login"
-                    }, ct, true, false);
-                    Engine.Ensure(r);
-                    await Account(ct);
+                        if (login.Window.ShowDialog() != true) throw new OperationCanceledException();
+                        signedIn = true;
+                        view.RegisterPrivate(login.SignedInEmail);
+                        C<TextBlock>("AccountLabel").Text = login.SignedInEmail;
+                        Log("Вход в Apple Account подтверждён.");
+                    }
+                    return Task.FromResult(0);
                 });
             });
             On("AccountInfo", delegate

@@ -66,6 +66,10 @@ jobs:
         run: |
           & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File Tests/Verify-Services.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Refactored services or controllers failed' }
+      - name: Verify private interactive Apple login
+        run: |
+          & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File Tests/Verify-AppleLogin.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Private Apple login verification failed' }
       - name: Verify direct ipatool migration and actual Windows release
         run: |
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tests/Verify-Engine.ps1 -Live

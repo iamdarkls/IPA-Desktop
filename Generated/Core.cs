@@ -1,4 +1,5 @@
 // Generated from Source/. Edit the source classes, then run Sync-Sources.ps1.
+using Microsoft.Win32.SafeHandles;
 using Microsoft.Win32;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -27,7 +28,7 @@ namespace IpaDesktop
     /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
     public static class AppInfo
     {
-        public const string Version = "0.2.8";
+        public const string Version = "0.2.9";
         public const string Repository = "iamdarkls/IPA-Desktop";
         public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
     }
@@ -893,6 +894,199 @@ namespace IpaDesktop
     }
 }
 
+// Infrastructure/ConPtyLoginProcess.cs
+namespace IpaDesktop
+{
+    /// <summary>ConPTY Windows 10 1809+: скрытый TTY для штатного ipatool, без shell и секретных аргументов.</summary>
+    public sealed class ConPtyLoginFactory : ILoginProcessFactory
+    {
+        public ILoginProcess Start(string executable, string workingDirectory)
+        {
+            return new ConPtyLoginProcess(executable, workingDirectory);
+        }
+    }
+    public sealed class ConPtyLoginProcess : ILoginProcess
+    {
+        readonly Queue<string> output = new Queue<string>();
+        readonly object gate = new object();
+        readonly SemaphoreSlim available = new SemaphoreSlim(0);
+        FileStream input, reader;
+        IntPtr console, process;
+        Task readTask;
+        bool ended, overflow;
+        int disposed;
+
+        public ConPtyLoginProcess(string executable, string workingDirectory)
+        {
+            IntPtr inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero, outputRead = IntPtr.Zero, outputWrite = IntPtr.Zero;
+            IntPtr attributes = IntPtr.Zero;
+            bool initialized = false;
+            try
+            {
+                if (!CreatePipe(out inputRead, out inputWrite, IntPtr.Zero, 0) || !CreatePipe(out outputRead, out outputWrite, IntPtr.Zero, 0)) throw new Win32Exception();
+                try
+                {
+                    int hr = CreatePseudoConsole(new Coord { X = 1200, Y = 60 }, inputRead, outputWrite, 0, out console);
+                    if (hr != 0) throw new Win32Exception(hr);
+                }
+                catch (EntryPointNotFoundException) { throw new NotSupportedException("Вход в окне требует Windows 10 версии 1809 или новее. Обновите Windows."); }
+                IntPtr size = IntPtr.Zero;
+                InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+                if (size == IntPtr.Zero) throw new Win32Exception();
+                attributes = Marshal.AllocHGlobal(size);
+                if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size)) throw new Win32Exception();
+                initialized = true;
+                if (!UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x00020016), console, new IntPtr(IntPtr.Size), IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception();
+                var start = new StartupEx(); start.Info.Size = Marshal.SizeOf(typeof(StartupEx)); start.Attributes = attributes;
+                ProcessInfo info;
+                // Только фиксированная команда. Адрес, пароль и код передаются позже в терминальный канал.
+                if (!CreateProcess(executable, new StringBuilder(ProcessRunner.Quote(executable) + " auth login --format json"), IntPtr.Zero, IntPtr.Zero,
+                    false, 0x00080000, IntPtr.Zero, workingDirectory, ref start, out info)) throw new Win32Exception();
+                process = info.Process; CloseHandle(info.Thread);
+                input = new FileStream(new SafeFileHandle(inputWrite, true), FileAccess.Write, 4096, false); inputWrite = IntPtr.Zero;
+                reader = new FileStream(new SafeFileHandle(outputRead, true), FileAccess.Read, 4096, false); outputRead = IntPtr.Zero;
+                readTask = Task.Run((Action)ReadOutput);
+            }
+            catch { Dispose(); throw; }
+            finally
+            {
+                if (initialized) DeleteProcThreadAttributeList(attributes);
+                if (attributes != IntPtr.Zero) Marshal.FreeHGlobal(attributes);
+                foreach (var handle in new[] { inputRead, inputWrite, outputRead, outputWrite }) if (handle != IntPtr.Zero) CloseHandle(handle);
+            }
+        }
+        // Чтение не останавливается при отмене: ClosePseudoConsole требует дренировать выходной канал.
+        void ReadOutput()
+        {
+            try
+            {
+                using (var text = new StreamReader(reader, Encoding.UTF8, false, 1024, true))
+                {
+                    var chars = new char[1024]; int count;
+                    while ((count = text.Read(chars, 0, chars.Length)) > 0)
+                    {
+                        lock (gate)
+                        {
+                            if (disposed != 0 || overflow) continue;
+                            if (output.Count >= 128) { overflow = true; output.Clear(); }
+                            else output.Enqueue(new string(chars, 0, count));
+                            available.Release();
+                        }
+                        Array.Clear(chars, 0, chars.Length);
+                    }
+                }
+            }
+            catch (IOException) { }
+            catch (ObjectDisposedException) { }
+            finally { lock (gate) { ended = true; available.Release(); } }
+        }
+        public async Task<string> ReadAsync(CancellationToken ct)
+        {
+            var exitDrain = new System.Diagnostics.Stopwatch();
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                lock (gate)
+                {
+                    if (overflow) throw new IOException("Превышен безопасный размер ответа входа.");
+                    if (output.Count > 0) return output.Dequeue();
+                    if (ended) return null;
+                }
+                if (WaitForSingleObject(process, 0) == 0)
+                {
+                    if (!exitDrain.IsRunning) exitDrain.Start();
+                    if (exitDrain.ElapsedMilliseconds >= 700) return null;
+                }
+                await available.WaitAsync(100, ct).ConfigureAwait(false);
+            }
+        }
+        /// <summary>Короткоживущие массивы очищаются; plaintext-строка пароля и аргумент -p не создаются.</summary>
+        public Task SendAsync(SecureString value, CancellationToken ct)
+        {
+            return Task.Run(delegate
+            {
+                ct.ThrowIfCancellationRequested();
+                IntPtr pointer = IntPtr.Zero; char[] chars = null; byte[] bytes = null;
+                try
+                {
+                    if (value == null || value.Length == 0 || value.Length > 1024) throw new ArgumentException("Проверьте введённые данные.");
+                    pointer = Marshal.SecureStringToGlobalAllocUnicode(value);
+                    chars = new char[value.Length + 1];
+                    for (int i = 0; i < value.Length; i++)
+                    {
+                        chars[i] = (char)Marshal.ReadInt16(pointer, i * 2);
+                        if (Char.IsControl(chars[i])) throw new ArgumentException("Ввод не должен содержать управляющие символы или переносы строк.");
+                    }
+                    chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
+                    ct.ThrowIfCancellationRequested(); input.Write(bytes, 0, bytes.Length); input.Flush();
+                }
+                finally
+                {
+                    if (pointer != IntPtr.Zero) Marshal.ZeroFreeGlobalAllocUnicode(pointer);
+                    if (chars != null) Array.Clear(chars, 0, chars.Length);
+                    if (bytes != null) Array.Clear(bytes, 0, bytes.Length);
+                }
+            }, ct);
+        }
+        public int ExitCode
+        {
+            get { uint code; if (!GetExitCodeProcess(process, out code) || code == 259) throw new IOException("Процесс входа не завершён."); return (int)code; }
+        }
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            if (process != IntPtr.Zero)
+            {
+                if (WaitForSingleObject(process, 0) != 0) { TerminateProcess(process, 1); WaitForSingleObject(process, 2000); }
+                CloseHandle(process); process = IntPtr.Zero;
+            }
+            if (input != null) input.Dispose();
+            lock (gate) { output.Clear(); }
+            var pc = console; console = IntPtr.Zero;
+            // Сбои платформы не должны навечно блокировать окно. Читатель продолжает дренировать pipe.
+            var close = Task.Run(delegate { if (pc != IntPtr.Zero) ClosePseudoConsole(pc); if (reader != null) reader.Dispose(); });
+            close.Wait(3000);
+            if (readTask != null) readTask.Wait(1000);
+        }
+        [StructLayout(LayoutKind.Sequential)] struct Coord { public short X, Y; }
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct Startup
+        {
+            public int Size; public string Reserved, Desktop, Title;
+            public int X, Y, XSize, YSize, XChars, YChars, Fill, Flags;
+            public short Show, ReservedSize; public IntPtr ReservedBytes, Input, Output, Error;
+        }
+        [StructLayout(LayoutKind.Sequential)] struct StartupEx { public Startup Info; public IntPtr Attributes; }
+        [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr Process, Thread; public int ProcessId, ThreadId; }
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, IntPtr security, int size);
+        [DllImport("kernel32.dll")] static extern int CreatePseudoConsole(Coord size, IntPtr input, IntPtr output, uint flags, out IntPtr console);
+        [DllImport("kernel32.dll")] static extern void ClosePseudoConsole(IntPtr console);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr result);
+        [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "CreateProcessW", SetLastError = true)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processSecurity, IntPtr threadSecurity, bool inherit, uint flags, IntPtr environment, string directory, ref StartupEx start, out ProcessInfo process);
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+        [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+        [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr handle, uint code);
+        [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
+    }
+}
+
+// Infrastructure/ILoginProcess.cs
+namespace IpaDesktop
+{
+    /// <summary>Изолированный интерактивный канал авторизации: вывод никогда не поступает в общий ProcessRunner.</summary>
+    public interface ILoginProcess : IDisposable
+    {
+        Task<string> ReadAsync(CancellationToken ct);
+        Task SendAsync(SecureString value, CancellationToken ct);
+        int ExitCode { get; }
+    }
+    public interface ILoginProcessFactory
+    {
+        ILoginProcess Start(string executable, string workingDirectory);
+    }
+}
+
 // Infrastructure/InstallationLayout.cs
 namespace IpaDesktop
 {
@@ -1616,6 +1810,152 @@ namespace IpaDesktop
     }
 }
 
+// Services/AppleLoginService.cs
+namespace IpaDesktop
+{
+    public interface IAppleLoginService
+    {
+        Task<string> LoginAsync(string identifier, SecureString password, Func<CancellationToken, Task<SecureString>> requestCode, CancellationToken ct);
+    }
+    /// <summary>Только заранее определённые сообщения могут выйти из приватного канала авторизации.</summary>
+    public sealed class AppleLoginException : Exception
+    {
+        public AppleLoginException(string message) : base(message) { }
+    }
+    public enum AppleLoginPrompt { None, Identifier, Password, Code }
+    /// <summary>Ограниченный протокол интерактивных запросов; исходный вывод не отдаётся UI или журналу.</summary>
+    public sealed class AppleLoginProtocol
+    {
+        string buffer = "";
+        bool identifierSent, passwordSent, codeSent;
+        public AppleLoginPrompt Append(string chunk)
+        {
+            if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
+            buffer += chunk;
+            string text = Text();
+            if (text.Contains("Enter email:"))
+            {
+                if (identifierSent || passwordSent) throw Changed();
+                identifierSent = true; buffer = ""; return AppleLoginPrompt.Identifier;
+            }
+            if (text.Contains("Enter password:"))
+            {
+                if (!identifierSent || passwordSent) throw Changed();
+                passwordSent = true; buffer = ""; return AppleLoginPrompt.Password;
+            }
+            if (text.Contains("Enter 2FA code:"))
+            {
+                if (!passwordSent || codeSent) throw Changed();
+                codeSent = true; buffer = ""; return AppleLoginPrompt.Code;
+            }
+            return AppleLoginPrompt.None;
+        }
+        static AppleLoginException Changed() { return new AppleLoginException("Протокол входа ipatool изменился. Обновите движок или выполните его откат в настройках."); }
+        string Text()
+        {
+            var text = Regex.Replace(buffer, "\u001b\\][^\u0007]*(?:\u0007|\u001b\\\\)", "");
+            return Regex.Replace(text, "\u001b\\[[0-?]*[ -/]*[@-~]", "").Replace("\r", "");
+        }
+        public string Complete(int exitCode)
+        {
+            var text = Text();
+            try
+            {
+                if (text.Contains("could not save account")) throw new AppleLoginException("Движок не смог сохранить сессию. Проверьте доступ к папке .ipatool в профиле Windows и повторите вход.");
+                if (exitCode == 0 && passwordSent)
+                {
+                    try
+                    {
+                        var data = ToolResponse.Object(text);
+                        var email = Convert.ToString(ToolResponse.Get(data, "email"));
+                        if (Object.Equals(ToolResponse.Get(data, "success"), true) && !String.IsNullOrWhiteSpace(email)) return email;
+                    }
+                    catch (AppleLoginException) { throw; }
+                    catch (Exception) { }
+                }
+                var lower = text.ToLowerInvariant();
+                if (lower.Contains("locked") || lower.Contains("disabled")) throw new AppleLoginException("Apple сообщает об ограничении аккаунта. Проверьте его состояние на сайте Apple.");
+                if (lower.Contains("resolve") || lower.Contains("connect") || lower.Contains("timeout") || lower.Contains("ssl") || lower.Contains("tls"))
+                    throw new AppleLoginException("Не удалось связаться с Apple. Проверьте подключение, дату Windows и повторите вход позже.");
+                if (lower.Contains("terms") || lower.Contains("agreement")) throw new AppleLoginException("Apple требует принять условия аккаунта. Откройте App Store на устройстве и завершите настройку аккаунта.");
+                throw new AppleLoginException(codeSent ? "Apple не подтвердила вход с этим кодом. Проверьте пароль и повторите вход со свежим кодом." : "Вход не подтверждён. Проверьте Apple Account и обычный пароль аккаунта, затем повторите попытку.");
+            }
+            finally { Clear(); }
+        }
+        public void Clear() { buffer = ""; }
+    }
+    /// <summary>Авторизует штатным ipatool и затем отдельно проверяет сохранённую сессию. Без CLI-паролей и сырых ошибок.</summary>
+    public sealed class AppleLoginService : IAppleLoginService
+    {
+        readonly ILoginProcessFactory factory;
+        readonly Func<string> executable;
+        readonly string directory;
+        readonly IAppToolClient tools;
+        public AppleLoginService(ILoginProcessFactory factory, Func<string> executable, string directory, IAppToolClient tools)
+        { this.factory = factory; this.executable = executable; this.directory = directory; this.tools = tools; }
+        public Task<string> LoginAsync(string identifier, SecureString password, Func<CancellationToken, Task<SecureString>> requestCode, CancellationToken ct)
+        {
+            return Task.Run(async delegate
+            {
+                if (String.IsNullOrWhiteSpace(identifier) || identifier.Length > 320 || password == null || password.Length == 0 || password.Length > 1024)
+                    throw new AppleLoginException("Введите Apple Account и пароль.");
+                foreach (char c in identifier) if (Char.IsControl(c)) throw new AppleLoginException("Apple Account не должен содержать переносов строк.");
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    timeout.CancelAfter(TimeSpan.FromMinutes(5));
+                    var token = timeout.Token; var protocol = new AppleLoginProtocol(); string email = null;
+                    try
+                    {
+                        token.ThrowIfCancellationRequested();
+                        using (var session = factory.Start(executable(), directory))
+                        {
+                            string chunk;
+                            while ((chunk = await session.ReadAsync(token).ConfigureAwait(false)) != null)
+                            {
+                                var prompt = protocol.Append(chunk);
+                                if (prompt == AppleLoginPrompt.Identifier)
+                                {
+                                    using (var value = new SecureString())
+                                    {
+                                        foreach (char c in identifier.Trim()) value.AppendChar(c);
+                                        value.MakeReadOnly(); await session.SendAsync(value, token).ConfigureAwait(false);
+                                    }
+                                }
+                                else if (prompt == AppleLoginPrompt.Password) await session.SendAsync(password, token).ConfigureAwait(false);
+                                else if (prompt == AppleLoginPrompt.Code)
+                                {
+                                    using (var code = await requestCode(token).ConfigureAwait(false))
+                                    {
+                                        if (code == null) throw new OperationCanceledException(token);
+                                        await session.SendAsync(code, token).ConfigureAwait(false);
+                                    }
+                                }
+                            }
+                            email = protocol.Complete(session.ExitCode);
+                        }
+                        // Не принимаем старую сессию за результат нового входа, даже если CLI напечатал success.
+                        var info = await tools.RunAsync(new[] { "auth", "info" }, token, false).ConfigureAwait(false);
+                        var saved = ToolResponse.Object(info.Output);
+                        if (info.Code != 0 || !Object.Equals(ToolResponse.Get(saved, "success"), true) ||
+                            !String.Equals(email, Convert.ToString(ToolResponse.Get(saved, "email")), StringComparison.OrdinalIgnoreCase))
+                            throw new AppleLoginException("Новая сессия не подтверждена. Повторите вход; текущий аккаунт можно проверить основной кнопкой.");
+                        return email;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
+                        throw new AppleLoginException("Время входа истекло. Повторите попытку и подготовьте доверенное устройство для получения кода.");
+                    }
+                    catch (AppleLoginException) { throw; }
+                    catch (NotSupportedException) { throw new AppleLoginException("Вход в окне требует Windows 10 версии 1809 или новее."); }
+                    catch (Exception) { throw new AppleLoginException("Не удалось завершить вход. Проверьте установку ipatool и повторите попытку. Подробности авторизации не записываются в журнал."); }
+                    finally { protocol.Clear(); }
+                }
+            }, ct);
+        }
+    }
+}
+
 // Services/AppleSupportService.cs
 namespace IpaDesktop
 {
@@ -2243,6 +2583,7 @@ namespace IpaDesktop
             private set;
         }
         public AppVersions AppVersions { get; private set; }
+        public IAppleLoginService AppleLogin { get; set; }
         public State Settings
         {
             get
@@ -2318,6 +2659,7 @@ namespace IpaDesktop
             runner = processRunner ?? new ProcessRunner(Downloads);
             locator = new ToolLocator(settings);
             tools = new AppToolClient(runner, locator);
+            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, tools);
             AppVersions = new AppVersions(tools);
             catalog = new AppCatalog(settings, locator);
             updater = new EngineUpdater(settings, runner);

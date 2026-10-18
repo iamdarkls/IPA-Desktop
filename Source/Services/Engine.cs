@@ -36,6 +36,7 @@ namespace IpaDesktop
             private set;
         }
         public AppVersions AppVersions { get; private set; }
+        public IAppleLoginService AppleLogin { get; set; }
         public State Settings
         {
             get
@@ -111,6 +112,7 @@ namespace IpaDesktop
             runner = processRunner ?? new ProcessRunner(Downloads);
             locator = new ToolLocator(settings);
             tools = new AppToolClient(runner, locator);
+            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, tools);
             AppVersions = new AppVersions(tools);
             catalog = new AppCatalog(settings, locator);
             updater = new EngineUpdater(settings, runner);
