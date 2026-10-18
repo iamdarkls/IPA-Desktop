@@ -200,6 +200,7 @@ namespace IpaDesktop
             CancelButton.Click += delegate { RequestClose(); };
             actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);
             Window.Content = layout;
+            NameScope.SetNameScope(Window, new NameScope());
             Window.RegisterName("AppleLoginEmail", EmailBox); Window.RegisterName("AppleLoginPassword", PasswordBox);
             Window.RegisterName("AppleLoginCode", CodeBox); Window.RegisterName("AppleLoginSubmit", SubmitButton);
             Window.RegisterName("AppleLoginCancel", CancelButton); Window.RegisterName("AppleLoginStatus", Status);
@@ -214,8 +215,16 @@ namespace IpaDesktop
         static TextBlock Note(string text, double top) { return new TextBlock { Text = text, FontSize = 12, Foreground = Brush("#9BACBF"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) }; }
         static PasswordBox SecretBox(int limit)
         {
-            return new PasswordBox { MaxLength = limit, MinHeight = 38, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 6, 0, 0),
+            var box = new PasswordBox { MaxLength = limit, MinHeight = 38, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 6, 0, 0),
                 Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C"), CaretBrush = Brush("#EDF1F8") };
+            // Штатная светлая тема Windows не должна менять фон скрытых полей при блокировке ввода.
+            box.Template = (ControlTemplate)System.Windows.Markup.XamlReader.Parse(
+                "<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='PasswordBox'>" +
+                "<Border x:Name='Surface' Background='{TemplateBinding Background}' BorderBrush='{TemplateBinding BorderBrush}' BorderThickness='1' CornerRadius='8' Padding='{TemplateBinding Padding}'>" +
+                "<ScrollViewer x:Name='PART_ContentHost' Focusable='False' HorizontalScrollBarVisibility='Hidden' VerticalScrollBarVisibility='Hidden'/></Border>" +
+                "<ControlTemplate.Triggers><Trigger Property='IsKeyboardFocusWithin' Value='True'><Setter TargetName='Surface' Property='BorderBrush' Value='#8CB9FF'/></Trigger>" +
+                "<Trigger Property='IsEnabled' Value='False'><Setter TargetName='Surface' Property='Opacity' Value='0.5'/></Trigger></ControlTemplate.Triggers></ControlTemplate>");
+            return box;
         }
         async void Submit(object sender, RoutedEventArgs e)
         {

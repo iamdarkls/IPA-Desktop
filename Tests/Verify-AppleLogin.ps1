@@ -18,6 +18,7 @@ public static class FakeAppleLogin {
  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
  public static int Main(string[] args) {
   File.WriteAllText("pid.txt",System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
+  File.WriteAllText("stage.txt","redirected="+Console.IsInputRedirected+" visible="+IsWindowVisible(GetConsoleWindow())+" argc="+args.Length);
   if(Console.IsInputRedirected || IsWindowVisible(GetConsoleWindow()))return 41;
   if(args.Length!=4 || String.Join(" ",args)!="auth login --format json")return 42;
   string mode=File.ReadAllText("mode.txt");
@@ -52,6 +53,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using IpaDesktop;
+public sealed class RecordingLoginFactory : ILoginProcessFactory {
+ public string Error="none";
+ public ILoginProcess Start(string exe,string folder){try{return new ConPtyLoginFactory().Start(exe,folder);}catch(Exception e){Error=e.GetType().Name+":"+e.Message;throw;}}
+}
 public sealed class LoginTools : IAppToolClient {
  public bool Mismatch;public int Calls;
  public Task<Result> RunAsync(string[] args,CancellationToken ct,bool publish){
@@ -67,7 +72,7 @@ public static class LoginContract {
   foreach(string mode in new[]{"success","2fa","reject","save","changed","huge","slow","mismatch"}){
    File.WriteAllText(Path.Combine(folder,"mode.txt"),mode=="mismatch"?"success":mode);
    var tools=new LoginTools{Mismatch=mode=="mismatch"};int codes=0;bool cancelled=false,failed=false;
-   var service=new AppleLoginService(new ConPtyLoginFactory(),delegate{return exe;},folder,tools);
+   var factory=new RecordingLoginFactory();var service=new AppleLoginService(factory,delegate{return exe;},folder,tools);
    using(var stop=new CancellationTokenSource())using(var password=Secret("Fixture-Password\"\\!7")){
     stop.CancelAfter(mode=="slow"?1800:12000);
     try{
@@ -77,7 +82,7 @@ public static class LoginContract {
     catch(OperationCanceledException){cancelled=true;}
     catch(AppleLoginException e){failed=true;Assert(!e.ToString().Contains("Fixture-Password")&&!e.ToString().Contains("123456")&&!e.ToString().Contains("fixture-token-secret"),"Raw secret escaped into login exception");}
     Assert(mode=="slow"?cancelled:!cancelled,"Cancellation/timeout behavior changed: "+mode);
-    Assert(mode=="success"||mode=="2fa"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+File.ReadAllText(Path.Combine(folder,"stage.txt")));
+    Assert(mode=="success"||mode=="2fa"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+(File.Exists(Path.Combine(folder,"stage.txt"))?File.ReadAllText(Path.Combine(folder,"stage.txt")):factory.Error));
     Assert(codes==((mode=="2fa"||mode=="reject")?1:0),"Unexpected/repeated 2FA request: "+mode);
     Assert(tools.Calls==((mode=="success"||mode=="2fa"||mode=="mismatch")?1:0),"Session verification was skipped or attempted after failure: "+mode);
    }
@@ -136,6 +141,11 @@ public sealed class WindowLoginService : IAppleLoginService {
     }elseif($code.IsVisible -and $submit.IsEnabled){
      if($cancel){$script:phase=3;Press ($dialog.FindName('AppleLoginCancel'))}
      else {
+      $dialog.UpdateLayout()
+      $bitmap=New-Object Windows.Media.Imaging.RenderTargetBitmap([int]$dialog.ActualWidth,[int]$dialog.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32)
+      $bitmap.Render($dialog);$encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder
+      $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap));$stream=New-Object IO.MemoryStream
+      $encoder.Save($stream);Write-Host ('IPA_LOGIN_PREVIEW:'+ [Convert]::ToBase64String($stream.ToArray()));$stream.Dispose()
       $code.Password='12';Press $submit
       if(!$status.Text.Contains('шесть')){throw 'Invalid 2FA code was submitted'}
       $code.Password='123456';$script:phase=3;Press $submit
