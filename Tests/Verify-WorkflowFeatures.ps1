@@ -63,6 +63,16 @@ try{
  $unknown=NewIpa $engine.Downloads 'unknown.ipa' 'com.example.app' '0.5' ''
  $binary=NewIpa $engine.Downloads 'binary.ipa' 'com.example.binary' '0.1' 'first@example.com' 'YnBsaXN0MDDTAQIDBAUGXxASQ0ZCdW5kbGVJZGVudGlmaWVyXxAaQ0ZCdW5kbGVTaG9ydFZlcnNpb25TdHJpbmdfEA9DRkJ1bmRsZVZlcnNpb25fEBJjb20uZXhhbXBsZS5iaW5hcnlTMi4wUjEwCA8kQVNobAAAAAAAAAEBAAAAAAAAAAcAAAAAAAAAAAAAAAAAAABv'
  $rows=$engine.LocalFiles.ListAsync().GetAwaiter().GetResult()
+ $choices=[IpaDesktop.LocalFileAccounts]::Choices($rows)
+ Assert ($choices.Count -eq 4 -and $null -eq $choices[0].Key) 'Account filter did not expose all/known/unknown options'
+ Assert (@($rows|Where-Object {[IpaDesktop.LocalFileAccounts]::Matches($_,'FIRST@example.com')}).Count -eq 3) 'Account filter case handling failed'
+ Assert (@($rows|Where-Object {[IpaDesktop.LocalFileAccounts]::Matches($_,'')}).Count -eq 1) 'Unknown account was assigned to a known account'
+ foreach($status in @($null,'','Не указан','Нет доступа','Не удалось прочитать','Метаданные слишком велики')) {
+  $missing=New-Object IpaDesktop.LocalRow;$missing.AppleAccount=$status
+  Assert ([IpaDesktop.LocalFileAccounts]::Matches($missing,'')) 'Missing/unreadable metadata was treated as a real account'
+ }
+ Write-Host 'PASS: metadata-based account choices with unknown/error statuses and case-insensitive matching'
+
  Assert ($rows.Count -eq 5) 'Storage lost IPA files'
  Assert (($rows|Where-Object Path -eq $old).IsOld) 'Numeric old-version detection failed'
  Assert (!($rows|Where-Object Path -eq $latest).IsOld) 'Newest version was selected for deletion'

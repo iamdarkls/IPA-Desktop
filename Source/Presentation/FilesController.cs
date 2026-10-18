@@ -19,8 +19,30 @@ namespace IpaDesktop
         AppleSupportReport appleSupport;
         readonly InstallationSelection installChosen = new InstallationSelection();
         readonly InstallationSelection failedInstalls = new InstallationSelection();
+        List<LocalRow> allFiles = new List<LocalRow>();
+        List<LocalRow> visibleFiles = new List<LocalRow>();
+        bool updatingAccounts;
+        string AccountKey
+        {
+            get
+            {
+                var account = C<ComboBox>("FileAccount").SelectedItem as LocalFileAccount;
+                return account == null ? null : account.Key;
+            }
+        }
         public FilesController(Desktop view, Engine engine) : base(view, engine)
         {
+            C<ComboBox>("FileAccount").SelectionChanged += delegate
+            {
+                if (!updatingAccounts) ApplyFileFilter();
+            };
+            On("SelectAllFiles", delegate
+            {
+                if (busy) return;
+                // Снимок фильтра не затрагивает ранее выбранные IPA других аккаунтов.
+                foreach (var row in visibleFiles) installChosen.Add(row);
+                RefreshInstallChosen();
+            });
             RowClickSelection.Attach(C<DataGrid>("Files"), delegate(object item)
             {
                 if (busy) return;
@@ -126,7 +148,7 @@ namespace IpaDesktop
         internal void DeleteRows(List<LocalRow> rows)
         {
             if (busy || rows.Count == 0) return;
-            var summary = String.Join(Environment.NewLine, rows.Take(8).Select(x => x.Name));
+            var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
             if (MessageBox.Show(w, "Переместить в корзину выбранные IPA (" + rows.Count + ")?" + Environment.NewLine + Environment.NewLine + summary + Environment.NewLine + Environment.NewLine + "Приложения на iPhone останутся установленными.", "Удаление IPA", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
             Work("Перемещение IPA в корзину…", async delegate(CancellationToken ct)
@@ -151,7 +173,7 @@ namespace IpaDesktop
         {
             var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             if (device == null || rows.Count == 0) throw new Exception("Выберите устройство и IPA для установки.");
-            var summary = String.Join(Environment.NewLine, rows.Take(8).Select(x => x.DisplayName));
+            var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
             if (MessageBox.Show(w, "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?" + Environment.NewLine + Environment.NewLine + summary, "Установка", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
             Work("Установка IPA…", async delegate(CancellationToken ct)
@@ -167,6 +189,12 @@ namespace IpaDesktop
                 view.CompleteQueue(result.Succeeded, result.Failed.Count);
                 if (result.Failed.Count > 0) throw new Exception("Не удалось установить: " + String.Join(", ", result.Failed.Select(x => x.DisplayName)) + ". Кнопка «Повторить ошибки» повторит только эти IPA.");
             });
+        }
+        /// <summary>В подтверждении различает одноимённые копии разных версий и аккаунтов.</summary>
+        static string SelectionLabel(LocalRow row)
+        {
+            return row.DisplayName + (String.IsNullOrWhiteSpace(row.Version) ? "" : " · " + row.Version) + " · " +
+                (String.IsNullOrWhiteSpace(row.AppleAccount) ? "аккаунт не указан" : row.AppleAccount);
         }
         /// <summary>Обновляет статус компонентов Apple из отдельного сервиса проверки Windows.</summary>
         public async Task CheckSupport(CancellationToken cancellation)
@@ -185,6 +213,10 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
+            C<ComboBox>("FileAccount").IsEnabled = !busy;
+            var chosenPaths = new HashSet<string>(installChosen.Snapshot().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+            C<Button>("SelectAllFiles").IsEnabled = !busy && visibleFiles.Any(x => !chosenPaths.Contains(x.Path));
+            C<Button>("SelectAllFiles").Content = "Выбрать все (" + visibleFiles.Count + ")";
             C<CheckBox>("SearchWifi").IsEnabled = !busy;
             C<Button>("WifiHelp").IsEnabled = !busy;
             C<Button>("FileInfo").IsEnabled = !busy && C<DataGrid>("Files").SelectedItems.Count == 1;
@@ -203,26 +235,49 @@ namespace IpaDesktop
         }
         void RefreshInstallChosen()
         {
-            C<ItemsControl>("ChosenFiles").ItemsSource = installChosen.Snapshot();
-            C<TextBlock>("InstallCount").Text = installChosen.Count == 0 ? "Двойной клик — выбрать IPA" : "Выбрано IPA: " + installChosen.Count;
+            var chosen = installChosen.Snapshot();
+            C<ItemsControl>("ChosenFiles").ItemsSource = chosen;
+            int hidden = chosen.Count(x => !LocalFileAccounts.Matches(x, AccountKey));
+            C<TextBlock>("InstallCount").Text = installChosen.Count == 0 ? "Двойной клик — выбрать IPA" : "Выбрано IPA: " + installChosen.Count + (hidden == 0 ? "" : " · вне фильтра: " + hidden);
+            C<TextBlock>("InstallCount").ToolTip = "Установка и удаление используют все IPA в нижнем списке, включая выбранные у других аккаунтов.";
             C<Button>("InstallFiles").Content = "Установить (" + installChosen.Count + ")";
             ApplyActions();
+        }
+        /// <summary>Фильтрует готовый снимок в памяти, сохраняя видимое выделение по пути и всю очередь действий.</summary>
+        void ApplyFileFilter()
+        {
+            var grid = C<DataGrid>("Files");
+            var selected = new HashSet<string>(grid.SelectedItems.Cast<LocalRow>().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+            visibleFiles = allFiles.Where(x => LocalFileAccounts.Matches(x, AccountKey)).ToList();
+            grid.ItemsSource = visibleFiles;
+            foreach (var row in visibleFiles) if (selected.Contains(row.Path)) grid.SelectedItems.Add(row);
+            C<TextBlock>("FilesSummary").Text = "Показано: " + visibleFiles.Count + " из " + allFiles.Count + " · " + StorageAnalysis.Bytes(visibleFiles.Sum(x => x.Bytes));
+            C<TextBlock>("FilesEmpty").Visibility = visibleFiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            RefreshInstallChosen();
         }
         int filesGeneration;
         /// <summary>Применяет только последний результат сканирования, сохраняя выделение по пути файла.</summary>
         public async void RefreshFiles()
         {
             int generation = ++filesGeneration;
-            var selected = new HashSet<string>(C<DataGrid>("Files").SelectedItems.Cast<LocalRow>().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
             try
             {
                 var rows = await engine.LocalFiles.ListAsync();
                 if (generation != filesGeneration) return;
-                C<DataGrid>("Files").ItemsSource = rows;
+                allFiles = rows;
+                var key = AccountKey;
+                var accounts = LocalFileAccounts.Choices(rows);
+                // Подавляем промежуточный SelectionChanged при замене списка аккаунтов.
+                updatingAccounts = true;
+                try
+                {
+                    C<ComboBox>("FileAccount").ItemsSource = accounts;
+                    C<ComboBox>("FileAccount").SelectedItem = accounts.FirstOrDefault(x => String.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase)) ?? accounts[0];
+                }
+                finally { updatingAccounts = false; }
                 view.ShowStorage(rows);
-                foreach (var row in rows) if (selected.Contains(row.Path)) C<DataGrid>("Files").SelectedItems.Add(row);
                 installChosen.Reconcile(rows);
-                RefreshInstallChosen();
+                ApplyFileFilter();
             } catch (Exception e)
             {
                 if (generation == filesGeneration) Log("Не удалось обновить список IPA: " + e.Message);

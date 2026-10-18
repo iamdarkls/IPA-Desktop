@@ -12,6 +12,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using IpaDesktop;
 public static class DesktopContract {
+ public static TaskCompletionSource<bool> BeginWait(Desktop view) {
+  var pending = new TaskCompletionSource<bool>();
+  Func<CancellationToken, Task> action = delegate(CancellationToken ct) { return pending.Task; };
+  typeof(Desktop).GetMethod("Work", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+   .Invoke(view, new object[]{"Test busy controls", action});
+  return pending;
+ }
+
  public static void Error(Desktop view, string message) {
   typeof(Desktop).GetMethod("Error", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
    .Invoke(view, new object[]{new Exception(message)});
@@ -361,6 +369,69 @@ public static class InstallPathProbe {
  if($deletePoint.Y -le $chosenPoint.Y){throw 'Delete action was not placed below selected IPA'}
  Click 'ClearInstall';Pump
  if($window.FindName('DeleteFiles').IsEnabled){throw 'Delete enabled with an empty action queue'}
+ # Real IPA metadata drives the actual account dropdown and bulk action, without CLI calls.
+ function NewAccountIpa($name,$account) {
+  $path=Join-Path $engine.Downloads $name
+  $zip=[IO.Compression.ZipFile]::Open($path,[IO.Compression.ZipArchiveMode]::Create)
+  try {
+   $entry=$zip.CreateEntry('iTunesMetadata.plist');$stream=$entry.Open()
+   try {
+    $bytes=[Text.Encoding]::UTF8.GetBytes('<plist version="1.0"><dict><key>appleId</key><string>'+$account+'</string><key>itemName</key><string>Same app</string></dict></plist>')
+    $stream.Write($bytes,0,$bytes.Length)
+   }finally{$stream.Dispose()}
+  }finally{$zip.Dispose()}
+  return $path
+ }
+ function RefreshAndWait {
+  $before=$window.FindName('FileAccount').SelectedItem
+  Click 'RefreshFiles'
+  $clock=[Diagnostics.Stopwatch]::StartNew()
+  do {Pump;[Threading.Thread]::Sleep(20)}while([object]::ReferenceEquals($before,$window.FindName('FileAccount').SelectedItem) -and $clock.Elapsed.TotalSeconds -lt 5)
+  if([object]::ReferenceEquals($before,$window.FindName('FileAccount').SelectedItem)){throw 'File account refresh did not complete'}
+ }
+ $aliceA=NewAccountIpa 'account-a-1.ipa' 'alice@example.com'
+ $aliceB=NewAccountIpa 'account-a-2.ipa' ' ALICE@example.com '
+ $bob=NewAccountIpa 'account-b.ipa' 'bob@example.com'
+ $callsBefore=$runner.Calls.Count
+ RefreshAndWait
+ $accounts=$window.FindName('FileAccount');$fileGrid=$window.FindName('Files')
+ if($accounts.Items.Count -ne 4 -or $fileGrid.Items.Count -ne 5){throw 'Account groups lost unknown/case-insensitive metadata'}
+ $accounts.SelectedItem=@($accounts.Items|Where-Object Key -eq 'alice@example.com')[0];Pump
+ if($fileGrid.Items.Count -ne 2 -or !$window.FindName('FilesSummary').Text.Contains('2 из 5')){throw 'Account filter did not limit visible IPA'}
+ Click 'SelectAllFiles';Pump
+ if($window.FindName('ChosenFiles').Items.Count -ne 2 -or $window.FindName('SelectAllFiles').IsEnabled){throw 'Bulk add missed rows or allowed duplicate selection'}
+ $accounts.SelectedItem=@($accounts.Items|Where-Object Key -eq 'bob@example.com')[0];Pump
+ if($fileGrid.Items.Count -ne 1 -or $window.FindName('ChosenFiles').Items.Count -ne 2 -or !$window.FindName('InstallCount').Text.Contains('вне фильтра: 2')){throw 'Changing account lost or hid the existing queue without warning'}
+ Click 'SelectAllFiles';Pump
+ if($window.FindName('ChosenFiles').Items.Count -ne 3){throw 'Bulk add included filtered-out IPA or dropped previous selection'}
+ # Capture the live controller state, including selected account and hidden chosen IPA.
+ $visual=$window.Content
+ $bitmap=New-Object Windows.Media.Imaging.RenderTargetBitmap([int]$visual.ActualWidth,[int]$visual.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32)
+ $bitmap.Render($visual);$encoder=New-Object Windows.Media.Imaging.PngBitmapEncoder
+ $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap));$stream=New-Object IO.MemoryStream
+ $encoder.Save($stream);Write-Host ('IPA_ACCOUNT_PREVIEW:'+ [Convert]::ToBase64String($stream.ToArray()));$stream.Dispose()
+
+ $accounts.SelectedItem=@($accounts.Items|Where-Object {$null -ne $_.Key -and $_.Key.Length -eq 0})[0];Pump
+ if($fileGrid.Items.Count -ne 2 -or !$window.FindName('InstallCount').Text.Contains('вне фильтра: 3')){throw 'Unknown metadata filter used current signed-in account'}
+ Click 'SelectAllFiles';Pump
+ if($window.FindName('ChosenFiles').Items.Count -ne 5){throw 'Unknown-account files were omitted from bulk selection'}
+ Click 'ClearInstall';Pump
+ if(!$window.FindName('SelectAllFiles').IsEnabled){throw 'Clearing selection did not restore bulk action'}
+ $accounts.SelectedItem=@($accounts.Items|Where-Object Key -eq 'alice@example.com')[0];Pump
+ Click 'SelectAllFiles';Pump
+ RefreshAndWait
+ if($fileGrid.Items.Count -ne 2 -or $window.FindName('ChosenFiles').Items.Count -ne 2 -or $accounts.SelectedItem.Key -ne 'alice@example.com'){throw 'Refresh lost account filter or queued paths'}
+ [IO.File]::Delete($aliceA);RefreshAndWait
+ if($fileGrid.Items.Count -ne 1 -or $window.FindName('ChosenFiles').Items.Count -ne 1){throw 'Deleted IPA remained in the action queue'}
+ [IO.File]::Delete($aliceB);RefreshAndWait
+ if($fileGrid.Items.Count -ne 3 -or $null -ne $accounts.SelectedItem.Key -or $window.FindName('ChosenFiles').Items.Count -ne 0){throw 'Removed account did not fall back to all files safely'}
+ [IO.File]::Delete($bob);RefreshAndWait
+ if($runner.Calls.Count -ne $callsBefore){throw 'File filtering or bulk selection ran a device/auth command'}
+ $pending=[DesktopContract]::BeginWait($desktop);Pump
+ if($accounts.IsEnabled -or $window.FindName('SelectAllFiles').IsEnabled){throw 'Account controls stayed enabled during an operation'}
+ $pending.SetResult($true);WaitIdle
+ if(!$accounts.IsEnabled -or !$window.FindName('SelectAllFiles').IsEnabled){throw 'Account controls were not restored after an operation'}
+ Write-Host 'PASS: real IPA account filtering, unknown metadata, normalized grouping, visible-only bulk selection, hidden queue counts, deduplication, refresh/deletion reconciliation and busy-state guards'
  # Use the actual checkbox event and reload the persisted settings.
  $window.FindName('SoundsEnabled').IsChecked=$true;Click 'SoundsEnabled';Pump
  $soundReload=New-Object IpaDesktop.Engine($temp)

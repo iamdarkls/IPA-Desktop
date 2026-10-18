@@ -1,4 +1,4 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop · 0.2.6" Width="1160" Height="860" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="#10151F" Foreground="#EDF1F8" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" SnapsToDevicePixels="True">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop · 0.2.7" Width="1160" Height="860" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="#10151F" Foreground="#EDF1F8" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
     <!-- Общий тёмный скроллбар: сохраняет штатный Track, команды страниц и перетаскивание. -->
     <Style x:Key="ScrollPageButton" TargetType="RepeatButton">
@@ -338,7 +338,7 @@
           <Image x:Name="BrandIcon" Width="46" Height="46" Margin="0,0,12,0"/>
           <TextBlock Text="IPA Desktop" FontSize="30" FontWeight="SemiBold" VerticalAlignment="Center"/>
           <Border Background="#23354E" CornerRadius="6" Padding="8,4" Margin="12,0,0,0" VerticalAlignment="Center">
-            <TextBlock Text="0.2.6" Foreground="#AFCDF7" FontSize="12"/>
+            <TextBlock Text="0.2.7" Foreground="#AFCDF7" FontSize="12"/>
           </Border>
         </StackPanel>
         <TextBlock Text="Приложения для iPhone — поиск, загрузка и установка" Foreground="#9BACBF" Margin="0,6,0,20">
@@ -479,8 +479,15 @@
               <TextBlock x:Name="WifiStatus" Text="USB" Foreground="#AFC6E7" VerticalAlignment="Center" FontSize="12" Margin="0,0,10,0"/>
               <TextBlock x:Name="AppleSupportStatus" Text="Компоненты Apple: проверка при запуске" Foreground="#9BACBF" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
+            <DockPanel Margin="0,0,0,8" LastChildFill="True">
+              <Button x:Name="SelectAllFiles" Content="Выбрать все (0)" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся."/>
+              <TextBlock Text="Apple Account" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#AFC6E7" FontSize="12"/>
+              <ComboBox x:Name="FileAccount" DockPanel.Dock="Left" DisplayMemberPath="Label" Width="300" MaxDropDownHeight="280" Margin="0,0,12,0" ToolTip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу."/>
+              <TextBlock x:Name="FilesSummary" Text="Чтение файлов…" VerticalAlignment="Center" FontSize="12" Foreground="#9BACBF" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
           </StackPanel>
-          <DataGrid x:Name="Files" Grid.Row="1" SelectionMode="Extended">
+          <Grid Grid.Row="1">
+          <DataGrid x:Name="Files" SelectionMode="Extended">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="*" MinWidth="140" ElementStyle="{StaticResource LocalAppText}"/>
               <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="90"/>
@@ -488,6 +495,8 @@
               <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="140"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock x:Name="FilesEmpty" Visibility="Collapsed" IsHitTestVisible="False" Text="IPA пока нет. Скачайте приложения или нажмите «Добавить IPA…»." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Margin="24,45,24,12" VerticalAlignment="Center" Foreground="#9BACBF"/>
+          </Grid>
           <Border Grid.Row="3" Background="#101A29" BorderBrush="#2B3E58" BorderThickness="1" CornerRadius="8" Padding="10,6">
             <Grid>
               <Grid.RowDefinitions>
@@ -544,7 +553,7 @@
             <Border Background="#1C293B" BorderBrush="#34445C" BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,24">
               <StackPanel>
                 <TextBlock Text="IPA Desktop" FontSize="22" FontWeight="SemiBold"/>
-                <TextBlock x:Name="GuiVersionStatus" Text="Установлена версия 0.2.6" Foreground="#8CBAFF" Margin="0,8,0,14"/>
+                <TextBlock x:Name="GuiVersionStatus" Text="Установлена версия 0.2.7" Foreground="#8CBAFF" Margin="0,8,0,14"/>
                 <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="#EDF1F8" Margin="0,0,0,16"/>
                 <WrapPanel>
                   <Button x:Name="CheckGuiUpdate" Content="Проверить версию"/>

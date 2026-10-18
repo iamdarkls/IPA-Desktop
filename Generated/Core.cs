@@ -27,7 +27,7 @@ namespace IpaDesktop
     /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
     public static class AppInfo
     {
-        public const string Version = "0.2.6";
+        public const string Version = "0.2.7";
         public const string Repository = "iamdarkls/IPA-Desktop";
         public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
     }
@@ -417,6 +417,47 @@ namespace IpaDesktop
         public string MinimumOS { get; set; }
         public string[] Platforms { get; set; }
         public string Build { get; set; }
+    }
+}
+
+// Domain/LocalFileAccounts.cs
+namespace IpaDesktop
+{
+    /// <summary>Вариант фильтра локальных IPA. Null означает все аккаунты, пустая строка — неизвестный аккаунт.</summary>
+    public sealed class LocalFileAccount
+    {
+        public string Key { get; set; }
+        public string Label { get; set; }
+    }
+
+    /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>
+    public static class LocalFileAccounts
+    {
+        static string Normalize(string account)
+        {
+            var value = (account ?? "").Trim();
+            // Эти значения возвращает IpaMetadata при отсутствии или ошибке чтения, это не имена аккаунтов.
+            foreach (var status in new[] { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" })
+                if (String.Equals(value, status, StringComparison.OrdinalIgnoreCase)) return "";
+            return value;
+        }
+
+        public static bool Matches(LocalRow row, string key)
+        {
+            return key == null || String.Equals(Normalize(row.AppleAccount), key, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static List<LocalFileAccount> Choices(IEnumerable<LocalRow> files)
+        {
+            var rows = files.ToList();
+            var choices = new List<LocalFileAccount> { new LocalFileAccount { Key = null, Label = "Все аккаунты (" + rows.Count + ")" } };
+            foreach (var group in rows.GroupBy(x => Normalize(x.AppleAccount), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x.Key.Length == 0).ThenBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
+            {
+                choices.Add(new LocalFileAccount { Key = group.Key, Label = (group.Key.Length == 0 ? "Без данных об аккаунте" : group.Key) + " (" + group.Count() + ")" });
+            }
+            return choices;
+        }
     }
 }
 

@@ -123,6 +123,11 @@ try {
  $minimumHeight=$window.FindName('Apps').ActualHeight
  $tabs.SelectedIndex=1;$window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ApplicationIdle);$window.UpdateLayout()
  if($window.FindName('Files').ActualHeight -lt 80){throw 'Files table collapsed at minimum size'}
+ $picker=$window.FindName('FileAccount');$all=$window.FindName('SelectAllFiles')
+ $point=$all.TranslatePoint((New-Object Windows.Point(0,0)),$window)
+ if($picker.ActualWidth -lt 280 -or $picker.ActualHeight -lt 30 -or $all.ActualWidth -lt 100 -or $point.X+$all.ActualWidth -gt $window.ActualWidth){throw 'Account picker or select-all button clipped at minimum window size'}
+ Write-Host 'PASS: account filter and bulk action remain visible at 940x720'
+
  $tabs.SelectedIndex=4;$window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ApplicationIdle);$window.UpdateLayout()
  if($window.FindName('StorageFiles').ActualHeight -lt 80){throw 'Storage table collapsed at minimum size'}
  $tabs.SelectedIndex=0;$window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ApplicationIdle);$window.UpdateLayout()
