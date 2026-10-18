@@ -122,6 +122,7 @@ try {
  Write-Host ('Minimum layout: '+$window.FindName('Apps').ActualWidth+' x '+$window.FindName('Apps').ActualHeight)
  $minimumHeight=$window.FindName('Apps').ActualHeight
  $tabs.SelectedIndex=1;$window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ApplicationIdle);$window.UpdateLayout()
+ Write-Host ('Files minimum height: '+$window.FindName('Files').ActualHeight)
  if($window.FindName('Files').ActualHeight -lt 80){throw 'Files table collapsed at minimum size'}
  $picker=$window.FindName('FileAccount');$all=$window.FindName('SelectAllFiles')
  $point=$all.TranslatePoint((New-Object Windows.Point(0,0)),$window)

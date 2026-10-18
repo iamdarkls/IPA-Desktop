@@ -465,13 +465,13 @@
           </Grid.RowDefinitions>
           <StackPanel>
             <WrapPanel>
-              <Button x:Name="RefreshFiles" Content="Обновить файлы"/>
-              <Button x:Name="ImportFile" Content="Добавить IPA…"/>
-              <Button x:Name="Devices" Content="Найти iPhone" Background="#16704C"/>
-              <Button x:Name="DeviceInfo" Content="Об iPhone…"/>
-              <ComboBox x:Name="DeviceList" DisplayMemberPath="DisplayLabel" Margin="0,0,8,8"/>
+              <Button x:Name="RefreshFiles" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Обновить файлы"/>
+              <Button x:Name="ImportFile" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Добавить IPA…"/>
+              <Button x:Name="Devices" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Найти iPhone" Background="#16704C"/>
+              <Button x:Name="DeviceInfo" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Об iPhone…"/>
+              <ComboBox x:Name="DeviceList" DisplayMemberPath="DisplayLabel" FontSize="12" Margin="0,0,8,6"/>
             </WrapPanel>
-            <DockPanel Margin="0,0,0,8" LastChildFill="True">
+            <DockPanel Margin="0,0,0,6" LastChildFill="True">
               <Button x:Name="OpenAppleSupportHelp" Content="Помощь Apple" DockPanel.Dock="Right" FontSize="12" Padding="8,4" Margin="6,0,0,0"/>
               <Button x:Name="CheckAppleSupport" Content="Проверить драйвер" DockPanel.Dock="Right" FontSize="12" Padding="8,4" Margin="6,0,0,0"/>
               <Button x:Name="WifiHelp" Content="Wi-Fi: помощь" DockPanel.Dock="Right" FontSize="12" Padding="8,4" Margin="6,0,0,0"/>
@@ -479,10 +479,10 @@
               <TextBlock x:Name="WifiStatus" Text="USB" Foreground="#AFC6E7" VerticalAlignment="Center" FontSize="12" Margin="0,0,10,0"/>
               <TextBlock x:Name="AppleSupportStatus" Text="Компоненты Apple: проверка при запуске" Foreground="#9BACBF" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
-            <DockPanel Margin="0,0,0,8" LastChildFill="True">
+            <DockPanel Margin="0,0,0,6" LastChildFill="True">
               <Button x:Name="SelectAllFiles" Content="Выбрать все (0)" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся."/>
               <TextBlock Text="Apple Account" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#AFC6E7" FontSize="12"/>
-              <ComboBox x:Name="FileAccount" DockPanel.Dock="Left" DisplayMemberPath="Label" Width="300" MaxDropDownHeight="280" Margin="0,0,12,0" ToolTip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу."/>
+              <ComboBox x:Name="FileAccount" FontSize="12" DockPanel.Dock="Left" DisplayMemberPath="Label" Width="300" MaxDropDownHeight="280" Margin="0,0,12,0" ToolTip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу."/>
               <TextBlock x:Name="FilesSummary" Text="Чтение файлов…" VerticalAlignment="Center" FontSize="12" Foreground="#9BACBF" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
           </StackPanel>
@@ -510,7 +510,7 @@
                 <Button x:Name="ClearInstall" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12"/>
                 <TextBlock x:Name="InstallCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — выбрать IPA" VerticalAlignment="Center" Foreground="#AFC6E7" FontSize="12"/>
               </DockPanel>
-              <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="54">
+              <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="42">
                 <ItemsControl x:Name="ChosenFiles">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
