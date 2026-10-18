@@ -122,7 +122,7 @@ try {
    $priorEngine=$liveEngine.Settings.Current;$priorTools=$liveEngine.Settings.DeviceCurrent
    $liveEngine.Install($pinned,$ct).GetAwaiter().GetResult()
    if($liveEngine.Settings.Version -ne $tag -or $liveEngine.Settings.Source -ne 'Sorvigolova/ipatool' -or $liveEngine.Settings.DeviceCurrent -ne $priorTools){throw "ipatool $tag install affected tools or selected wrong release"}
-   # Only reach the password prompt: no Apple password/code is submitted and no login network request starts.
+   # Reach the password prompt and type one fixture character without Enter: no Apple password/code is submitted and no login request starts.
    $loginStop=New-Object Threading.CancellationTokenSource;$loginStop.CancelAfter(10000)
    $loginProcess=$null;$reachedPassword=$false
    try {
@@ -139,9 +139,19 @@ try {
      }
      elseif($prompt -eq [IpaDesktop.AppleLoginPrompt]::Password){$reachedPassword=$true}
     }
+    # Cause actual _getch echo/repaint without Enter: Apple authentication is never called.
+    $testCharacter=New-Object Security.SecureString
+    try {$testCharacter.AppendChar('x');$testCharacter.MakeReadOnly();$loginProcess.SendCharactersAsync($testCharacter,$loginStop.Token).GetAwaiter().GetResult()}finally{$testCharacter.Dispose()}
+    $echoSeen=$false
+    while(!$echoSeen) {
+     $chunk=$loginProcess.ReadAsync($loginStop.Token).GetAwaiter().GetResult()
+     if($null -eq $chunk){throw 'Actual ipatool exited during password-character echo'}
+     if($protocol.Append($chunk) -ne [IpaDesktop.AppleLoginPrompt]::None){throw 'Actual ipatool repaint requested credentials twice'}
+     if($chunk.Contains('*')){$echoSeen=$true}
+    }
    }finally{if($loginProcess){$loginProcess.Dispose()};$loginStop.Dispose()}
    if(!$reachedPassword){throw 'Actual ipatool does not support hidden interactive input'}
-   Write-Host ('PASS: actual ipatool '+$tag+' accepts ConPTY TTY and secret-free interactive email/password prompts; stopped before password/network login')
+   Write-Host ('PASS: actual ipatool '+$tag+' accepts ConPTY TTY and password-character echo/redraw without duplicate requests; stopped before Enter/network login')
    $liveEngine.Rollback()
    if($liveEngine.Settings.Current -ne $priorEngine -or $liveEngine.Settings.DeviceCurrent -ne $priorTools){throw "ipatool $tag rollback lost independent state"}
    Write-Host ('PASS: actual Windows ipatool '+$tag+' archive, SHA-256, CLI command contract, install and rollback')

@@ -24,18 +24,22 @@ public static class FakeAppleLogin {
   string mode=File.ReadAllText("mode.txt");
   File.WriteAllText("stage.txt","email");Console.Write("\x1b[32mEnter em");Console.Out.Flush();Thread.Sleep(25);Console.Write("ail: \x1b[0m");Console.Out.Flush();
   if(Console.ReadLine()!="fixture@example.com")return 43;
+  if(mode=="changed"){Console.Write("Enter 2FA code: ");Console.Out.Flush();Thread.Sleep(20000);return 46;}
+  if(mode=="repaint"){Console.Write("\r\x1b[1GEnter email: fixture@example.com\r\n");Console.Out.Flush();}
   File.WriteAllText("stage.txt","password");Console.Write("Enter password: ");Console.Out.Flush();
   var password=new StringBuilder();ConsoleKeyInfo key;
   while((key=Console.ReadKey(true)).Key!=ConsoleKey.Enter){password.Append(key.KeyChar);Console.Write('*');Console.Out.Flush();}
   Console.WriteLine();
   if(password.ToString()!="Fixture-Password\"\\!7")return 44;
   if(mode=="slow"){Thread.Sleep(20000);return 45;}
-  if(mode=="changed"){Console.Write("Enter password: ");Console.Out.Flush();Thread.Sleep(20000);return 46;}
+
   if(mode=="huge"){Console.Write(new string('x',100000));Console.Out.Flush();return 47;}
-  if(mode=="2fa" || mode=="reject"){
+  if(mode=="repaint"){Console.Write("\r\x1b[1GEnter password: ********************\r\n");Console.Out.Flush();}
+  if(mode=="2fa" || mode=="reject" || mode=="repaint"){
    Console.Write("Enter 2FA code: ");Console.Out.Flush();
    string code=Console.ReadLine();
    if(code!="123456")return 48;
+   if(mode=="repaint"){Console.Write("\r\x1b[1GEnter 2FA code: ******\r\n");Console.Out.Flush();}
    if(mode=="reject"){Console.WriteLine("Login error: password "+password+" token=fixture-token-secret code="+code);return 1;}
   }
   if(mode=="save")Console.WriteLine("Warning: could not save account");
@@ -69,7 +73,18 @@ public static class LoginContract {
  public static SecureString Secret(string value){var secret=new SecureString();foreach(char c in value)secret.AppendChar(c);secret.MakeReadOnly();return secret;}
  public static void Assert(bool value,string message){if(!value)throw new Exception(message);}
  public static void Run(string exe,string folder){
-  foreach(string mode in new[]{"success","2fa","reject","save","changed","huge","slow","mismatch"}){
+  var protocol=new AppleLoginProtocol();
+  Assert(protocol.Append("Enter em")==AppleLoginPrompt.None,"Fragmented prompt was completed early");
+  Assert(protocol.Append("ail: ")==AppleLoginPrompt.Identifier,"Email request missing");
+  Assert(protocol.Append("\r\x1b[1GEnter email: fixture@example.com")==AppleLoginPrompt.None,"Email redraw requested another input");
+  Assert(protocol.Append("\rEnter email: fixture@example.com\r\nEnter password: ")==AppleLoginPrompt.Password,"Old email redraw hid the next password prompt");
+  for(int i=0;i<200;i++)Assert(protocol.Append("\r\x1b[1GEnter password: "+new String('*',500))==AppleLoginPrompt.None,"Password redraw resent the secret");
+  Assert(protocol.Append("\rEnter password: ******\r\nEnter 2FA code: ")==AppleLoginPrompt.Code,"Password redraw hid the code prompt");
+  Assert(protocol.Append("\rEnter 2FA code: ******")==AppleLoginPrompt.None,"2FA redraw resent the code");
+  protocol.Append("\r\n{\"success\":true,\"email\":\"fixture@example.com\"}\r\n");
+  Assert(protocol.Complete(0)=="fixture@example.com","Redraw consumed the login result");
+
+  foreach(string mode in new[]{"success","2fa","repaint","reject","save","changed","huge","slow","mismatch"}){
    File.WriteAllText(Path.Combine(folder,"mode.txt"),mode=="mismatch"?"success":mode);
    var tools=new LoginTools{Mismatch=mode=="mismatch"};int codes=0;bool cancelled=false,failed=false;
    var factory=new RecordingLoginFactory();var service=new AppleLoginService(factory,delegate{return exe;},folder,tools);
@@ -82,9 +97,9 @@ public static class LoginContract {
     catch(OperationCanceledException){cancelled=true;}
     catch(AppleLoginException e){failed=true;Assert(!e.ToString().Contains("Fixture-Password")&&!e.ToString().Contains("123456")&&!e.ToString().Contains("fixture-token-secret"),"Raw secret escaped into login exception");}
     Assert(mode=="slow"?cancelled:!cancelled,"Cancellation/timeout behavior changed: "+mode);
-    Assert(mode=="success"||mode=="2fa"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+(File.Exists(Path.Combine(folder,"stage.txt"))?File.ReadAllText(Path.Combine(folder,"stage.txt")):factory.Error));
-    Assert(codes==((mode=="2fa"||mode=="reject")?1:0),"Unexpected/repeated 2FA request: "+mode);
-    Assert(tools.Calls==((mode=="success"||mode=="2fa"||mode=="mismatch")?1:0),"Session verification was skipped or attempted after failure: "+mode);
+    Assert(mode=="success"||mode=="2fa"||mode=="repaint"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+(File.Exists(Path.Combine(folder,"stage.txt"))?File.ReadAllText(Path.Combine(folder,"stage.txt")):factory.Error));
+    Assert(codes==((mode=="2fa"||mode=="reject"||mode=="repaint")?1:0),"Unexpected/repeated 2FA request: "+mode);
+    Assert(tools.Calls==((mode=="success"||mode=="2fa"||mode=="repaint"||mode=="mismatch")?1:0),"Session verification was skipped or attempted after failure: "+mode);
    }
    int pid=Int32.Parse(File.ReadAllText(Path.Combine(folder,"pid.txt")));bool exited=false;
    try{using(var process=Process.GetProcessById(pid))exited=process.HasExited;}catch(ArgumentException){exited=true;}
@@ -112,7 +127,7 @@ public sealed class WindowLoginService : IAppleLoginService {
 }
 '@
  [LoginContract]::Run($fixture,$temp)
- Write-Host 'PASS: real Windows ConPTY, fragmented/ANSI prompts without newline, private input, exact secret-free arguments, invisible console, 2FA, rejected credentials, excessive output, save failure, stale session rejection and cancellation cleanup'
+ Write-Host 'PASS: real Windows ConPTY, fragmented/ANSI prompts without newline, repeated full-line redraws and coalesced old/new prompts without resending secrets, private input, exact secret-free arguments, invisible console, 2FA, rejected credentials, excessive output, save failure, stale session rejection and cancellation cleanup'
  # Drive actual modal windows through their controls, including invalid 2FA and retry.
  $engine=New-Object IpaDesktop.Engine((Join-Path $temp 'engine'))
  $engine.Settings.CheckGuiUpdates=$false;$engine.Settings.AutoUpdate=$false;$engine.Settings.AutoUpdateDeviceTools=$false;$engine.Settings.SoundsEnabled=$false

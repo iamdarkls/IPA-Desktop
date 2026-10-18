@@ -28,7 +28,7 @@ namespace IpaDesktop
     /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
     public static class AppInfo
     {
-        public const string Version = "0.2.9";
+        public const string Version = "0.2.10";
         public const string Repository = "iamdarkls/IPA-Desktop";
         public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
     }
@@ -1006,6 +1006,15 @@ namespace IpaDesktop
         /// <summary>Короткоживущие массивы очищаются; plaintext-строка пароля и аргумент -p не создаются.</summary>
         public Task SendAsync(SecureString value, CancellationToken ct)
         {
+            return SendValueAsync(value, true, ct);
+        }
+        /// <summary>Ввод без Enter для проверки TTY до сетевой авторизации; реальные учётные данные так не отправляются.</summary>
+        public Task SendCharactersAsync(SecureString value, CancellationToken ct)
+        {
+            return SendValueAsync(value, false, ct);
+        }
+        Task SendValueAsync(SecureString value, bool enter, CancellationToken ct)
+        {
             return Task.Run(delegate
             {
                 ct.ThrowIfCancellationRequested();
@@ -1014,13 +1023,13 @@ namespace IpaDesktop
                 {
                     if (value == null || value.Length == 0 || value.Length > 1024) throw new ArgumentException("Проверьте введённые данные.");
                     pointer = Marshal.SecureStringToGlobalAllocUnicode(value);
-                    chars = new char[value.Length + 1];
+                    chars = new char[value.Length + (enter ? 1 : 0)];
                     for (int i = 0; i < value.Length; i++)
                     {
                         chars[i] = (char)Marshal.ReadInt16(pointer, i * 2);
                         if (Char.IsControl(chars[i])) throw new ArgumentException("Ввод не должен содержать управляющие символы или переносы строк.");
                     }
-                    chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
+                    if (enter) chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
                     ct.ThrowIfCancellationRequested(); input.Write(bytes, 0, bytes.Length); input.Flush();
                 }
                 finally
@@ -1836,24 +1845,34 @@ namespace IpaDesktop
             if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
             buffer += chunk;
             string text = Text();
-            if (text.Contains("Enter email:"))
+            // ConPTY может повторно прислать всю строку при перерисовке, включая старые запросы.
+            // Реагируем только на следующий этап; пароль/код повторно не отправляем.
+            if (!identifierSent && text.Contains("Enter email:"))
             {
-                if (identifierSent || passwordSent) throw Changed();
                 identifierSent = true; buffer = ""; return AppleLoginPrompt.Identifier;
             }
-            if (text.Contains("Enter password:"))
+            if (!passwordSent && text.Contains("Enter password:"))
             {
-                if (!identifierSent || passwordSent) throw Changed();
+                if (!identifierSent) throw Changed();
                 passwordSent = true; buffer = ""; return AppleLoginPrompt.Password;
             }
-            if (text.Contains("Enter 2FA code:"))
+            if (!codeSent && text.Contains("Enter 2FA code:"))
             {
-                if (!passwordSent || codeSent) throw Changed();
+                if (!passwordSent) throw Changed();
                 codeSent = true; buffer = ""; return AppleLoginPrompt.Code;
             }
+            // Отбрасываем обработанный префикс перерисовки, сохраняя хвост и частичные ANSI-последовательности.
+            // Иначе многократное эхо старого запроса раздувало бы ограниченный буфер.
+            int consumed = 0;
+            foreach (var prompt in new[] { "Enter email:", "Enter password:", "Enter 2FA code:" })
+            {
+                int index = text.LastIndexOf(prompt, StringComparison.Ordinal);
+                if (index >= 0) consumed = Math.Max(consumed, index + prompt.Length);
+            }
+            if (consumed > 0) buffer = text.Substring(consumed);
             return AppleLoginPrompt.None;
         }
-        static AppleLoginException Changed() { return new AppleLoginException("Протокол входа ipatool изменился. Обновите движок или выполните его откат в настройках."); }
+        static AppleLoginException Changed() { return new AppleLoginException("Не удалось распознать последовательность запросов входа. Закройте окно и повторите попытку. Если ошибка повторяется, проверьте обновления программы."); }
         string Text()
         {
             var text = Regex.Replace(buffer, "\u001b\\][^\u0007]*(?:\u0007|\u001b\\\\)", "");

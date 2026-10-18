@@ -120,6 +120,15 @@ namespace IpaDesktop
         /// <summary>Короткоживущие массивы очищаются; plaintext-строка пароля и аргумент -p не создаются.</summary>
         public Task SendAsync(SecureString value, CancellationToken ct)
         {
+            return SendValueAsync(value, true, ct);
+        }
+        /// <summary>Ввод без Enter для проверки TTY до сетевой авторизации; реальные учётные данные так не отправляются.</summary>
+        public Task SendCharactersAsync(SecureString value, CancellationToken ct)
+        {
+            return SendValueAsync(value, false, ct);
+        }
+        Task SendValueAsync(SecureString value, bool enter, CancellationToken ct)
+        {
             return Task.Run(delegate
             {
                 ct.ThrowIfCancellationRequested();
@@ -128,13 +137,13 @@ namespace IpaDesktop
                 {
                     if (value == null || value.Length == 0 || value.Length > 1024) throw new ArgumentException("Проверьте введённые данные.");
                     pointer = Marshal.SecureStringToGlobalAllocUnicode(value);
-                    chars = new char[value.Length + 1];
+                    chars = new char[value.Length + (enter ? 1 : 0)];
                     for (int i = 0; i < value.Length; i++)
                     {
                         chars[i] = (char)Marshal.ReadInt16(pointer, i * 2);
                         if (Char.IsControl(chars[i])) throw new ArgumentException("Ввод не должен содержать управляющие символы или переносы строк.");
                     }
-                    chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
+                    if (enter) chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
                     ct.ThrowIfCancellationRequested(); input.Write(bytes, 0, bytes.Length); input.Flush();
                 }
                 finally
