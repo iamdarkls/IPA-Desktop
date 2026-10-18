@@ -404,6 +404,16 @@ public static class InstallPathProbe {
  if($fileGrid.Items.Count -ne 1 -or $window.FindName('ChosenFiles').Items.Count -ne 2 -or !$window.FindName('InstallCount').Text.Contains('вне фильтра: 2')){throw 'Changing account lost or hid the existing queue without warning'}
  Click 'SelectAllFiles';Pump
  if($window.FindName('ChosenFiles').Items.Count -ne 3){throw 'Bulk add included filtered-out IPA or dropped previous selection'}
+ # Check actual WPF text in the custom ComboBox template, not just its selected model.
+ function VisualText($node) {
+  if($node -is [Windows.Controls.TextBlock]){$node.Text}
+  for($i=0;$i -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($node);$i++) {
+   VisualText ([Windows.Media.VisualTreeHelper]::GetChild($node,$i))
+  }
+ }
+ $selection=$accounts.Template.FindName('SelectionContent',$accounts)
+ $rendered=@(VisualText $selection) -join ' '
+ if(!$rendered.Contains('bob@example.com') -or $rendered.Contains('IpaDesktop.LocalFileAccount')){throw 'Selected account label is not visible in the ComboBox template'}
  # Capture the live controller state, including selected account and hidden chosen IPA.
  $visual=$window.Content
  $bitmap=New-Object Windows.Media.Imaging.RenderTargetBitmap([int]$visual.ActualWidth,[int]$visual.ActualHeight,96,96,[Windows.Media.PixelFormats]::Pbgra32)

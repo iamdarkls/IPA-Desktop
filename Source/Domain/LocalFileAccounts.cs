@@ -9,6 +9,8 @@ namespace IpaDesktop
     {
         public string Key { get; set; }
         public string Label { get; set; }
+        // Общий шаблон ComboBox отображает SelectionBoxItem через ToString, включая выбранный элемент.
+        public override string ToString() { return Label; }
     }
 
     /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>

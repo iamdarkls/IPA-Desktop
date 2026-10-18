@@ -27,7 +27,7 @@ namespace IpaDesktop
     /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
     public static class AppInfo
     {
-        public const string Version = "0.2.7";
+        public const string Version = "0.2.8";
         public const string Repository = "iamdarkls/IPA-Desktop";
         public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
     }
@@ -428,6 +428,8 @@ namespace IpaDesktop
     {
         public string Key { get; set; }
         public string Label { get; set; }
+        // Общий шаблон ComboBox отображает SelectionBoxItem через ToString, включая выбранный элемент.
+        public override string ToString() { return Label; }
     }
 
     /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>
