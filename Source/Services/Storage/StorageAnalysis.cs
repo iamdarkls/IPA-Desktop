@@ -23,13 +23,16 @@ namespace IpaDesktop
         {
             var list = rows.ToList();
             foreach (var row in list) { row.IsOld = false; row.StorageStatus = "Версия не определена"; }
-            var known = list.Where(x => !String.IsNullOrWhiteSpace(x.BundleID) && x.AppleAccount != null && x.AppleAccount.Contains("@") && Parse(x.Version) != null);
-            foreach (var group in known.GroupBy(x => x.BundleID.ToLowerInvariant() + "\n" + x.AppleAccount.ToLowerInvariant()))
+            // Parse each version once, then reuse it for grouping, max and comparison.
+            var known = list.Where(x => !String.IsNullOrWhiteSpace(x.BundleID) && x.AppleAccount != null && x.AppleAccount.Contains("@"))
+                .Select(x => Tuple.Create(x, Parse(x.Version))).Where(x => x.Item2 != null);
+            foreach (var group in known.GroupBy(x => x.Item1.BundleID.ToLowerInvariant() + "\n" + x.Item1.AppleAccount.ToLowerInvariant()))
             {
-                var newest = group.Select(x => Parse(x.Version)).Max();
-                foreach (var row in group)
+                var newest = group.Select(x => x.Item2).Max();
+                foreach (var entry in group)
                 {
-                    row.IsOld = Parse(row.Version).CompareTo(newest) < 0;
+                    var row = entry.Item1;
+                    row.IsOld = entry.Item2.CompareTo(newest) < 0;
                     row.StorageStatus = row.IsOld ? "Старая версия" : "Самая новая в папке";
                 }
             }

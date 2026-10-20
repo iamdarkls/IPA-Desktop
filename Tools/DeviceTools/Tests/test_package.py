@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
-from package_support import DependencyCollector, sha256_file
+from device_tools.dependencies import DependencyCollector, sha256_file
 
 
 class PackageChecks(unittest.TestCase):

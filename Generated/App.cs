@@ -18,7 +18,7 @@ using System.Windows.Media;
 using System.Windows;
 using System;
 
-// Presentation/AccountController.cs
+// Presentation/Accounts/AccountController.cs
 namespace IpaDesktop
 {
     /// <summary>Управляет входом, проверкой и выходом из Apple Account, синхронизируя доступность кнопок.</summary>
@@ -87,68 +87,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/AppDialogs.cs
-namespace IpaDesktop
-{
-    /// <summary>Создаёт диалоги с общими стилями приложения, владельцем и тёмной рамкой Windows.</summary>
-    public static class AppDialogs
-    {
-        public static Window Create(Window owner, string title, double width, double height)
-        {
-            var dialog = new Window
-            {
-                Owner = owner, Title = title, Width = width, Height = height,
-                MinWidth = 460, MinHeight = 320, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = owner.Background, Foreground = owner.Foreground,
-                FontFamily = owner.FontFamily, FontSize = owner.FontSize,
-                ShowInTaskbar = false, Icon = owner.Icon
-            };
-            dialog.Resources.MergedDictionaries.Add(owner.Resources);
-            dialog.SourceInitialized += delegate { WindowTheme.Apply(dialog); };
-            return dialog;
-        }
-        /// <summary>Полный текст доступен для выделения и копирования, без автоматического открытия при ошибке.</summary>
-        public static Window Text(Window owner, string title, string details)
-        {
-            var dialog = Create(owner, title, 740, 530);
-            var layout = new Grid { Margin = new Thickness(18) };
-            layout.RowDefinitions.Add(new RowDefinition());
-            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var text = new TextBox
-            {
-                Text = details ?? "", IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-            };
-            layout.Children.Add(text);
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
-            var copy = new Button { Content = "Копировать" };
-            var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            copy.Click += delegate
-            {
-                try { Clipboard.SetText(text.Text); status.Text = "Скопировано"; }
-                catch (System.Runtime.InteropServices.ExternalException) { status.Text = "Буфер занят; выделите текст и нажмите Ctrl+C."; }
-            };
-            var close = new Button { Content = "Закрыть", IsCancel = true };
-            close.Click += delegate { dialog.Close(); };
-            actions.Children.Add(copy); actions.Children.Add(close); actions.Children.Add(status);
-            Grid.SetRow(actions, 1); layout.Children.Add(actions); dialog.Content = layout;
-            return dialog;
-        }
-        public static void ShowText(Window owner, string title, string details) { Text(owner, title, details).ShowDialog(); }
-        /// <summary>Данные уже прочитаны репозиторием; просмотр IPA не запускает дополнительное сканирование диска.</summary>
-        public static Window Ipa(Window owner, LocalRow row)
-        {
-            return Text(owner, "Сведения об IPA — " + row.DisplayName,
-                row.FileDetails + Environment.NewLine + "App Store ID: " + (row.AppStoreID ?? "не указан") +
-                Environment.NewLine + "Bundle ID: " + (row.BundleID ?? "не указан") +
-                Environment.NewLine + "Сборка: " + (row.Build ?? "не указана") +
-                Environment.NewLine + "Размер: " + row.Size);
-        }
-    }
-}
-
-// Presentation/AppleLoginWindow.cs
+// Presentation/Accounts/AppleLoginWindow.cs
 namespace IpaDesktop
 {
     /// <summary>Модальный вход с отдельным этапом 2FA. Пароль и код находятся в PasswordBox и краткоживущих SecureString.</summary>
@@ -301,168 +240,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/AppSetEditor.cs
-namespace IpaDesktop
-{
-    /// <summary>Редактирует независимую копию набора; отмена не меняет файл конфигурации.</summary>
-    public static class AppSetEditor
-    {
-        public static Window Create(Window owner, string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save)
-        {
-            var draft = new ObservableCollection<AppRow>(apps.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
-            var dialog = AppDialogs.Create(owner, "Редактирование набора", 680, 580);
-            var grid = new Grid { Margin = new Thickness(18) };
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition());
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var title = new TextBox { Text = name, MaxLength = 64, Margin = new Thickness(0, 0, 0, 12) };
-            title.Name = "DraftName"; grid.Children.Add(title);
-            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = draft, DisplayMemberPath = "Name" };
-            list.Style = (Style)owner.FindResource("SetList"); list.Name = "DraftApps";
-            Grid.SetRow(list, 1); grid.Children.Add(list);
-            var bottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            var hint = new TextBlock { Text = "Клик — отметить приложение. Новые приложения добавляются в набор через поиск.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-            var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-            status.Foreground = System.Windows.Media.Brushes.Salmon;
-            var buttons = new WrapPanel();
-            var remove = new Button { Content = "Убрать отмеченные" }; remove.Name = "DraftRemove";
-            remove.Click += delegate { foreach (var item in list.SelectedItems.Cast<AppRow>().ToArray()) draft.Remove(item); };
-            var apply = new Button { Content = "Сохранить" }; apply.Name = "DraftSave";
-            apply.Click += delegate
-            {
-                try
-                {
-                    save(title.Text.Trim(), draft.ToArray());
-                    dialog.DialogResult = true;
-                }
-                catch (Exception e) { status.Text = e.Message; }
-            };
-            var cancel = new Button { Content = "Отмена", IsCancel = true };
-            cancel.Click += delegate { dialog.Close(); };
-            buttons.Children.Add(remove); buttons.Children.Add(apply); buttons.Children.Add(cancel);
-            bottom.Children.Add(hint); bottom.Children.Add(status); bottom.Children.Add(buttons);
-            Grid.SetRow(bottom, 2); grid.Children.Add(bottom);
-            dialog.Content = grid;
-            return dialog;
-        }
-    }
-}
-
-// Presentation/AppSetsController.cs
-namespace IpaDesktop
-{
-    /// <summary>Управляет наборами в обеих вкладках: сохранением, выбором, предпросмотром и добавлением в очередь.</summary>
-    public sealed class AppSetsController : WindowController
-    {
-        public AppSetsController(Desktop view, Engine engine) : base(view, engine)
-        {
-            C<ListBox>("AppSets").SelectionChanged += delegate { Preview(); ApplyActions(); };
-            On("AddToSet", delegate { Save(C<ComboBox>("SearchSet").Text, "SearchSetStatus"); });
-            On("SaveSet", delegate { Save(C<TextBox>("SetName").Text, "SetStatus"); });
-            On("EditSet", delegate
-            {
-                var selected = Selected();
-                if (selected.Count != 1) return;
-                var original = selected[0];
-                Work("Открытие набора…", async delegate(CancellationToken ct)
-                {
-                    var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveApps(original); }, ct);
-                    ct.ThrowIfCancellationRequested();
-                    var editor = AppSetEditor.Create(w, original.Name, apps,
-                        delegate(string name, IEnumerable<AppRow> rows) { engine.AppSets.Update(original.Name, name, rows); });
-                    if (editor.ShowDialog() == true) RefreshSets();
-                });
-            });
-            On("DeleteSet", DeleteSelected);
-            On("UseSet", UseSelected);
-            RefreshSets();
-        }
-        /// <summary>Обе кнопки дополняют набор одинаково; повторное имя не уничтожает прежние приложения.</summary>
-        void Save(string name, string status)
-        {
-            name = (name ?? "").Trim();
-            try
-            {
-                var rows = view.SelectedDownloads();
-                if (name.Length == 0) throw new InvalidOperationException("Введите название нового набора или выберите существующий.");
-                if (rows.Count == 0) throw new InvalidOperationException("Добавьте приложения в выбранное в поиске.");
-                engine.AppSets.AddApps(name, rows.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
-                RefreshSets();
-                C<ComboBox>("SearchSet").Text = name;
-                C<TextBlock>(status).Text = "Набор «" + name + "» сохранён. Повторы по ID исключены.";
-                view.RegisterPrivate(name);
-            }
-            catch (Exception e) { C<TextBlock>(status).Text = e.Message; Error(e); }
-        }
-        /// <summary>Сохраняет выделение по именам после перезагрузки списка, независимо от ссылок на модели.</summary>
-        internal void RefreshSets()
-        {
-            var list = C<ListBox>("AppSets");
-            var selected = new HashSet<string>(Selected().Select(x => x.Name), StringComparer.OrdinalIgnoreCase);
-            var picker = C<ComboBox>("SearchSet");
-            var name = picker.Text;
-            try
-            {
-                var sets = engine.AppSets.Load();
-                list.ItemsSource = sets;
-                foreach (var set in sets.Where(x => selected.Contains(x.Name))) list.SelectedItems.Add(set);
-                if (list.SelectedItems.Count == 0 && sets.Count > 0) list.SelectedIndex = 0;
-                picker.ItemsSource = sets.Select(x => x.Name).ToArray(); picker.Text = name;
-                C<TextBlock>("SetsCount").Text = sets.Count == 0 ? "Наборов пока нет" : "Сохранено наборов: " + sets.Count;
-                Preview(); ApplyActions();
-            }
-            catch (Exception e) { C<TextBlock>("SetStatus").Text = e.Message; Error(e); }
-        }
-        List<AppSet> Selected() { return C<ListBox>("AppSets").SelectedItems.Cast<AppSet>().ToList(); }
-        void Preview()
-        {
-            var selected = Selected();
-            var apps = selected.Where(x => x.Apps != null).SelectMany(x => x.Apps).GroupBy(x => x.ID).Select(g => g.First()).ToArray();
-            C<TextBlock>("SetPreview").Text = selected.Count == 0 ? "Отметьте один или несколько наборов." :
-                "Выбрано наборов: " + selected.Count + " · уникальных приложений: " + apps.Length +
-                (selected.Any(x => x.Apps == null) ? " · есть наборы прежнего формата" : "") + Environment.NewLine +
-                String.Join(", ", apps.Take(12).Select(x => x.Name)) + (apps.Length > 12 ? "…" : "");
-        }
-        /// <summary>Сначала разрешает все наборы; при ошибке ни один из них не попадает в очередь частично.</summary>
-        void UseSelected()
-        {
-            var selected = Selected();
-            if (selected.Count == 0) return;
-            Work("Добавление наборов…", async delegate(CancellationToken ct)
-            {
-                var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveMany(selected); }, ct);
-                ct.ThrowIfCancellationRequested();
-                int added = view.AddSetApps(apps);
-                RefreshSets();
-                foreach (var set in selected) view.RegisterPrivate(set.Name);
-                string message = "Наборов: " + selected.Count + ". Добавлено приложений: " + added + ", уже в очереди: " + (apps.Length - added) + ".";
-                C<TextBlock>("SetStatus").Text = message;
-                C<TextBlock>("SearchSetStatus").Text = message;
-                Log(message);
-            });
-        }
-        void DeleteSelected()
-        {
-            var selected = Selected();
-            // Удаление только конфигурации, без изменения IPA на диске или приложений на телефоне.
-            engine.AppSets.DeleteMany(selected.Select(x => x.Name));
-            RefreshSets(); C<TextBlock>("SetStatus").Text = "Удалено наборов: " + selected.Count + ". IPA сохранены.";
-        }
-        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
-        public override void RefreshActions()
-        {
-            int count = Selected().Count;
-            C<Button>("AddToSet").IsEnabled = C<Button>("SaveSet").IsEnabled = !busy && view.SelectedDownloads().Count > 0;
-            C<Button>("EditSet").IsEnabled = !busy && count == 1;
-            C<Button>("UseSet").IsEnabled = C<Button>("DeleteSet").IsEnabled = !busy && count > 0;
-            C<Button>("UseSet").Content = "В очередь скачивания (" + count + ")";
-            C<Button>("DeleteSet").Content = "Удалить наборы (" + count + ")";
-            C<ComboBox>("SearchSet").IsEnabled = C<ListBox>("AppSets").IsEnabled = C<TextBox>("SetName").IsEnabled = !busy;
-        }
-    }
-}
-
-// Presentation/AppVersionWindow.cs
+// Presentation/Applications/AppVersionWindow.cs
 namespace IpaDesktop
 {
     /// <summary>Таблица версий с ручным ID, выборочной загрузкой метаданных и прерываемыми запросами.</summary>
@@ -553,6 +331,276 @@ namespace IpaDesktop
             cancel.Content=loading?"Отменить запрос":"Закрыть";
         }
         public void Dispose(){lifetime.Dispose();}
+    }
+}
+
+// Presentation/Applications/SearchController.cs
+namespace IpaDesktop
+{
+    /// <summary>Поиск, выбор версий и очередь скачивания; сохраняет снимки ошибок и последнего пакета.</summary>
+    public sealed class SearchController : WindowController
+    {
+        readonly DownloadSelection chosen = new DownloadSelection();
+        readonly SearchSession searchSession = new SearchSession();
+        readonly DownloadSelection failedDownloads = new DownloadSelection();
+        string versionApp;
+        List<DownloadItem> lastDownloads = new List<DownloadItem>();
+        public SearchController(Desktop view, Engine engine) : base(view, engine)
+        {
+            C<ComboBox>("VersionList").Items.Add("Последняя версия");
+            C<ComboBox>("VersionList").SelectedIndex = 0;
+            C<TextBox>("Query").TextChanged += delegate
+            {
+                searchSession.Change(C<TextBox>("Query").Text);
+                if (String.IsNullOrWhiteSpace(C<TextBox>("Query").Text))
+                {
+                    C<DataGrid>("Apps").ItemsSource = null;
+                    ApplyActions();
+                }
+            };
+            On("Search", delegate
+            {
+                string query = C<TextBox>("Query").Text.Trim();
+                if (query.Length == 0) return;
+                int request = searchSession.Revision;
+                Work("Поиск приложений…", async delegate(CancellationToken ct)
+                {
+                    if (query.All(Char.IsDigit))
+                    {
+                        if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").ItemsSource = new[]
+                        {
+                            new AppRow
+                            {
+                                Name = "Приложение по ID " + query, ID = query
+                            }
+                        };
+                    } else
+                    {
+                        var local = await engine.CatalogSearch(query, ct);
+                        if (!searchSession.IsCurrent(request)) return;
+                        C<DataGrid>("Apps").ItemsSource = local;
+                        Log("Найдено в каталогах: " + local.Count);
+                        try
+                        {
+                            var r = await engine.Tool(new[]
+                            {
+                                "search", query, "--limit", "10"
+                            }, ct, false);
+                            Engine.Ensure(r);
+                            if (!searchSession.IsCurrent(request)) return;
+                            C<DataGrid>("Apps").ItemsSource = Engine.MergeApps(local, Engine.ParseApps(r.Output));
+                        } catch (OperationCanceledException)
+                        {
+                            throw;
+                        } catch (Exception e)
+                        {
+                            if (!searchSession.IsCurrent(request)) return;
+                            if (local.Count == 0) throw;
+                            Log("App Store: " + e.Message + ". Показаны результаты каталога.");
+                        }
+                    }
+                    if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").SelectedIndex = 0;
+                });
+            });
+            C<TextBox>("Query").KeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e)
+            {
+                if (e.Key == System.Windows.Input.Key.Enter && C<Button>("Search").IsEnabled) C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            C<DataGrid>("Apps").SelectionChanged += delegate
+            {
+                versionApp = null;
+                C<ComboBox>("VersionList").Items.Clear();
+                C<ComboBox>("VersionList").Items.Add("Последняя версия");
+                C<ComboBox>("VersionList").SelectedIndex = 0;
+                ApplyActions();
+            };
+            On("Versions", delegate
+            {
+                var selected = SelectedApps();
+                if (selected.Count != 1) throw new Exception("Для списка версий выберите одно приложение.");
+                string id = selected[0].ID;
+                Work("Получение доступных версий…", async delegate(CancellationToken ct)
+                {
+                    var r = await engine.Tool(new[]
+                    {
+                        "list-versions", "-i", id
+                    }, ct, false);
+                    Engine.Ensure(r);
+                    var values = Engine.Get(Engine.Object(r.Output), "externalVersionIdentifiers") as object[];
+                    if (values == null) throw new Exception("Список версий не получен: формат ответа не поддерживается.");
+                    if (SelectedApps().Count != 1 || SelectedApps()[0].ID != id) throw new Exception("Выбор приложения изменился. Повторите запрос версий.");
+                    var combo = C<ComboBox>("VersionList");
+                    combo.Items.Clear();
+                    combo.Items.Add("Последняя версия");
+                    foreach (var v in values.Reverse())
+                    {
+                        var s = Convert.ToString(v);
+                        if (s.Length > 0 && s.All(Char.IsDigit)) combo.Items.Add(s);
+                    }
+                    combo.SelectedIndex = 0;
+                    versionApp = id;
+                    Log("Версий: " + values.Length + ". В списке отображаются идентификаторы Apple.");
+                });
+            });
+            On("VersionTable", delegate
+            {
+                var apps = SelectedApps();
+                if (apps.Count != 1) throw new Exception("Для таблицы версий выберите одно приложение.");
+                var app = apps[0];
+                Work("Получение списка версий…", async ct =>
+                {
+                    var rows = new List<AppVersionRow>();
+                    try { rows = await engine.AppVersions.ListAsync(app.ID, ct); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception e) { Log("Список версий недоступен: " + e.Message + ". Можно указать известный ID вручную."); }
+                    ct.ThrowIfCancellationRequested();
+                    using (var dialog = new AppVersionWindow(w, app.Name, app.ID, rows, engine.AppVersions, ct))
+                    {
+                        if (dialog.Window.ShowDialog() == true)
+                        {
+                            foreach (var id in dialog.SelectedIDs) chosen.AddVariant(app, id);
+                            RefreshChosen();
+                        }
+                    }
+                });
+            });
+            On("VersionInfo", delegate
+            {
+                var selected = SelectedApps();
+                if (selected.Count != 1) throw new Exception("Выберите одно приложение.");
+                var row = selected[0];
+                var combo = C<ComboBox>("VersionList");
+                string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
+                if (version != null && row.ID != versionApp) throw new Exception("Обновите список версий выбранного приложения.");
+                Work("Получение сведений о версии…", async delegate(CancellationToken ct)
+                {
+                    if (version == null)
+                    {
+                        var list = await engine.Tool(new[]
+                        {
+                            "list-versions", "-i", row.ID
+                        }, ct, false);
+                        Engine.Ensure(list);
+                        var ids = Engine.VersionIds(list.Output);
+                        if (ids.Count == 0) throw new Exception("Движок не вернул доступных версий приложения.");
+                        version = ids[ids.Count - 1];
+                        Log("Последняя доступная версия: ID " + version);
+                    }
+                    var r = await engine.Tool(new[]
+                    {
+                        "get-version-metadata", "-i", row.ID, "--external-version-id", version
+                    }, ct, false);
+                    Engine.Ensure(r);
+                    var data = Engine.Object(r.Output);
+                    AppDialogs.ShowText(w, "Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
+                        ToolResponse.VersionMetadataText(data) + Environment.NewLine + "ID версии: " + version + Environment.NewLine + "App Store ID: " + row.ID);
+                });
+            });
+            RowClickSelection.Attach(C<DataGrid>("Apps"), delegate(object item)
+            {
+                if (busy) return;
+                var row = item as AppRow;
+                if (row == null || chosen.Snapshot().Any(x => x.ID == row.ID)) return;
+                var combo = C<ComboBox>("VersionList");
+                chosen.AddVariant(row, combo.SelectedIndex > 0 && versionApp == row.ID ? Convert.ToString(combo.SelectedItem) : null);
+                RefreshChosen();
+            });
+            On("AddChosen", delegate
+            {
+                var rows = SelectedApps();
+                var combo = C<ComboBox>("VersionList");
+                string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
+                if (version != null && (rows.Count != 1 || rows[0].ID != versionApp)) throw new Exception("Для конкретной версии выберите одно приложение и обновите список версий.");
+                foreach (var row in rows) chosen.AddVariant(row, version);
+                RefreshChosen();
+            });
+            On("ClearChosen", delegate
+            {
+                chosen.Clear();
+                lastDownloads.Clear();
+                RefreshChosen();
+            });
+            SelectionRemove.Attach(C<ItemsControl>("ChosenApps"), delegate(string id)
+            {
+                if (busy) return;
+                chosen.RemoveKey(id);
+                RefreshChosen();
+            });
+            On("Download", delegate { StartDownloads(chosen.Snapshot()); });
+            On("RetryDownloads", delegate { StartDownloads(failedDownloads.Snapshot(), false); });
+            On("ForgetDownloadErrors", delegate { failedDownloads.Clear(); ApplyActions(); });
+
+        }
+        /// <summary>Возвращает текущий выбор, а при пустой очереди — независимый снимок последнего пакета.</summary>
+        internal List<DownloadItem> SelectedDownloads()
+        {
+            return chosen.Count > 0 ? chosen.Snapshot() : lastDownloads.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
+        }
+        /// <summary>Дополняет очередь ID из наборов и сохраняет уже выбранные версии приложений.</summary>
+        internal int AddSetApps(IEnumerable<AppRow> apps)
+        {
+            int added = chosen.AddMissing(apps);
+            RefreshChosen();
+            C<TabItem>("SearchTab").IsSelected = true;
+            return added;
+        }
+        /// <summary>Запускает пакет и обновляет отдельные списки успешных и неудачных запросов.</summary>
+        void StartDownloads(List<DownloadItem> rows, bool remember = true)
+        {
+            if (rows.Count == 0) throw new Exception("Добавьте приложения в выбранное.");
+            if (remember) lastDownloads = rows.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
+            Work("Скачивание IPA…", async delegate(CancellationToken ct)
+            {
+                view.StartReport("Скачивание", rows.Count, delegate { StartDownloads(failedDownloads.Snapshot(), false); });
+                var result = await BatchRunner.Run(rows,
+                    (row, token) => engine.ApplicationDownloads.DownloadAsync(row, token),
+                    (row, index) => { view.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
+                    row =>
+                    {
+                        view.ReportItem(row.Name, null);
+                        chosen.RemoveKey(row.Key);
+                        failedDownloads.RemoveKey(row.Key);
+                        RefreshChosen();
+                    },
+                    (row, error) =>
+                    {
+                        view.ReportItem(row.Name, error);
+                        failedDownloads.AddVariant(new AppRow { ID = row.ID, Name = row.Name }, row.VersionID);
+                        Log("Не удалось скачать " + row.Name + ": " + error.Message);
+                    }, RefreshLocalFiles, ct);
+                view.CompleteQueue(result.Succeeded, result.Failed.Count);
+                if (result.Failed.Count > 0) throw new Exception("Не удалось скачать: " + String.Join(", ", result.Failed.Select(x => x.Name)) + ". Кнопка «Повторить ошибки» повторит только эти приложения.");
+            });
+        }
+        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
+        public override void RefreshActions()
+        {
+            C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0;
+            C<Button>("RetryDownloads").Content = "Повторить ошибки (" + failedDownloads.Count + ")";
+            C<Button>("RetryDownloads").ToolTip = String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label));
+            C<Button>("ForgetDownloadErrors").IsEnabled = !busy && failedDownloads.Count > 0;
+            C<Button>("AddChosen").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count > 0;
+            C<Button>("ClearChosen").IsEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
+            C<Button>("Download").IsEnabled = !busy && chosen.Count > 0;
+            C<ItemsControl>("ChosenApps").IsEnabled = !busy;
+            C<Button>("VersionTable").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
+            C<Button>("VersionInfo").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
+        }
+        void RefreshChosen()
+        {
+            C<ItemsControl>("ChosenApps").ItemsSource = chosen.Snapshot();
+            C<TextBlock>("ChosenCount").Text = chosen.Count == 0 ? "Добавьте приложения из результатов поиска" : "Выбрано: " + chosen.Count + " · сохраняются при новом поиске";
+            C<Button>("Download").Content = "Скачать (" + chosen.Count + ")";
+            if (chosen.Count == 0 && lastDownloads.Count > 0) C<TextBlock>("SearchSetStatus").Text = "Для набора: приложения последней загрузки (" + lastDownloads.Count + ").";
+            else C<TextBlock>("SearchSetStatus").Text = chosen.Count > 0 ? "Для набора выбрано: " + chosen.Count + ". Введите название или выберите набор." : "Выберите приложения, затем введите название набора.";
+            ApplyActions();
+        }
+        List<AppRow> SelectedApps()
+        {
+            var rows = C<DataGrid>("Apps").SelectedItems.Cast<AppRow>().ToList();
+            if (rows.Count == 0) throw new Exception("Выберите приложение в таблице.");
+            return rows;
+        }
     }
 }
 
@@ -995,7 +1043,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/FilesController.cs
+// Presentation/Devices/FilesController.cs
 namespace IpaDesktop
 {
     /// <summary>Управляет локальными IPA и установкой на iPhone; наборы и хранилище обслуживаются отдельно.</summary>
@@ -1271,7 +1319,68 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/JournalView.cs
+// Presentation/Shared/AppDialogs.cs
+namespace IpaDesktop
+{
+    /// <summary>Создаёт диалоги с общими стилями приложения, владельцем и тёмной рамкой Windows.</summary>
+    public static class AppDialogs
+    {
+        public static Window Create(Window owner, string title, double width, double height)
+        {
+            var dialog = new Window
+            {
+                Owner = owner, Title = title, Width = width, Height = height,
+                MinWidth = 460, MinHeight = 320, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = owner.Background, Foreground = owner.Foreground,
+                FontFamily = owner.FontFamily, FontSize = owner.FontSize,
+                ShowInTaskbar = false, Icon = owner.Icon
+            };
+            dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            dialog.SourceInitialized += delegate { WindowTheme.Apply(dialog); };
+            return dialog;
+        }
+        /// <summary>Полный текст доступен для выделения и копирования, без автоматического открытия при ошибке.</summary>
+        public static Window Text(Window owner, string title, string details)
+        {
+            var dialog = Create(owner, title, 740, 530);
+            var layout = new Grid { Margin = new Thickness(18) };
+            layout.RowDefinitions.Add(new RowDefinition());
+            layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var text = new TextBox
+            {
+                Text = details ?? "", IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            layout.Children.Add(text);
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
+            var copy = new Button { Content = "Копировать" };
+            var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            copy.Click += delegate
+            {
+                try { Clipboard.SetText(text.Text); status.Text = "Скопировано"; }
+                catch (System.Runtime.InteropServices.ExternalException) { status.Text = "Буфер занят; выделите текст и нажмите Ctrl+C."; }
+            };
+            var close = new Button { Content = "Закрыть", IsCancel = true };
+            close.Click += delegate { dialog.Close(); };
+            actions.Children.Add(copy); actions.Children.Add(close); actions.Children.Add(status);
+            Grid.SetRow(actions, 1); layout.Children.Add(actions); dialog.Content = layout;
+            return dialog;
+        }
+        public static void ShowText(Window owner, string title, string details) { Text(owner, title, details).ShowDialog(); }
+        /// <summary>Данные уже прочитаны репозиторием; просмотр IPA не запускает дополнительное сканирование диска.</summary>
+        public static Window Ipa(Window owner, LocalRow row)
+        {
+            return Text(owner, "Сведения об IPA — " + row.DisplayName,
+                row.FileDetails + Environment.NewLine + "App Store ID: " + (row.AppStoreID ?? "не указан") +
+                Environment.NewLine + "Bundle ID: " + (row.BundleID ?? "не указан") +
+                Environment.NewLine + "Сборка: " + (row.Build ?? "не указана") +
+                Environment.NewLine + "Размер: " + row.Size);
+        }
+    }
+}
+
+// Presentation/Shared/JournalView.cs
 namespace IpaDesktop
 {
     /// <summary>Выводит буфер журнала в WPF и поддерживает прокрутку к последним сообщениям.</summary>
@@ -1310,7 +1419,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/RowClickSelection.cs
+// Presentation/Shared/RowClickSelection.cs
 namespace IpaDesktop
 {
     /// <summary>Добавляет строку двойным левым кликом, оставляя одиночный клик для обычного выделения.</summary>
@@ -1334,277 +1443,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/SearchController.cs
-namespace IpaDesktop
-{
-    /// <summary>Поиск, выбор версий и очередь скачивания; сохраняет снимки ошибок и последнего пакета.</summary>
-    public sealed class SearchController : WindowController
-    {
-        readonly DownloadSelection chosen = new DownloadSelection();
-        readonly SearchSession searchSession = new SearchSession();
-        readonly DownloadSelection failedDownloads = new DownloadSelection();
-        string versionApp;
-        List<DownloadItem> lastDownloads = new List<DownloadItem>();
-        public SearchController(Desktop view, Engine engine) : base(view, engine)
-        {
-            C<ComboBox>("VersionList").Items.Add("Последняя версия");
-            C<ComboBox>("VersionList").SelectedIndex = 0;
-            C<TextBox>("Query").TextChanged += delegate
-            {
-                searchSession.Change(C<TextBox>("Query").Text);
-                if (String.IsNullOrWhiteSpace(C<TextBox>("Query").Text))
-                {
-                    C<DataGrid>("Apps").ItemsSource = null;
-                    ApplyActions();
-                }
-            };
-            On("Search", delegate
-            {
-                string query = C<TextBox>("Query").Text.Trim();
-                if (query.Length == 0) return;
-                int request = searchSession.Revision;
-                Work("Поиск приложений…", async delegate(CancellationToken ct)
-                {
-                    if (query.All(Char.IsDigit))
-                    {
-                        if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").ItemsSource = new[]
-                        {
-                            new AppRow
-                            {
-                                Name = "Приложение по ID " + query, ID = query
-                            }
-                        };
-                    } else
-                    {
-                        var local = await engine.CatalogSearch(query, ct);
-                        if (!searchSession.IsCurrent(request)) return;
-                        C<DataGrid>("Apps").ItemsSource = local;
-                        Log("Найдено в каталогах: " + local.Count);
-                        try
-                        {
-                            var r = await engine.Tool(new[]
-                            {
-                                "search", query, "--limit", "10"
-                            }, ct, false);
-                            Engine.Ensure(r);
-                            if (!searchSession.IsCurrent(request)) return;
-                            C<DataGrid>("Apps").ItemsSource = Engine.MergeApps(local, Engine.ParseApps(r.Output));
-                        } catch (OperationCanceledException)
-                        {
-                            throw;
-                        } catch (Exception e)
-                        {
-                            if (!searchSession.IsCurrent(request)) return;
-                            if (local.Count == 0) throw;
-                            Log("App Store: " + e.Message + ". Показаны результаты каталога.");
-                        }
-                    }
-                    if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").SelectedIndex = 0;
-                });
-            });
-            C<TextBox>("Query").KeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e)
-            {
-                if (e.Key == System.Windows.Input.Key.Enter && C<Button>("Search").IsEnabled) C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            };
-            C<DataGrid>("Apps").SelectionChanged += delegate
-            {
-                versionApp = null;
-                C<ComboBox>("VersionList").Items.Clear();
-                C<ComboBox>("VersionList").Items.Add("Последняя версия");
-                C<ComboBox>("VersionList").SelectedIndex = 0;
-                ApplyActions();
-            };
-            On("Versions", delegate
-            {
-                var selected = SelectedApps();
-                if (selected.Count != 1) throw new Exception("Для списка версий выберите одно приложение.");
-                string id = selected[0].ID;
-                Work("Получение доступных версий…", async delegate(CancellationToken ct)
-                {
-                    var r = await engine.Tool(new[]
-                    {
-                        "list-versions", "-i", id
-                    }, ct, false);
-                    Engine.Ensure(r);
-                    var values = Engine.Get(Engine.Object(r.Output), "externalVersionIdentifiers") as object[];
-                    if (values == null) throw new Exception("Список версий не получен: формат ответа не поддерживается.");
-                    if (SelectedApps().Count != 1 || SelectedApps()[0].ID != id) throw new Exception("Выбор приложения изменился. Повторите запрос версий.");
-                    var combo = C<ComboBox>("VersionList");
-                    combo.Items.Clear();
-                    combo.Items.Add("Последняя версия");
-                    foreach (var v in values.Reverse())
-                    {
-                        var s = Convert.ToString(v);
-                        if (s.Length > 0 && s.All(Char.IsDigit)) combo.Items.Add(s);
-                    }
-                    combo.SelectedIndex = 0;
-                    versionApp = id;
-                    Log("Версий: " + values.Length + ". В списке отображаются идентификаторы Apple.");
-                });
-            });
-            On("VersionTable", delegate
-            {
-                var apps = SelectedApps();
-                if (apps.Count != 1) throw new Exception("Для таблицы версий выберите одно приложение.");
-                var app = apps[0];
-                Work("Получение списка версий…", async ct =>
-                {
-                    var rows = new List<AppVersionRow>();
-                    try { rows = await engine.AppVersions.ListAsync(app.ID, ct); }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception e) { Log("Список версий недоступен: " + e.Message + ". Можно указать известный ID вручную."); }
-                    ct.ThrowIfCancellationRequested();
-                    using (var dialog = new AppVersionWindow(w, app.Name, app.ID, rows, engine.AppVersions, ct))
-                    {
-                        if (dialog.Window.ShowDialog() == true)
-                        {
-                            foreach (var id in dialog.SelectedIDs) chosen.AddVariant(app, id);
-                            RefreshChosen();
-                        }
-                    }
-                });
-            });
-            On("VersionInfo", delegate
-            {
-                var selected = SelectedApps();
-                if (selected.Count != 1) throw new Exception("Выберите одно приложение.");
-                var row = selected[0];
-                var combo = C<ComboBox>("VersionList");
-                string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
-                if (version != null && row.ID != versionApp) throw new Exception("Обновите список версий выбранного приложения.");
-                Work("Получение сведений о версии…", async delegate(CancellationToken ct)
-                {
-                    if (version == null)
-                    {
-                        var list = await engine.Tool(new[]
-                        {
-                            "list-versions", "-i", row.ID
-                        }, ct, false);
-                        Engine.Ensure(list);
-                        var ids = Engine.VersionIds(list.Output);
-                        if (ids.Count == 0) throw new Exception("Движок не вернул доступных версий приложения.");
-                        version = ids[ids.Count - 1];
-                        Log("Последняя доступная версия: ID " + version);
-                    }
-                    var r = await engine.Tool(new[]
-                    {
-                        "get-version-metadata", "-i", row.ID, "--external-version-id", version
-                    }, ct, false);
-                    Engine.Ensure(r);
-                    var data = Engine.Object(r.Output);
-                    AppDialogs.ShowText(w, "Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
-                        ToolResponse.VersionMetadataText(data) + Environment.NewLine + "ID версии: " + version + Environment.NewLine + "App Store ID: " + row.ID);
-                });
-            });
-            RowClickSelection.Attach(C<DataGrid>("Apps"), delegate(object item)
-            {
-                if (busy) return;
-                var row = item as AppRow;
-                if (row == null || chosen.Snapshot().Any(x => x.ID == row.ID)) return;
-                var combo = C<ComboBox>("VersionList");
-                chosen.AddVariant(row, combo.SelectedIndex > 0 && versionApp == row.ID ? Convert.ToString(combo.SelectedItem) : null);
-                RefreshChosen();
-            });
-            On("AddChosen", delegate
-            {
-                var rows = SelectedApps();
-                var combo = C<ComboBox>("VersionList");
-                string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
-                if (version != null && (rows.Count != 1 || rows[0].ID != versionApp)) throw new Exception("Для конкретной версии выберите одно приложение и обновите список версий.");
-                foreach (var row in rows) chosen.AddVariant(row, version);
-                RefreshChosen();
-            });
-            On("ClearChosen", delegate
-            {
-                chosen.Clear();
-                lastDownloads.Clear();
-                RefreshChosen();
-            });
-            SelectionRemove.Attach(C<ItemsControl>("ChosenApps"), delegate(string id)
-            {
-                if (busy) return;
-                chosen.RemoveKey(id);
-                RefreshChosen();
-            });
-            On("Download", delegate { StartDownloads(chosen.Snapshot()); });
-            On("RetryDownloads", delegate { StartDownloads(failedDownloads.Snapshot(), false); });
-            On("ForgetDownloadErrors", delegate { failedDownloads.Clear(); ApplyActions(); });
-
-        }
-        /// <summary>Возвращает текущий выбор, а при пустой очереди — независимый снимок последнего пакета.</summary>
-        internal List<DownloadItem> SelectedDownloads()
-        {
-            return chosen.Count > 0 ? chosen.Snapshot() : lastDownloads.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
-        }
-        /// <summary>Дополняет очередь ID из наборов и сохраняет уже выбранные версии приложений.</summary>
-        internal int AddSetApps(IEnumerable<AppRow> apps)
-        {
-            int added = chosen.AddMissing(apps);
-            RefreshChosen();
-            C<TabItem>("SearchTab").IsSelected = true;
-            return added;
-        }
-        /// <summary>Запускает пакет и обновляет отдельные списки успешных и неудачных запросов.</summary>
-        void StartDownloads(List<DownloadItem> rows, bool remember = true)
-        {
-            if (rows.Count == 0) throw new Exception("Добавьте приложения в выбранное.");
-            if (remember) lastDownloads = rows.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
-            Work("Скачивание IPA…", async delegate(CancellationToken ct)
-            {
-                view.StartReport("Скачивание", rows.Count, delegate { StartDownloads(failedDownloads.Snapshot(), false); });
-                var result = await BatchRunner.Run(rows,
-                    (row, token) => engine.ApplicationDownloads.DownloadAsync(row, token),
-                    (row, index) => { view.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
-                    row =>
-                    {
-                        view.ReportItem(row.Name, null);
-                        chosen.RemoveKey(row.Key);
-                        failedDownloads.RemoveKey(row.Key);
-                        RefreshChosen();
-                    },
-                    (row, error) =>
-                    {
-                        view.ReportItem(row.Name, error);
-                        failedDownloads.AddVariant(new AppRow { ID = row.ID, Name = row.Name }, row.VersionID);
-                        Log("Не удалось скачать " + row.Name + ": " + error.Message);
-                    }, RefreshLocalFiles, ct);
-                view.CompleteQueue(result.Succeeded, result.Failed.Count);
-                if (result.Failed.Count > 0) throw new Exception("Не удалось скачать: " + String.Join(", ", result.Failed.Select(x => x.Name)) + ". Кнопка «Повторить ошибки» повторит только эти приложения.");
-            });
-        }
-        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
-        public override void RefreshActions()
-        {
-            C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0;
-            C<Button>("RetryDownloads").Content = "Повторить ошибки (" + failedDownloads.Count + ")";
-            C<Button>("RetryDownloads").ToolTip = String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label));
-            C<Button>("ForgetDownloadErrors").IsEnabled = !busy && failedDownloads.Count > 0;
-            C<Button>("AddChosen").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count > 0;
-            C<Button>("ClearChosen").IsEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
-            C<Button>("Download").IsEnabled = !busy && chosen.Count > 0;
-            C<ItemsControl>("ChosenApps").IsEnabled = !busy;
-            C<Button>("VersionTable").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
-            C<Button>("VersionInfo").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
-        }
-        void RefreshChosen()
-        {
-            C<ItemsControl>("ChosenApps").ItemsSource = chosen.Snapshot();
-            C<TextBlock>("ChosenCount").Text = chosen.Count == 0 ? "Добавьте приложения из результатов поиска" : "Выбрано: " + chosen.Count + " · сохраняются при новом поиске";
-            C<Button>("Download").Content = "Скачать (" + chosen.Count + ")";
-            if (chosen.Count == 0 && lastDownloads.Count > 0) C<TextBlock>("SearchSetStatus").Text = "Для набора: приложения последней загрузки (" + lastDownloads.Count + ").";
-            else C<TextBlock>("SearchSetStatus").Text = chosen.Count > 0 ? "Для набора выбрано: " + chosen.Count + ". Введите название или выберите набор." : "Выберите приложения, затем введите название набора.";
-            ApplyActions();
-        }
-        List<AppRow> SelectedApps()
-        {
-            var rows = C<DataGrid>("Apps").SelectedItems.Cast<AppRow>().ToList();
-            if (rows.Count == 0) throw new Exception("Выберите приложение в таблице.");
-            return rows;
-        }
-    }
-}
-
-// Presentation/SelectionRemove.cs
+// Presentation/Shared/SelectionRemove.cs
 namespace IpaDesktop
 {
     /// <summary>Обрабатывает крестики в шаблонах выбранных элементов по стабильному ID или пути.</summary>
@@ -1630,7 +1469,245 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/StorageController.cs
+// Presentation/Shared/WindowController.cs
+namespace IpaDesktop
+{
+    /// <summary>Общий доступ контроллеров к окну, рабочей операции, журналу и обновлению состояния действий.</summary>
+    public abstract class WindowController
+    {
+        protected readonly Desktop view;
+        protected readonly Engine engine;
+        protected Window w
+        {
+            get
+            {
+                return view.Window;
+            }
+        }
+        protected bool busy
+        {
+            get
+            {
+                return view.IsBusy;
+            }
+        }
+        protected bool setting
+        {
+            get
+            {
+                return view.IsUpdatingSettings;
+            }
+        }
+        protected WindowController(Desktop view, Engine engine)
+        {
+            this.view = view;
+            this.engine = engine;
+        }
+        protected T C<T>(string name) where T : class
+        {
+            return view.C<T>(name);
+        }
+        /// <summary>Подключает действие к кнопке и передаёт исключения в общий обработчик интерфейса.</summary>
+        protected void On(string name, Action action)
+        {
+            view.On(name, action);
+        }
+        /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
+        protected void Work(string title, Func<CancellationToken, Task> action)
+        {
+            view.Work(title, action);
+        }
+        /// <summary>Передаёт метрики прогрессу, а обычные сообщения — в ограниченный буфер журнала.</summary>
+        protected void Log(string text)
+        {
+            view.Log(text);
+        }
+        /// <summary>Показывает ошибку пользователю и сохраняет сообщение в журнале.</summary>
+        protected void Error(Exception error)
+        {
+            view.Error(error);
+        }
+        /// <summary>Обновляет состояния всех созданных контроллеров; допускает частичную инициализацию окна.</summary>
+        protected void ApplyActions()
+        {
+            view.ApplyActions();
+        }
+        /// <summary>Отображает настройки, блокируя повторную реакцию обработчиков переключателей.</summary>
+        protected void StateView()
+        {
+            view.StateView();
+        }
+        protected void RefreshLocalFiles()
+        {
+            view.RefreshFiles();
+        }
+        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
+        public abstract void RefreshActions();
+    }
+}
+
+// Presentation/Storage/AppSetEditor.cs
+namespace IpaDesktop
+{
+    /// <summary>Редактирует независимую копию набора; отмена не меняет файл конфигурации.</summary>
+    public static class AppSetEditor
+    {
+        public static Window Create(Window owner, string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save)
+        {
+            var draft = new ObservableCollection<AppRow>(apps.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
+            var dialog = AppDialogs.Create(owner, "Редактирование набора", 680, 580);
+            var grid = new Grid { Margin = new Thickness(18) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition());
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var title = new TextBox { Text = name, MaxLength = 64, Margin = new Thickness(0, 0, 0, 12) };
+            title.Name = "DraftName"; grid.Children.Add(title);
+            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = draft, DisplayMemberPath = "Name" };
+            list.Style = (Style)owner.FindResource("SetList"); list.Name = "DraftApps";
+            Grid.SetRow(list, 1); grid.Children.Add(list);
+            var bottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+            var hint = new TextBlock { Text = "Клик — отметить приложение. Новые приложения добавляются в набор через поиск.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
+            var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
+            status.Foreground = System.Windows.Media.Brushes.Salmon;
+            var buttons = new WrapPanel();
+            var remove = new Button { Content = "Убрать отмеченные" }; remove.Name = "DraftRemove";
+            remove.Click += delegate { foreach (var item in list.SelectedItems.Cast<AppRow>().ToArray()) draft.Remove(item); };
+            var apply = new Button { Content = "Сохранить" }; apply.Name = "DraftSave";
+            apply.Click += delegate
+            {
+                try
+                {
+                    save(title.Text.Trim(), draft.ToArray());
+                    dialog.DialogResult = true;
+                }
+                catch (Exception e) { status.Text = e.Message; }
+            };
+            var cancel = new Button { Content = "Отмена", IsCancel = true };
+            cancel.Click += delegate { dialog.Close(); };
+            buttons.Children.Add(remove); buttons.Children.Add(apply); buttons.Children.Add(cancel);
+            bottom.Children.Add(hint); bottom.Children.Add(status); bottom.Children.Add(buttons);
+            Grid.SetRow(bottom, 2); grid.Children.Add(bottom);
+            dialog.Content = grid;
+            return dialog;
+        }
+    }
+}
+
+// Presentation/Storage/AppSetsController.cs
+namespace IpaDesktop
+{
+    /// <summary>Управляет наборами в обеих вкладках: сохранением, выбором, предпросмотром и добавлением в очередь.</summary>
+    public sealed class AppSetsController : WindowController
+    {
+        public AppSetsController(Desktop view, Engine engine) : base(view, engine)
+        {
+            C<ListBox>("AppSets").SelectionChanged += delegate { Preview(); ApplyActions(); };
+            On("AddToSet", delegate { Save(C<ComboBox>("SearchSet").Text, "SearchSetStatus"); });
+            On("SaveSet", delegate { Save(C<TextBox>("SetName").Text, "SetStatus"); });
+            On("EditSet", delegate
+            {
+                var selected = Selected();
+                if (selected.Count != 1) return;
+                var original = selected[0];
+                Work("Открытие набора…", async delegate(CancellationToken ct)
+                {
+                    var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveApps(original); }, ct);
+                    ct.ThrowIfCancellationRequested();
+                    var editor = AppSetEditor.Create(w, original.Name, apps,
+                        delegate(string name, IEnumerable<AppRow> rows) { engine.AppSets.Update(original.Name, name, rows); });
+                    if (editor.ShowDialog() == true) RefreshSets();
+                });
+            });
+            On("DeleteSet", DeleteSelected);
+            On("UseSet", UseSelected);
+            RefreshSets();
+        }
+        /// <summary>Обе кнопки дополняют набор одинаково; повторное имя не уничтожает прежние приложения.</summary>
+        void Save(string name, string status)
+        {
+            name = (name ?? "").Trim();
+            try
+            {
+                var rows = view.SelectedDownloads();
+                if (name.Length == 0) throw new InvalidOperationException("Введите название нового набора или выберите существующий.");
+                if (rows.Count == 0) throw new InvalidOperationException("Добавьте приложения в выбранное в поиске.");
+                engine.AppSets.AddApps(name, rows.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
+                RefreshSets();
+                C<ComboBox>("SearchSet").Text = name;
+                C<TextBlock>(status).Text = "Набор «" + name + "» сохранён. Повторы по ID исключены.";
+                view.RegisterPrivate(name);
+            }
+            catch (Exception e) { C<TextBlock>(status).Text = e.Message; Error(e); }
+        }
+        /// <summary>Сохраняет выделение по именам после перезагрузки списка, независимо от ссылок на модели.</summary>
+        internal void RefreshSets()
+        {
+            var list = C<ListBox>("AppSets");
+            var selected = new HashSet<string>(Selected().Select(x => x.Name), StringComparer.OrdinalIgnoreCase);
+            var picker = C<ComboBox>("SearchSet");
+            var name = picker.Text;
+            try
+            {
+                var sets = engine.AppSets.Load();
+                list.ItemsSource = sets;
+                foreach (var set in sets.Where(x => selected.Contains(x.Name))) list.SelectedItems.Add(set);
+                if (list.SelectedItems.Count == 0 && sets.Count > 0) list.SelectedIndex = 0;
+                picker.ItemsSource = sets.Select(x => x.Name).ToArray(); picker.Text = name;
+                C<TextBlock>("SetsCount").Text = sets.Count == 0 ? "Наборов пока нет" : "Сохранено наборов: " + sets.Count;
+                Preview(); ApplyActions();
+            }
+            catch (Exception e) { C<TextBlock>("SetStatus").Text = e.Message; Error(e); }
+        }
+        List<AppSet> Selected() { return C<ListBox>("AppSets").SelectedItems.Cast<AppSet>().ToList(); }
+        void Preview()
+        {
+            var selected = Selected();
+            var apps = selected.Where(x => x.Apps != null).SelectMany(x => x.Apps).GroupBy(x => x.ID).Select(g => g.First()).ToArray();
+            C<TextBlock>("SetPreview").Text = selected.Count == 0 ? "Отметьте один или несколько наборов." :
+                "Выбрано наборов: " + selected.Count + " · уникальных приложений: " + apps.Length +
+                (selected.Any(x => x.Apps == null) ? " · есть наборы прежнего формата" : "") + Environment.NewLine +
+                String.Join(", ", apps.Take(12).Select(x => x.Name)) + (apps.Length > 12 ? "…" : "");
+        }
+        /// <summary>Сначала разрешает все наборы; при ошибке ни один из них не попадает в очередь частично.</summary>
+        void UseSelected()
+        {
+            var selected = Selected();
+            if (selected.Count == 0) return;
+            Work("Добавление наборов…", async delegate(CancellationToken ct)
+            {
+                var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveMany(selected); }, ct);
+                ct.ThrowIfCancellationRequested();
+                int added = view.AddSetApps(apps);
+                RefreshSets();
+                foreach (var set in selected) view.RegisterPrivate(set.Name);
+                string message = "Наборов: " + selected.Count + ". Добавлено приложений: " + added + ", уже в очереди: " + (apps.Length - added) + ".";
+                C<TextBlock>("SetStatus").Text = message;
+                C<TextBlock>("SearchSetStatus").Text = message;
+                Log(message);
+            });
+        }
+        void DeleteSelected()
+        {
+            var selected = Selected();
+            // Удаление только конфигурации, без изменения IPA на диске или приложений на телефоне.
+            engine.AppSets.DeleteMany(selected.Select(x => x.Name));
+            RefreshSets(); C<TextBlock>("SetStatus").Text = "Удалено наборов: " + selected.Count + ". IPA сохранены.";
+        }
+        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
+        public override void RefreshActions()
+        {
+            int count = Selected().Count;
+            C<Button>("AddToSet").IsEnabled = C<Button>("SaveSet").IsEnabled = !busy && view.SelectedDownloads().Count > 0;
+            C<Button>("EditSet").IsEnabled = !busy && count == 1;
+            C<Button>("UseSet").IsEnabled = C<Button>("DeleteSet").IsEnabled = !busy && count > 0;
+            C<Button>("UseSet").Content = "В очередь скачивания (" + count + ")";
+            C<Button>("DeleteSet").Content = "Удалить наборы (" + count + ")";
+            C<ComboBox>("SearchSet").IsEnabled = C<ListBox>("AppSets").IsEnabled = C<TextBox>("SetName").IsEnabled = !busy;
+        }
+    }
+}
+
+// Presentation/Storage/StorageController.cs
 namespace IpaDesktop
 {
     /// <summary>Отображает место на диске и кандидатов на очистку, используя общий снимок локальных IPA.</summary>
@@ -1667,7 +1744,7 @@ namespace IpaDesktop
     }
 }
 
-// Presentation/UpdatesController.cs
+// Presentation/Updates/UpdatesController.cs
 namespace IpaDesktop
 {
     /// <summary>Связывает кнопки обновления и отката GUI, ipatool и инструментов установки.</summary>
@@ -1836,82 +1913,5 @@ namespace IpaDesktop
             C<TextBlock>("UpdateNotice").Visibility = guiRelease == null ? Visibility.Collapsed : Visibility.Visible;
             Log(text);
         }
-    }
-}
-
-// Presentation/WindowController.cs
-namespace IpaDesktop
-{
-    /// <summary>Общий доступ контроллеров к окну, рабочей операции, журналу и обновлению состояния действий.</summary>
-    public abstract class WindowController
-    {
-        protected readonly Desktop view;
-        protected readonly Engine engine;
-        protected Window w
-        {
-            get
-            {
-                return view.Window;
-            }
-        }
-        protected bool busy
-        {
-            get
-            {
-                return view.IsBusy;
-            }
-        }
-        protected bool setting
-        {
-            get
-            {
-                return view.IsUpdatingSettings;
-            }
-        }
-        protected WindowController(Desktop view, Engine engine)
-        {
-            this.view = view;
-            this.engine = engine;
-        }
-        protected T C<T>(string name) where T : class
-        {
-            return view.C<T>(name);
-        }
-        /// <summary>Подключает действие к кнопке и передаёт исключения в общий обработчик интерфейса.</summary>
-        protected void On(string name, Action action)
-        {
-            view.On(name, action);
-        }
-        /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
-        protected void Work(string title, Func<CancellationToken, Task> action)
-        {
-            view.Work(title, action);
-        }
-        /// <summary>Передаёт метрики прогрессу, а обычные сообщения — в ограниченный буфер журнала.</summary>
-        protected void Log(string text)
-        {
-            view.Log(text);
-        }
-        /// <summary>Показывает ошибку пользователю и сохраняет сообщение в журнале.</summary>
-        protected void Error(Exception error)
-        {
-            view.Error(error);
-        }
-        /// <summary>Обновляет состояния всех созданных контроллеров; допускает частичную инициализацию окна.</summary>
-        protected void ApplyActions()
-        {
-            view.ApplyActions();
-        }
-        /// <summary>Отображает настройки, блокируя повторную реакцию обработчиков переключателей.</summary>
-        protected void StateView()
-        {
-            view.StateView();
-        }
-        protected void RefreshLocalFiles()
-        {
-            view.RefreshFiles();
-        }
-        /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
-        public abstract void RefreshActions();
     }
 }

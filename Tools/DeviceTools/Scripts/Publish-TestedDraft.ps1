@@ -1,4 +1,4 @@
-# Recover only a draft produced by an already tested build of identical native inputs.
+﻿# Recover only a draft produced by an already tested build of identical native inputs.
 $ErrorActionPreference='Stop'
 $version=(Get-Content Tools/DeviceTools/VERSION -Raw).Trim()
 $tag="device-tools-v$version"
@@ -32,12 +32,11 @@ foreach($run in @($runs.workflow_runs|Where-Object { $_.head_sha -eq $target -an
 if(!$tested){throw 'No successful compile and native validation for draft target'}
 git fetch --no-tags --depth=1 origin $target
 if($LASTEXITCODE -ne 0){throw 'Could not read tested native source commit'}
-foreach($file in @('pins.json','build.sh','package.py','package_support.py','VERSION','README.md','changelog.md')){
- $built=git rev-parse "${target}:Tools/DeviceTools/$file"
- if($LASTEXITCODE -ne 0){throw 'Missing tested native input'}
- $current=git rev-parse "HEAD:Tools/DeviceTools/$file"
- if($LASTEXITCODE -ne 0 -or $built -ne $current){throw "Native input changed since tested build: $file"}
-}
+# Compare the complete native tool tree; new modules cannot escape draft validation.
+$built=git rev-parse "${target}:Tools/DeviceTools"
+if($LASTEXITCODE -ne 0){throw 'Missing tested native inputs'}
+$current=git rev-parse 'HEAD:Tools/DeviceTools'
+if($LASTEXITCODE -ne 0 -or $built -ne $current){throw 'Native inputs changed since tested build; rebuild instead of recovering draft'}
 $cache=Join-Path $PWD 'native-draft-recovery'
 New-Item -ItemType Directory -Path $cache|Out-Null
 foreach($name in $names){

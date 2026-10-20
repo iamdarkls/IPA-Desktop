@@ -22,14 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test stable release discovery
+        env:
+          PYTHONPATH: Tools/DeviceTools
         run: |
-          python3 Tools/DeviceTools/test_updates.py
-          python3 Tools/DeviceTools/test_package.py
+          python3 -m unittest discover -s Tools/DeviceTools/Tests -v
       - name: Check stable upstream releases and prepare candidate
         id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 Tools/DeviceTools/check_updates.py
+        run: python3 Tools/DeviceTools/Scripts/check_updates.py
       - uses: actions/upload-artifact@v4
         if: steps.prepare.outputs.build == 'true'
         with:
@@ -56,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: ./Tools/DeviceTools/Publish-TestedDraft.ps1
+        run: ./Tools/DeviceTools/Scripts/Publish-TestedDraft.ps1
   build:
     needs: [prepare, recover]
     if: needs.prepare.outputs.build == 'true' && needs.recover.outputs.published != 'true'
@@ -79,7 +80,7 @@ jobs:
             mingw-w64-x86_64-libzip mingw-w64-x86_64-python
       - name: Build pinned sources and package Windows binaries
         shell: msys2 {0}
-        run: bash Tools/DeviceTools/build.sh
+        run: bash Tools/DeviceTools/Scripts/build.sh
       - name: Verify standalone Windows command line tools
         shell: pwsh
         run: |

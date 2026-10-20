@@ -24,6 +24,7 @@ class DependencyCollector:
 
     def collect(self, roots):
         pending = deque(map(Path, roots))
+        scheduled = {file.name.casefold() for file in pending}
         seen = set()
         output = []
         while pending:
@@ -43,7 +44,9 @@ class DependencyCollector:
                     continue
                 found = self.prefix.get(name) or self.mingw.get(name)
                 if found is not None:
-                    pending.append(found)
+                    if name not in scheduled:
+                        scheduled.add(name)
+                        pending.append(found)
                 elif name.startswith(('api-ms-win-', 'ext-ms-win-')) or name in self.system:
                     continue
                 else:

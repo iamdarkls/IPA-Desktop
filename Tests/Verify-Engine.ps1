@@ -28,6 +28,22 @@ try {
  [IO.File]::WriteAllText((Join-Path $direct 'ipatool.exe'),'fixture')
  if($engine.Binary('ipatool*.exe') -ne (Join-Path $direct 'ipatool.exe')){throw 'ipatool did not use direct release'}
  if($engine.Binary('ideviceinstaller.exe') -ne (Join-Path $support 'ideviceinstaller.exe')){throw 'Device tool used engine folder'}
+ # Warm lookups reuse the immutable active package; a deleted path must be rediscovered.
+ $timer=[Diagnostics.Stopwatch]::StartNew()
+ for($index=0;$index -lt 1000;$index++){$engine.Binary('ipatool*.exe')|Out-Null}
+ Write-Host ('Tool lookup: 1000 warm calls in '+[Math]::Round($timer.Elapsed.TotalMilliseconds)+' ms')
+ $original=Join-Path $direct 'ipatool.exe';$renamed=Join-Path $direct 'ipatool-renamed.exe'
+ Move-Item $original $renamed
+ [IO.File]::WriteAllText((Join-Path $direct 'ipatool-duplicate.exe'),'fixture')
+ $ambiguous=$false
+ try{$engine.Binary('ipatool*.exe')|Out-Null}catch{$ambiguous=$true}
+ if(!$ambiguous){throw 'Missing cached binary bypassed ambiguity validation'}
+ Remove-Item (Join-Path $direct 'ipatool-duplicate.exe')
+ if($engine.Binary('ipatool*.exe') -ne $renamed){throw 'Failed lookup was cached or deleted path was reused'}
+ Move-Item $renamed $original
+ if($engine.Binary('ipatool*.exe') -ne $original){throw 'Replaced binary was not rediscovered'}
+ Write-Host 'PASS: warm tool lookup, missing-path invalidation, ambiguity and recovery'
+
  $engine.Save();$engine.Rollback()
  if($engine.Settings.Source -or $engine.Settings.DeviceCurrent -ne 'devices'){throw 'Legacy rollback lost source or device tools'}
  if($engine.Binary('ipatool*.exe') -ne (Join-Path $oldBins 'ipatool-old.exe')){throw 'Legacy rollback did not restore bundled engine'}

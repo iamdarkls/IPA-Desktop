@@ -7,7 +7,7 @@ using System.Text;
 using System.Xml;
 using System;
 
-// Infrastructure/IpaMetadata.cs
+// Infrastructure/Storage/IpaMetadata.cs
 namespace IpaDesktop
 {
     // Reads account identity from the IPA itself; never substitutes the current session.

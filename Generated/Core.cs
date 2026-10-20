@@ -22,62 +22,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System;
 
-// Domain/AppInfo.cs
-namespace IpaDesktop
-{
-    /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
-    public static class AppInfo
-    {
-        public const string Version = "0.2.10";
-        public const string Repository = "iamdarkls/IPA-Desktop";
-        public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
-    }
-}
-
-// Domain/AppleSupportReport.cs
-namespace IpaDesktop
-{
-    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
-    public enum AppleSupportStatus
-    {
-        Running,
-        Stopped,
-        ServiceMissing,
-        NotDetected,
-        Unknown
-    }
-
-    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
-    public sealed class AppleSupportSnapshot
-    {
-        public bool InstallationDetected { get; set; }
-        public bool ServiceFound { get; set; }
-        public bool ServiceStatusKnown { get; set; }
-        public bool ServiceRunning { get; set; }
-        public bool ServiceScanCompleted { get; set; }
-        public bool RegistryScanCompleted { get; set; }
-        public string Details { get; set; }
-    }
-
-    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
-    public sealed class AppleSupportReport
-    {
-        public AppleSupportStatus Status { get; set; }
-        public string Message { get; set; }
-        public string Details { get; set; }
-        public string HelpUrl
-        {
-            get
-            {
-                return Status == AppleSupportStatus.Stopped
-                    ? "https://support.apple.com/ru-ru/102347"
-                    : "https://support.apple.com/ru-ru/118290";
-            }
-        }
-    }
-}
-
-// Domain/AppRow.cs
+// Domain/Applications/AppRow.cs
 namespace IpaDesktop
 {
     /// <summary>Приложение каталога: отображаемое название и числовой App Store ID; без данных аккаунта.</summary>
@@ -96,67 +41,7 @@ namespace IpaDesktop
     }
 }
 
-// Domain/AppSet.cs
-namespace IpaDesktop
-{
-    /// <summary>Сохранённый набор ID; Files используется только для чтения и миграции прежнего формата.</summary>
-    public sealed class AppSet
-    {
-        public string Name { get; set; }
-        public AppRow[] Apps { get; set; }
-        // Read-only compatibility with sets saved before 0.1.18.
-        public string[] Files { get; set; }
-        public string Label { get { return Name + " · " + (Apps == null ? (Files == null ? 0 : Files.Length) : Apps.Length) + " приложений" + (Apps == null ? " · прежний формат" : ""); } }
-    }
-}
-
-// Domain/AppSetRules.cs
-namespace IpaDesktop
-{
-    /// <summary>Ограничения формата наборов и объединение приложений по App Store ID; без зависимости от WPF.</summary>
-    public static class AppSetRules
-    {
-        /// <summary>Проверяет новый формат ID и прежний формат имён IPA до чтения файлов или записи конфигурации.</summary>
-        public static void Validate(AppSet set)
-        {
-            if (set == null || String.IsNullOrWhiteSpace(set.Name) || set.Name.Length > 64 || set.Name.Any(Char.IsControl)) throw new IOException("Название набора: от 1 до 64 символов.");
-            if (set.Apps != null)
-            {
-                if (set.Apps.Length == 0 || set.Apps.Length > 500) throw new IOException("В наборе должно быть от 1 до 500 приложений.");
-                foreach (var app in set.Apps)
-                    if (app == null || !ValidId(app.ID) || String.IsNullOrWhiteSpace(app.Name) || app.Name.Length > 320 || app.Name.Any(Char.IsControl)) throw new IOException("Набор содержит некорректный App Store ID или название.");
-                if (set.Apps.Select(x => x.ID).Distinct().Count() != set.Apps.Length) throw new IOException("App Store ID в наборе повторяются.");
-            }
-            else
-            {
-                if (set.Files == null || set.Files.Length == 0 || set.Files.Length > 500) throw new IOException("Пустой набор.");
-                foreach (var name in set.Files)
-                    if (String.IsNullOrWhiteSpace(name) || name.Length > 255 || name.Any(Char.IsControl) || name.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || !String.Equals(Path.GetExtension(name), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Набор содержит некорректное имя IPA.");
-            }
-        }
-        /// <summary>Проверяет положительный числовой ID без знака, пробелов и управляющих символов.</summary>
-        public static bool ValidId(string id)
-        {
-            ulong value;
-            return !String.IsNullOrEmpty(id) && id.Length <= 20 && id.All(c => c >= '0' && c <= '9') && UInt64.TryParse(id, out value) && value > 0;
-        }
-        /// <summary>Копирует входные данные, проверяет значения и сохраняет порядок первого появления ID.</summary>
-        public static AppRow[] UniqueApps(IEnumerable<AppRow> apps)
-        {
-            if (apps == null) throw new IOException("Список приложений не задан.");
-            var result = new List<AppRow>();
-            var ids = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var app in apps)
-            {
-                if (app == null || !ValidId(app.ID) || String.IsNullOrWhiteSpace(app.Name) || app.Name.Length > 320 || app.Name.Any(Char.IsControl)) throw new IOException("Некорректный App Store ID или название приложения.");
-                if (ids.Add(app.ID)) result.Add(new AppRow { ID = app.ID, Name = app.Name });
-            }
-            return result.ToArray();
-        }
-    }
-}
-
-// Domain/AppVersionRow.cs
+// Domain/Applications/AppVersionRow.cs
 namespace IpaDesktop
 {
     /// <summary>Строка таблицы версий; неизвестные поля не подменяются данными другой версии.</summary>
@@ -171,62 +56,7 @@ namespace IpaDesktop
     }
 }
 
-// Domain/Asset.cs
-namespace IpaDesktop
-{
-    /// <summary>Описание архива GitHub Releases; имена полей сохраняют контракт JSON API.</summary>
-    public class Asset
-    {
-        public string name
-        {
-            get;
-            set;
-        }
-        public string browser_download_url
-        {
-            get;
-            set;
-        }
-        public string digest
-        {
-            get;
-            set;
-        }
-        public long size
-        {
-            get;
-            set;
-        }
-    }
-}
-
-// Domain/DeviceRow.cs
-namespace IpaDesktop
-{
-    /// <summary>Обнаруженный iPhone: подпись для интерфейса и реальный UDID для команд установки.</summary>
-    public class DeviceRow
-    {
-        public string ID
-        {
-            get;
-            set;
-        }
-        public string Name
-        {
-            get;
-            set;
-        }
-        public bool Network { get; set; }
-        public string Connection { get { return Network ? "Wi-Fi" : "USB"; } }
-        public string DisplayLabel { get { return Name + " · " + Connection; } }
-        public override string ToString()
-        {
-            return Name;
-        }
-    }
-}
-
-// Domain/DownloadItem.cs
+// Domain/Applications/DownloadItem.cs
 namespace IpaDesktop
 {
     /// <summary>Снимок запроса загрузки с необязательным ID версии; null означает последнюю доступную.</summary>
@@ -258,7 +88,7 @@ namespace IpaDesktop
     }
 }
 
-// Domain/DownloadSelection.cs
+// Domain/Applications/DownloadSelection.cs
 namespace IpaDesktop
 {
     /// <summary>Очередь загрузок, уникальная по паре App Store ID и ID версии; снимки отделены от внутреннего состояния.</summary>
@@ -321,37 +151,105 @@ namespace IpaDesktop
     }
 }
 
-// Domain/FileTransferMeter.cs
+// Domain/Applications/SearchSession.cs
 namespace IpaDesktop
 {
-    /// <summary>Оценка записи по монотонным отсчётам размера одного файла, без вывода объёма из округлённых процентов.</summary>
-    public sealed class FileTransferMeter
+    /// <summary>Ревизия поискового запроса: устаревшие асинхронные ответы не возвращаются в выдачу.</summary>
+    public class SearchSession
     {
-        readonly Queue<Tuple<double, long>> samples = new Queue<Tuple<double, long>>();
-        public void Reset() { samples.Clear(); }
-        public FileTransferSample Sample(long bytes, double seconds)
+        int revision;
+        string query = "";
+        /// <summary>Повышает ревизию запроса, чтобы игнорировать ответы прежнего поиска.</summary>
+        public int Change(string value)
         {
-            if (bytes < 0 || Double.IsNaN(seconds) || Double.IsInfinity(seconds) || seconds < 0) throw new ArgumentException("Некорректное измерение передачи.");
-            if (samples.Count > 0 && (seconds <= LastTime || bytes < LastBytes)) Reset();
-            samples.Enqueue(Tuple.Create(seconds, bytes)); LastTime = seconds; LastBytes = bytes;
-            while (samples.Count > 8 || (samples.Count > 1 && seconds - samples.Peek().Item1 > 3.5)) samples.Dequeue();
-            var first = samples.Peek(); double elapsed = seconds - first.Item1;
-            return new FileTransferSample { Bytes = bytes, BytesPerSecond = elapsed >= 0.5 ? (double?)(bytes - first.Item2) / elapsed : null };
+            query = (value ?? "").Trim();
+            return++revision;
         }
-        double LastTime; long LastBytes;
-    }
-    public sealed class FileTransferSample
-    {
-        public long Bytes { get; set; }
-        public double? BytesPerSecond { get; set; }
-        public string Message
+        public int Revision
         {
-            get { return "FILE_TRANSFER:" + Bytes.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + (BytesPerSecond.HasValue ? BytesPerSecond.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "?"); }
+            get
+            {
+                return revision;
+            }
+        }
+        /// <summary>Проверяет, относится ли асинхронный ответ к текущему запросу.</summary>
+        public bool IsCurrent(int request)
+        {
+            return request == revision && query.Length > 0;
         }
     }
 }
 
-// Domain/InstallationSelection.cs
+// Domain/Devices/AppleSupportReport.cs
+namespace IpaDesktop
+{
+    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
+    public enum AppleSupportStatus
+    {
+        Running,
+        Stopped,
+        ServiceMissing,
+        NotDetected,
+        Unknown
+    }
+
+    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
+    public sealed class AppleSupportSnapshot
+    {
+        public bool InstallationDetected { get; set; }
+        public bool ServiceFound { get; set; }
+        public bool ServiceStatusKnown { get; set; }
+        public bool ServiceRunning { get; set; }
+        public bool ServiceScanCompleted { get; set; }
+        public bool RegistryScanCompleted { get; set; }
+        public string Details { get; set; }
+    }
+
+    /// <summary>Результат проверки драйверов Apple и сведения для объяснения пользователю.</summary>
+    public sealed class AppleSupportReport
+    {
+        public AppleSupportStatus Status { get; set; }
+        public string Message { get; set; }
+        public string Details { get; set; }
+        public string HelpUrl
+        {
+            get
+            {
+                return Status == AppleSupportStatus.Stopped
+                    ? "https://support.apple.com/ru-ru/102347"
+                    : "https://support.apple.com/ru-ru/118290";
+            }
+        }
+    }
+}
+
+// Domain/Devices/DeviceRow.cs
+namespace IpaDesktop
+{
+    /// <summary>Обнаруженный iPhone: подпись для интерфейса и реальный UDID для команд установки.</summary>
+    public class DeviceRow
+    {
+        public string ID
+        {
+            get;
+            set;
+        }
+        public string Name
+        {
+            get;
+            set;
+        }
+        public bool Network { get; set; }
+        public string Connection { get { return Network ? "Wi-Fi" : "USB"; } }
+        public string DisplayLabel { get { return Name + " · " + Connection; } }
+        public override string ToString()
+        {
+            return Name;
+        }
+    }
+}
+
+// Domain/Devices/InstallationSelection.cs
 namespace IpaDesktop
 {
     /// <summary>Очередь установки, уникальная по пути IPA; сведения аккаунта принадлежат самому файлу.</summary>
@@ -404,129 +302,37 @@ namespace IpaDesktop
     }
 }
 
-// Domain/IpaDetails.cs
+// Domain/Operations/FileTransferMeter.cs
 namespace IpaDesktop
 {
-    /// <summary>Метаданные IPA, прочитанные из архива; отсутствующие поля остаются неизвестными.</summary>
-    public sealed class IpaDetails
+    /// <summary>Оценка записи по монотонным отсчётам размера одного файла, без вывода объёма из округлённых процентов.</summary>
+    public sealed class FileTransferMeter
     {
-        public string AppStoreID { get; set; }
-        public string Account { get; set; }
-        public string BundleID { get; set; }
-        public string AppName { get; set; }
-        public string Version { get; set; }
-        public string MinimumOS { get; set; }
-        public string[] Platforms { get; set; }
-        public string Build { get; set; }
+        readonly Queue<Tuple<double, long>> samples = new Queue<Tuple<double, long>>();
+        public void Reset() { samples.Clear(); }
+        public FileTransferSample Sample(long bytes, double seconds)
+        {
+            if (bytes < 0 || Double.IsNaN(seconds) || Double.IsInfinity(seconds) || seconds < 0) throw new ArgumentException("Некорректное измерение передачи.");
+            if (samples.Count > 0 && (seconds <= LastTime || bytes < LastBytes)) Reset();
+            samples.Enqueue(Tuple.Create(seconds, bytes)); LastTime = seconds; LastBytes = bytes;
+            while (samples.Count > 8 || (samples.Count > 1 && seconds - samples.Peek().Item1 > 3.5)) samples.Dequeue();
+            var first = samples.Peek(); double elapsed = seconds - first.Item1;
+            return new FileTransferSample { Bytes = bytes, BytesPerSecond = elapsed >= 0.5 ? (double?)(bytes - first.Item2) / elapsed : null };
+        }
+        double LastTime; long LastBytes;
     }
-}
-
-// Domain/LocalFileAccounts.cs
-namespace IpaDesktop
-{
-    /// <summary>Вариант фильтра локальных IPA. Null означает все аккаунты, пустая строка — неизвестный аккаунт.</summary>
-    public sealed class LocalFileAccount
+    public sealed class FileTransferSample
     {
-        public string Key { get; set; }
-        public string Label { get; set; }
-        // Общий шаблон ComboBox отображает SelectionBoxItem через ToString, включая выбранный элемент.
-        public override string ToString() { return Label; }
-    }
-
-    /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>
-    public static class LocalFileAccounts
-    {
-        static string Normalize(string account)
-        {
-            var value = (account ?? "").Trim();
-            // Эти значения возвращает IpaMetadata при отсутствии или ошибке чтения, это не имена аккаунтов.
-            foreach (var status in new[] { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" })
-                if (String.Equals(value, status, StringComparison.OrdinalIgnoreCase)) return "";
-            return value;
-        }
-
-        public static bool Matches(LocalRow row, string key)
-        {
-            return key == null || String.Equals(Normalize(row.AppleAccount), key, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public static List<LocalFileAccount> Choices(IEnumerable<LocalRow> files)
-        {
-            var rows = files.ToList();
-            var choices = new List<LocalFileAccount> { new LocalFileAccount { Key = null, Label = "Все аккаунты (" + rows.Count + ")" } };
-            foreach (var group in rows.GroupBy(x => Normalize(x.AppleAccount), StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => x.Key.Length == 0).ThenBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
-            {
-                choices.Add(new LocalFileAccount { Key = group.Key, Label = (group.Key.Length == 0 ? "Без данных об аккаунте" : group.Key) + " (" + group.Count() + ")" });
-            }
-            return choices;
-        }
-    }
-}
-
-// Domain/LocalRow.cs
-namespace IpaDesktop
-{
-    /// <summary>Строка локального IPA: путь, размер, версия, аккаунт и признак старой версии.</summary>
-    public class LocalRow
-    {
-        /// <summary>Название из IPA; при отсутствии метаданных убирает только наш точный служебный суффикс.</summary>
-        public string DisplayName
-        {
-            get
-            {
-                if (!String.IsNullOrWhiteSpace(AppName)) return AppName;
-                string title = System.IO.Path.GetFileNameWithoutExtension(Name ?? System.IO.Path.GetFileName(Path ?? ""));
-                var match = Regex.Match(title, @"^(?<title>.+)-[0-9]{1,20}-[0-9a-fA-F]{32}$");
-                return match.Success ? match.Groups["title"].Value : title;
-            }
-        }
-        /// <summary>Полные сведения доступны по наведению, включая настоящее имя файла и путь.</summary>
-        public string FileDetails
-        {
-            get
-            {
-                return DisplayName + Environment.NewLine + "Версия: " + (String.IsNullOrWhiteSpace(Version) ? "не указана" : Version) +
-                    Environment.NewLine + "Apple Account: " + (String.IsNullOrWhiteSpace(AppleAccount) ? "не указан" : AppleAccount) +
-                    Environment.NewLine + "Минимальная ОС: " + (MinimumOS ?? "не указана") +
-                    Environment.NewLine + "Платформы: " + (Platforms == null || Platforms.Length == 0 ? "не указаны" : String.Join(", ", Platforms)) +
-                    Environment.NewLine + "Файл: " + Name + Environment.NewLine + Path;
-            }
-        }
-        public string MinimumOS { get; set; }
-        public string[] Platforms { get; set; }
         public long Bytes { get; set; }
-        public string AppStoreID { get; set; }
-        public string BundleID { get; set; }
-        public string AppName { get; set; }
-        public string Version { get; set; }
-        public string Build { get; set; }
-        public bool IsOld { get; set; }
-        public string StorageStatus { get; set; }
-        public string AppleAccount
+        public double? BytesPerSecond { get; set; }
+        public string Message
         {
-            get;
-            set;
-        }
-        public string Name
-        {
-            get;
-            set;
-        }
-        public string Size
-        {
-            get;
-            set;
-        }
-        public string Path
-        {
-            get;
-            set;
+            get { return "FILE_TRANSFER:" + Bytes.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + (BytesPerSecond.HasValue ? BytesPerSecond.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "?"); }
         }
     }
 }
 
-// Domain/OperationReport.cs
+// Domain/Operations/OperationReport.cs
 namespace IpaDesktop
 {
     /// <summary>Итог одной очереди с полными ошибками; не зависит от журнала и текущей вкладки.</summary>
@@ -589,7 +395,7 @@ namespace IpaDesktop
     }
 }
 
-// Domain/QueueProgress.cs
+// Domain/Operations/QueueProgress.cs
 namespace IpaDesktop
 {
     /// <summary>Потокобезопасное состояние прогресса; использует только метрики, реально полученные от утилиты.</summary>
@@ -690,7 +496,251 @@ namespace IpaDesktop
     }
 }
 
-// Domain/Release.cs
+// Domain/Operations/Result.cs
+namespace IpaDesktop
+{
+    /// <summary>Код завершения, стандартный вывод и ошибки одной команды внешней утилиты.</summary>
+    public class Result
+    {
+        public int Code
+        {
+            get;
+            set;
+        }
+        public string Output
+        {
+            get;
+            set;
+        }
+    }
+}
+
+// Domain/Storage/AppSet.cs
+namespace IpaDesktop
+{
+    /// <summary>Сохранённый набор ID; Files используется только для чтения и миграции прежнего формата.</summary>
+    public sealed class AppSet
+    {
+        public string Name { get; set; }
+        public AppRow[] Apps { get; set; }
+        // Read-only compatibility with sets saved before 0.1.18.
+        public string[] Files { get; set; }
+        public string Label { get { return Name + " · " + (Apps == null ? (Files == null ? 0 : Files.Length) : Apps.Length) + " приложений" + (Apps == null ? " · прежний формат" : ""); } }
+    }
+}
+
+// Domain/Storage/AppSetRules.cs
+namespace IpaDesktop
+{
+    /// <summary>Ограничения формата наборов и объединение приложений по App Store ID; без зависимости от WPF.</summary>
+    public static class AppSetRules
+    {
+        /// <summary>Проверяет новый формат ID и прежний формат имён IPA до чтения файлов или записи конфигурации.</summary>
+        public static void Validate(AppSet set)
+        {
+            if (set == null || String.IsNullOrWhiteSpace(set.Name) || set.Name.Length > 64 || set.Name.Any(Char.IsControl)) throw new IOException("Название набора: от 1 до 64 символов.");
+            if (set.Apps != null)
+            {
+                if (set.Apps.Length == 0 || set.Apps.Length > 500) throw new IOException("В наборе должно быть от 1 до 500 приложений.");
+                foreach (var app in set.Apps)
+                    if (app == null || !ValidId(app.ID) || String.IsNullOrWhiteSpace(app.Name) || app.Name.Length > 320 || app.Name.Any(Char.IsControl)) throw new IOException("Набор содержит некорректный App Store ID или название.");
+                if (set.Apps.Select(x => x.ID).Distinct().Count() != set.Apps.Length) throw new IOException("App Store ID в наборе повторяются.");
+            }
+            else
+            {
+                if (set.Files == null || set.Files.Length == 0 || set.Files.Length > 500) throw new IOException("Пустой набор.");
+                foreach (var name in set.Files)
+                    if (String.IsNullOrWhiteSpace(name) || name.Length > 255 || name.Any(Char.IsControl) || name.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || !String.Equals(Path.GetExtension(name), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Набор содержит некорректное имя IPA.");
+            }
+        }
+        /// <summary>Проверяет положительный числовой ID без знака, пробелов и управляющих символов.</summary>
+        public static bool ValidId(string id)
+        {
+            ulong value;
+            return !String.IsNullOrEmpty(id) && id.Length <= 20 && id.All(c => c >= '0' && c <= '9') && UInt64.TryParse(id, out value) && value > 0;
+        }
+        /// <summary>Копирует входные данные, проверяет значения и сохраняет порядок первого появления ID.</summary>
+        public static AppRow[] UniqueApps(IEnumerable<AppRow> apps)
+        {
+            if (apps == null) throw new IOException("Список приложений не задан.");
+            var result = new List<AppRow>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var app in apps)
+            {
+                if (app == null || !ValidId(app.ID) || String.IsNullOrWhiteSpace(app.Name) || app.Name.Length > 320 || app.Name.Any(Char.IsControl)) throw new IOException("Некорректный App Store ID или название приложения.");
+                if (ids.Add(app.ID)) result.Add(new AppRow { ID = app.ID, Name = app.Name });
+            }
+            return result.ToArray();
+        }
+    }
+}
+
+// Domain/Storage/IpaDetails.cs
+namespace IpaDesktop
+{
+    /// <summary>Метаданные IPA, прочитанные из архива; отсутствующие поля остаются неизвестными.</summary>
+    public sealed class IpaDetails
+    {
+        public string AppStoreID { get; set; }
+        public string Account { get; set; }
+        public string BundleID { get; set; }
+        public string AppName { get; set; }
+        public string Version { get; set; }
+        public string MinimumOS { get; set; }
+        public string[] Platforms { get; set; }
+        public string Build { get; set; }
+    }
+}
+
+// Domain/Storage/LocalFileAccounts.cs
+namespace IpaDesktop
+{
+    /// <summary>Вариант фильтра локальных IPA. Null означает все аккаунты, пустая строка — неизвестный аккаунт.</summary>
+    public sealed class LocalFileAccount
+    {
+        public string Key { get; set; }
+        public string Label { get; set; }
+        // Общий шаблон ComboBox отображает SelectionBoxItem через ToString, включая выбранный элемент.
+        public override string ToString() { return Label; }
+    }
+
+    /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>
+    public static class LocalFileAccounts
+    {
+        static readonly string[] MissingStatuses = { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" };
+
+        static string Normalize(string account)
+        {
+            var value = (account ?? "").Trim();
+            // Эти значения возвращает IpaMetadata при отсутствии или ошибке чтения, это не имена аккаунтов.
+            foreach (var status in MissingStatuses)
+                if (String.Equals(value, status, StringComparison.OrdinalIgnoreCase)) return "";
+            return value;
+        }
+
+        public static bool Matches(LocalRow row, string key)
+        {
+            return key == null || String.Equals(Normalize(row.AppleAccount), key, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static List<LocalFileAccount> Choices(IEnumerable<LocalRow> files)
+        {
+            var rows = files.ToList();
+            var choices = new List<LocalFileAccount> { new LocalFileAccount { Key = null, Label = "Все аккаунты (" + rows.Count + ")" } };
+            foreach (var group in rows.GroupBy(x => Normalize(x.AppleAccount), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x.Key.Length == 0).ThenBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase))
+            {
+                choices.Add(new LocalFileAccount { Key = group.Key, Label = (group.Key.Length == 0 ? "Без данных об аккаунте" : group.Key) + " (" + group.Count() + ")" });
+            }
+            return choices;
+        }
+    }
+}
+
+// Domain/Storage/LocalRow.cs
+namespace IpaDesktop
+{
+    /// <summary>Строка локального IPA: путь, размер, версия, аккаунт и признак старой версии.</summary>
+    public class LocalRow
+    {
+        /// <summary>Название из IPA; при отсутствии метаданных убирает только наш точный служебный суффикс.</summary>
+        public string DisplayName
+        {
+            get
+            {
+                if (!String.IsNullOrWhiteSpace(AppName)) return AppName;
+                string title = System.IO.Path.GetFileNameWithoutExtension(Name ?? System.IO.Path.GetFileName(Path ?? ""));
+                var match = Regex.Match(title, @"^(?<title>.+)-[0-9]{1,20}-[0-9a-fA-F]{32}$");
+                return match.Success ? match.Groups["title"].Value : title;
+            }
+        }
+        /// <summary>Полные сведения доступны по наведению, включая настоящее имя файла и путь.</summary>
+        public string FileDetails
+        {
+            get
+            {
+                return DisplayName + Environment.NewLine + "Версия: " + (String.IsNullOrWhiteSpace(Version) ? "не указана" : Version) +
+                    Environment.NewLine + "Apple Account: " + (String.IsNullOrWhiteSpace(AppleAccount) ? "не указан" : AppleAccount) +
+                    Environment.NewLine + "Минимальная ОС: " + (MinimumOS ?? "не указана") +
+                    Environment.NewLine + "Платформы: " + (Platforms == null || Platforms.Length == 0 ? "не указаны" : String.Join(", ", Platforms)) +
+                    Environment.NewLine + "Файл: " + Name + Environment.NewLine + Path;
+            }
+        }
+        public string MinimumOS { get; set; }
+        public string[] Platforms { get; set; }
+        public long Bytes { get; set; }
+        public string AppStoreID { get; set; }
+        public string BundleID { get; set; }
+        public string AppName { get; set; }
+        public string Version { get; set; }
+        public string Build { get; set; }
+        public bool IsOld { get; set; }
+        public string StorageStatus { get; set; }
+        public string AppleAccount
+        {
+            get;
+            set;
+        }
+        public string Name
+        {
+            get;
+            set;
+        }
+        public string Size
+        {
+            get;
+            set;
+        }
+        public string Path
+        {
+            get;
+            set;
+        }
+    }
+}
+
+// Domain/Updates/AppInfo.cs
+namespace IpaDesktop
+{
+    /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
+    public static class AppInfo
+    {
+        public const string Version = "0.2.11";
+        public const string Repository = "iamdarkls/IPA-Desktop";
+        public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
+    }
+}
+
+// Domain/Updates/Asset.cs
+namespace IpaDesktop
+{
+    /// <summary>Описание архива GitHub Releases; имена полей сохраняют контракт JSON API.</summary>
+    public class Asset
+    {
+        public string name
+        {
+            get;
+            set;
+        }
+        public string browser_download_url
+        {
+            get;
+            set;
+        }
+        public string digest
+        {
+            get;
+            set;
+        }
+        public long size
+        {
+            get;
+            set;
+        }
+    }
+}
+
+// Domain/Updates/Release.cs
 namespace IpaDesktop
 {
     /// <summary>Ответ GitHub Releases с тегом и архивами; используется при проверке доступных обновлений.</summary>
@@ -721,55 +771,7 @@ namespace IpaDesktop
     }
 }
 
-// Domain/Result.cs
-namespace IpaDesktop
-{
-    /// <summary>Код завершения, стандартный вывод и ошибки одной команды внешней утилиты.</summary>
-    public class Result
-    {
-        public int Code
-        {
-            get;
-            set;
-        }
-        public string Output
-        {
-            get;
-            set;
-        }
-    }
-}
-
-// Domain/SearchSession.cs
-namespace IpaDesktop
-{
-    /// <summary>Ревизия поискового запроса: устаревшие асинхронные ответы не возвращаются в выдачу.</summary>
-    public class SearchSession
-    {
-        int revision;
-        string query = "";
-        /// <summary>Повышает ревизию запроса, чтобы игнорировать ответы прежнего поиска.</summary>
-        public int Change(string value)
-        {
-            query = (value ?? "").Trim();
-            return++revision;
-        }
-        public int Revision
-        {
-            get
-            {
-                return revision;
-            }
-        }
-        /// <summary>Проверяет, относится ли асинхронный ответ к текущему запросу.</summary>
-        public bool IsCurrent(int request)
-        {
-            return request == revision && query.Length > 0;
-        }
-    }
-}
-
-// Domain/State.cs
+// Domain/Updates/State.cs
 namespace IpaDesktop
 {
     /// <summary>Сохраняемые настройки и независимые указатели текущих и прежних версий инструментов.</summary>
@@ -826,75 +828,7 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/AtomicFile.cs
-namespace IpaDesktop
-{
-    /// <summary>Записывает конфигурацию целиком, затем атомарно заменяет прежний файл.</summary>
-    public static class AtomicFile
-    {
-        /// <summary>Уникальный временный файл исключает пересечение записей; ошибка не удаляет оригинал.</summary>
-        public static void WriteUtf8(string path, string contents)
-        {
-            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                File.WriteAllText(temporary, contents, Encoding.UTF8);
-                if (File.Exists(path)) File.Replace(temporary, path, null);
-                else File.Move(temporary, path);
-            }
-            finally
-            {
-                // Очистка не должна скрыть первоначальную ошибку записи.
-                try { if (File.Exists(temporary)) File.Delete(temporary); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
-            }
-        }
-    }
-}
-
-// Infrastructure/BufferedJournal.cs
-namespace IpaDesktop
-{
-    /// <summary>Ограниченный буфер сообщений между фоновыми процессами и таймером интерфейса.</summary>
-    public class BufferedJournal
-    {
-        readonly Queue<string> pending = new Queue<string> ();
-        readonly object gate = new object();
-        int skipped;
-        public void Add(string text)
-        {
-            if (text == null) return;
-            string line = DateTime.Now.ToString("HH:mm:ss") + "  " + (text.Length > 2000 ? text.Substring(0, 2000) + " …" : text) + Environment.NewLine;
-            lock (gate)
-            {
-                if (pending.Count >= 500)
-                {
-                    pending.Dequeue();
-                    skipped++;
-                }
-                pending.Enqueue(line);
-            }
-        }
-        /// <summary>Извлекает накопленные сообщения для пакетного обновления интерфейса.</summary>
-        public string Drain()
-        {
-            lock (gate)
-            {
-                var result = new StringBuilder();
-                if (skipped > 0)
-                {
-                    result.AppendLine("Слишком частый вывод: пропущено строк " + skipped + ".");
-                    skipped = 0;
-                }
-                while (pending.Count > 0 && result.Length < 6000) result.Append(pending.Dequeue());
-                return result.ToString();
-            }
-        }
-    }
-}
-
-// Infrastructure/ConPtyLoginProcess.cs
+// Infrastructure/Accounts/ConPtyLoginProcess.cs
 namespace IpaDesktop
 {
     /// <summary>ConPTY Windows 10 1809+: скрытый TTY для штатного ipatool, без shell и секретных аргументов.</summary>
@@ -1083,7 +1017,7 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/ILoginProcess.cs
+// Infrastructure/Accounts/ILoginProcess.cs
 namespace IpaDesktop
 {
     /// <summary>Изолированный интерактивный канал авторизации: вывод никогда не поступает в общий ProcessRunner.</summary>
@@ -1099,195 +1033,161 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/InstallationLayout.cs
+// Infrastructure/Devices/WindowsAppleSupportProbe.cs
 namespace IpaDesktop
 {
-    /// <summary>Восстанавливает вложенные файлы из ресурсов и переносит старую структуру portable-сборки.</summary>
-    public static class InstallationLayout
+    /// <summary>Только читает службы и реестр Windows; не устанавливает драйверы и не меняет службы.</summary>
+    public interface IAppleSupportProbe
     {
-        static readonly Dictionary<string, string> LegacyFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "Assets/App.ico", "App.ico" },
-            { "Assets/App.svg", "App.svg" },
-            { "Scripts/Update-App.ps1", "Update-App.ps1" },
-            { "Scripts/Sync-Sources.ps1", "Sync-Sources.ps1" },
-            { "Docs/ARCHITECTURE.md", "ARCHITECTURE.md" },
-            { "Generated/Core.cs", "Core.cs" },
-            { "Generated/App.cs", "App.cs" },
-            { "Generated/IpaMetadata.cs", "IpaMetadata.cs" },
-            { "Generated/WindowTheme.cs", "WindowTheme.cs" },
-            { "Generated/GuiUpdater.cs", "GuiUpdater.cs" },
-            { "Tests/Verify.ps1", "Verify.ps1" },
-            { "Tests/Verify-IpaMetadata.ps1", "Verify-IpaMetadata.ps1" },
-            { "Tests/Verify-Updater.ps1", "Verify-Updater.ps1" },
-            { "Tests/Verify-Design.ps1", "Verify-Design.ps1" },
-            { "Tests/Verify-Services.ps1", "Verify-Services.ps1" }
-        };
+        AppleSupportSnapshot Read();
+    }
 
-        /// <summary>Восстанавливает отсутствующие файлы и удаляет только неизменённые устаревшие копии.</summary>
-        public static void Ensure(string installationDirectory)
+    /// <summary>Только читает службы и реестр Windows; не устанавливает драйверы и не меняет службы.</summary>
+    public sealed class WindowsAppleSupportProbe : IAppleSupportProbe
+    {
+        public AppleSupportSnapshot Read()
         {
-            string root = Path.GetFullPath(installationDirectory);
-            var assembly = typeof(InstallationLayout).Assembly;
-            foreach (var relative in GuiUpdater.PackageFiles.Where(path => path.Contains("/")))
+            var result = new AppleSupportSnapshot();
+            var details = new List<string>();
+            ServiceController[] services = null;
+            try
             {
-                using (var resource = assembly.GetManifestResourceStream("IPA.Layout." + relative.Replace('/', '.')))
+                services = ServiceController.GetServices();
+                result.ServiceScanCompleted = true;
+                foreach (var service in services)
                 {
-                    if (resource == null) throw new InvalidDataException("Отсутствует ресурс структуры программы: " + relative);
-                    byte[] data;
-                    using (var buffer = new MemoryStream())
-                    {
-                        resource.CopyTo(buffer);
-                        data = buffer.ToArray();
-                    }
-
-                    string destination = Path.Combine(root, relative);
-                    string legacyName;
-                    string legacy = LegacyFiles.TryGetValue(relative, out legacyName) ? Path.Combine(root, legacyName) : null;
-                    bool migrate = legacy != null && File.Exists(legacy) && new FileInfo(legacy).Length == data.Length && File.ReadAllBytes(legacy).SequenceEqual(data);
-                    if (!File.Exists(destination) || migrate)
-                    {
-                        if (File.Exists(destination) && (File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
-                            throw new IOException("Файл программы является ссылкой: " + relative);
-                        string folder = Path.GetDirectoryName(destination);
-                        for (string parent = folder; parent != null && parent.StartsWith(root, StringComparison.OrdinalIgnoreCase); parent = Path.GetDirectoryName(parent))
-                        {
-                            if (Directory.Exists(parent) && (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
-                                throw new IOException("Папка программы содержит ссылку: " + relative);
-                            if (parent.Equals(root, StringComparison.OrdinalIgnoreCase)) break;
-                        }
-                        Directory.CreateDirectory(folder);
-                        File.WriteAllBytes(destination, data);
-                    }
-
-                    // Remove only known migration copies matching this binary's resources.
-                    // User-modified files and IPA downloads are never removed here.
-                    if (migrate) File.Delete(legacy);
+                    if (!service.ServiceName.Equals("AppleMobileDeviceService", StringComparison.OrdinalIgnoreCase)
+                        && !service.ServiceName.Equals("Apple Mobile Device Service", StringComparison.OrdinalIgnoreCase)
+                        && !service.DisplayName.StartsWith("Apple Mobile Device", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    result.ServiceFound = true;
+                    details.Add("Служба: " + service.ServiceName);
+                    result.ServiceRunning = service.Status == ServiceControllerStatus.Running;
+                    result.ServiceStatusKnown = true;
+                    details.Add("Состояние службы: " + service.Status);
+                    break;
                 }
             }
-        }
-    }
-}
-
-// Infrastructure/InstallationPackage.cs
-namespace IpaDesktop
-{
-    /// <summary>Даёт старому CLI ASCII-имя IPA, сохраняя Unicode-каталог через рабочую директорию процесса.</summary>
-    public sealed class InstallationPackage : IDisposable
-    {
-        readonly string directory;
-        public string WorkingDirectory { get; private set; }
-        public string RelativePath { get; private set; }
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool CreateHardLink(string newName, string existingName, IntPtr securityAttributes);
-
-        InstallationPackage(string source)
-        {
-            WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(source));
-            string name = ".install-" + Guid.NewGuid().ToString("N");
-            directory = Path.Combine(WorkingDirectory, name);
-            RelativePath = Path.Combine(name, "package.ipa");
-        }
-
-        /// <summary>Предпочитает жёсткую ссылку без копирования больших IPA; на других ФС копирует с отменой.</summary>
-        public static Task<InstallationPackage> CreateAsync(string source, CancellationToken ct)
-        {
-            return Task.Run(delegate
+            catch (InvalidOperationException error)
             {
-                ct.ThrowIfCancellationRequested();
-                var package = new InstallationPackage(source);
+                result.ServiceScanCompleted = false;
+                details.Add("Проверка службы: " + error.Message);
+            }
+            catch (Win32Exception error)
+            {
+                result.ServiceScanCompleted = false;
+                details.Add("Проверка службы: " + error.Message);
+            }
+            catch (SecurityException error)
+            {
+                result.ServiceScanCompleted = false;
+                details.Add("Проверка службы: " + error.Message);
+            }
+            finally
+            {
+                if (services != null)
+                    foreach (var service in services) service.Dispose();
+            }
+
+            bool registryComplete = true;
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
                 try
                 {
-                    Directory.CreateDirectory(package.directory);
-                    string target = Path.Combine(package.WorkingDirectory, package.RelativePath);
-                    if (!CreateHardLink(target, Path.GetFullPath(source), IntPtr.Zero))
+                    using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view))
                     {
-                        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        using (var apple = root.OpenSubKey(@"SOFTWARE\Apple Inc.\Apple Mobile Device Support"))
                         {
-                            byte[] buffer = new byte[1024 * 1024];
-                            int count;
-                            while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                            if (apple != null)
                             {
-                                ct.ThrowIfCancellationRequested();
-                                output.Write(buffer, 0, count);
+                                result.InstallationDetected = true;
+                                details.Add("Регистрация компонентов Apple: " + view);
+                            }
+                        }
+                        using (var uninstall = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
+                        {
+                            if (uninstall == null) continue;
+                            foreach (var keyName in uninstall.GetSubKeyNames())
+                            {
+                                using (var product = uninstall.OpenSubKey(keyName))
+                                {
+                                    if (product == null) continue;
+                                    string name = Convert.ToString(product.GetValue("DisplayName"));
+                                    if (!name.Equals("Apple Mobile Device Support", StringComparison.OrdinalIgnoreCase))
+                                        continue;
+                                    result.InstallationDetected = true;
+                                    details.Add("Установленный компонент: " + name + " " + Convert.ToString(product.GetValue("DisplayVersion")));
+                                    break;
+                                }
                             }
                         }
                     }
-                    ct.ThrowIfCancellationRequested();
-                    return package;
                 }
-                catch { package.Dispose(); throw; }
-            }, ct);
-        }
-
-        /// <summary>Удаляет только временное имя: исходный IPA остаётся после успеха, ошибки или отмены.</summary>
-        public void Dispose()
-        {
-            try
-            {
-                File.Delete(Path.Combine(WorkingDirectory, RelativePath));
-                Directory.Delete(directory);
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-    }
-}
-
-// Infrastructure/IProcessRunner.cs
-namespace IpaDesktop
-{
-    /// <summary>Подменяемый контракт запуска процессов, журналирования и отмены для Windows и тестов.</summary>
-    public interface IProcessRunner
-    {
-        Action<string> Log
-        {
-            get;
-            set;
-        }
-        Process Active
-        {
-            get;
-        }
-        Task<Result> Run(string executable, string[] arguments, CancellationToken cancellation, bool visible, bool publish, string workingDirectory = null);
-    }
-}
-
-// Infrastructure/JsonCodec.cs
-namespace IpaDesktop
-{
-    /// <summary>Единая обёртка JSON-сериализации для совместимости с .NET Framework без внешних пакетов.</summary>
-    public static class JsonCodec
-    {
-        static JavaScriptSerializer Serializer
-        {
-            get
-            {
-                return new JavaScriptSerializer
+                catch (UnauthorizedAccessException error)
                 {
-                    MaxJsonLength = 16000000
-                };
+                    registryComplete = false;
+                    details.Add("Проверка реестра: " + error.Message);
+                }
+                catch (SecurityException error)
+                {
+                    registryComplete = false;
+                    details.Add("Проверка реестра: " + error.Message);
+                }
+                catch (System.IO.IOException error)
+                {
+                    registryComplete = false;
+                    details.Add("Проверка реестра: " + error.Message);
+                }
             }
-        }
-        public static string Serialize(object value)
-        {
-            return Serializer.Serialize(value);
-        }
-        public static T Deserialize<T> (string value)
-        {
-            return Serializer.Deserialize<T> (value);
-        }
-        public static object DeserializeObject(string value)
-        {
-            return Serializer.DeserializeObject(value);
+            result.RegistryScanCompleted = registryComplete;
+            result.Details = String.Join(Environment.NewLine, details);
+            return result;
         }
     }
 }
 
-// Infrastructure/NetworkClient.cs
+// Infrastructure/Logging/BufferedJournal.cs
+namespace IpaDesktop
+{
+    /// <summary>Ограниченный буфер сообщений между фоновыми процессами и таймером интерфейса.</summary>
+    public class BufferedJournal
+    {
+        readonly Queue<string> pending = new Queue<string> ();
+        readonly object gate = new object();
+        int skipped;
+        public void Add(string text)
+        {
+            if (text == null) return;
+            string line = DateTime.Now.ToString("HH:mm:ss") + "  " + (text.Length > 2000 ? text.Substring(0, 2000) + " …" : text) + Environment.NewLine;
+            lock (gate)
+            {
+                if (pending.Count >= 500)
+                {
+                    pending.Dequeue();
+                    skipped++;
+                }
+                pending.Enqueue(line);
+            }
+        }
+        /// <summary>Извлекает накопленные сообщения для пакетного обновления интерфейса.</summary>
+        public string Drain()
+        {
+            lock (gate)
+            {
+                var result = new StringBuilder();
+                if (skipped > 0)
+                {
+                    result.AppendLine("Слишком частый вывод: пропущено строк " + skipped + ".");
+                    skipped = 0;
+                }
+                while (pending.Count > 0 && result.Length < 6000) result.Append(pending.Dequeue());
+                return result.ToString();
+            }
+        }
+    }
+}
+
+// Infrastructure/Networking/NetworkClient.cs
 namespace IpaDesktop
 {
     /// <summary>Создаёт HTTP-клиенты с TLS и идентификатором приложения для запросов к источникам обновлений.</summary>
@@ -1306,7 +1206,26 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/ProcessRunner.cs
+// Infrastructure/Processes/IProcessRunner.cs
+namespace IpaDesktop
+{
+    /// <summary>Подменяемый контракт запуска процессов, журналирования и отмены для Windows и тестов.</summary>
+    public interface IProcessRunner
+    {
+        Action<string> Log
+        {
+            get;
+            set;
+        }
+        Process Active
+        {
+            get;
+        }
+        Task<Result> Run(string executable, string[] arguments, CancellationToken cancellation, bool visible, bool publish, string workingDirectory = null);
+    }
+}
+
+// Infrastructure/Processes/ProcessRunner.cs
 namespace IpaDesktop
 {
     /// <summary>Запускает CLI вне UI-потока, ограничивает вывод и обеспечивает прерываемое ожидание процесса.</summary>
@@ -1494,7 +1413,203 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/SettingsStore.cs
+// Infrastructure/Storage/AtomicFile.cs
+namespace IpaDesktop
+{
+    /// <summary>Записывает конфигурацию целиком, затем атомарно заменяет прежний файл.</summary>
+    public static class AtomicFile
+    {
+        /// <summary>Уникальный временный файл исключает пересечение записей; ошибка не удаляет оригинал.</summary>
+        public static void WriteUtf8(string path, string contents)
+        {
+            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, contents, Encoding.UTF8);
+                if (File.Exists(path)) File.Replace(temporary, path, null);
+                else File.Move(temporary, path);
+            }
+            finally
+            {
+                // Очистка не должна скрыть первоначальную ошибку записи.
+                try { if (File.Exists(temporary)) File.Delete(temporary); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+    }
+}
+
+// Infrastructure/Storage/InstallationLayout.cs
+namespace IpaDesktop
+{
+    /// <summary>Восстанавливает вложенные файлы из ресурсов и переносит старую структуру portable-сборки.</summary>
+    public static class InstallationLayout
+    {
+        static readonly Dictionary<string, string> LegacyFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Assets/App.ico", "App.ico" },
+            { "Assets/App.svg", "App.svg" },
+            { "Scripts/Update-App.ps1", "Update-App.ps1" },
+            { "Scripts/Sync-Sources.ps1", "Sync-Sources.ps1" },
+            { "Docs/ARCHITECTURE.md", "ARCHITECTURE.md" },
+            { "Generated/Core.cs", "Core.cs" },
+            { "Generated/App.cs", "App.cs" },
+            { "Generated/IpaMetadata.cs", "IpaMetadata.cs" },
+            { "Generated/WindowTheme.cs", "WindowTheme.cs" },
+            { "Generated/GuiUpdater.cs", "GuiUpdater.cs" },
+            { "Tests/Verify.ps1", "Verify.ps1" },
+            { "Tests/Verify-IpaMetadata.ps1", "Verify-IpaMetadata.ps1" },
+            { "Tests/Verify-Updater.ps1", "Verify-Updater.ps1" },
+            { "Tests/Verify-Design.ps1", "Verify-Design.ps1" },
+            { "Tests/Verify-Services.ps1", "Verify-Services.ps1" }
+        };
+
+        /// <summary>Восстанавливает отсутствующие файлы и удаляет только неизменённые устаревшие копии.</summary>
+        public static void Ensure(string installationDirectory)
+        {
+            string root = Path.GetFullPath(installationDirectory);
+            var assembly = typeof(InstallationLayout).Assembly;
+            foreach (var relative in GuiUpdater.PackageFiles.Where(path => path.Contains("/")))
+            {
+                using (var resource = assembly.GetManifestResourceStream("IPA.Layout." + relative.Replace('/', '.')))
+                {
+                    if (resource == null) throw new InvalidDataException("Отсутствует ресурс структуры программы: " + relative);
+                    byte[] data;
+                    using (var buffer = new MemoryStream())
+                    {
+                        resource.CopyTo(buffer);
+                        data = buffer.ToArray();
+                    }
+
+                    string destination = Path.Combine(root, relative);
+                    string legacyName;
+                    string legacy = LegacyFiles.TryGetValue(relative, out legacyName) ? Path.Combine(root, legacyName) : null;
+                    bool migrate = legacy != null && File.Exists(legacy) && new FileInfo(legacy).Length == data.Length && File.ReadAllBytes(legacy).SequenceEqual(data);
+                    if (!File.Exists(destination) || migrate)
+                    {
+                        if (File.Exists(destination) && (File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
+                            throw new IOException("Файл программы является ссылкой: " + relative);
+                        string folder = Path.GetDirectoryName(destination);
+                        for (string parent = folder; parent != null && parent.StartsWith(root, StringComparison.OrdinalIgnoreCase); parent = Path.GetDirectoryName(parent))
+                        {
+                            if (Directory.Exists(parent) && (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
+                                throw new IOException("Папка программы содержит ссылку: " + relative);
+                            if (parent.Equals(root, StringComparison.OrdinalIgnoreCase)) break;
+                        }
+                        Directory.CreateDirectory(folder);
+                        File.WriteAllBytes(destination, data);
+                    }
+
+                    // Remove only known migration copies matching this binary's resources.
+                    // User-modified files and IPA downloads are never removed here.
+                    if (migrate) File.Delete(legacy);
+                }
+            }
+        }
+    }
+}
+
+// Infrastructure/Storage/InstallationPackage.cs
+namespace IpaDesktop
+{
+    /// <summary>Даёт старому CLI ASCII-имя IPA, сохраняя Unicode-каталог через рабочую директорию процесса.</summary>
+    public sealed class InstallationPackage : IDisposable
+    {
+        readonly string directory;
+        public string WorkingDirectory { get; private set; }
+        public string RelativePath { get; private set; }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool CreateHardLink(string newName, string existingName, IntPtr securityAttributes);
+
+        InstallationPackage(string source)
+        {
+            WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(source));
+            string name = ".install-" + Guid.NewGuid().ToString("N");
+            directory = Path.Combine(WorkingDirectory, name);
+            RelativePath = Path.Combine(name, "package.ipa");
+        }
+
+        /// <summary>Предпочитает жёсткую ссылку без копирования больших IPA; на других ФС копирует с отменой.</summary>
+        public static Task<InstallationPackage> CreateAsync(string source, CancellationToken ct)
+        {
+            return Task.Run(delegate
+            {
+                ct.ThrowIfCancellationRequested();
+                var package = new InstallationPackage(source);
+                try
+                {
+                    Directory.CreateDirectory(package.directory);
+                    string target = Path.Combine(package.WorkingDirectory, package.RelativePath);
+                    if (!CreateHardLink(target, Path.GetFullPath(source), IntPtr.Zero))
+                    {
+                        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            byte[] buffer = new byte[1024 * 1024];
+                            int count;
+                            while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                            {
+                                ct.ThrowIfCancellationRequested();
+                                output.Write(buffer, 0, count);
+                            }
+                        }
+                    }
+                    ct.ThrowIfCancellationRequested();
+                    return package;
+                }
+                catch { package.Dispose(); throw; }
+            }, ct);
+        }
+
+        /// <summary>Удаляет только временное имя: исходный IPA остаётся после успеха, ошибки или отмены.</summary>
+        public void Dispose()
+        {
+            try
+            {
+                File.Delete(Path.Combine(WorkingDirectory, RelativePath));
+                Directory.Delete(directory);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+}
+
+// Infrastructure/Storage/JsonCodec.cs
+namespace IpaDesktop
+{
+    /// <summary>Единая обёртка JSON-сериализации для совместимости с .NET Framework без внешних пакетов.</summary>
+    public static class JsonCodec
+    {
+        static JavaScriptSerializer Serializer
+        {
+            get
+            {
+                return new JavaScriptSerializer
+                {
+                    MaxJsonLength = 16000000
+                };
+            }
+        }
+        public static string Serialize(object value)
+        {
+            return Serializer.Serialize(value);
+        }
+        public static T Deserialize<T> (string value)
+        {
+            return Serializer.Deserialize<T> (value);
+        }
+        public static object DeserializeObject(string value)
+        {
+            return Serializer.DeserializeObject(value);
+        }
+    }
+}
+
+// Infrastructure/Storage/SettingsStore.cs
 namespace IpaDesktop
 {
     /// <summary>Загружает state.json и сохраняет его атомарно; используется сервисами установки и отката.</summary>
@@ -1526,13 +1641,17 @@ namespace IpaDesktop
     }
 }
 
-// Infrastructure/ToolLocator.cs
+// Infrastructure/Tools/ToolLocator.cs
 namespace IpaDesktop
 {
     /// <summary>Находит исполняемые файлы в выбранной версии движка или отдельном комплекте устройства.</summary>
     public sealed class ToolLocator
     {
         readonly SettingsStore store;
+        readonly object gate = new object();
+        readonly Dictionary<string, string> enginePaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, string> devicePaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string engineRoot, deviceRoot;
         string Root
         {
             get
@@ -1565,264 +1684,35 @@ namespace IpaDesktop
         /// <summary>Находит нужный бинарник в активном комплекте и сообщает об отсутствии.</summary>
         public string Find(string pattern)
         {
-            var root = pattern.StartsWith("ipatool", StringComparison.OrdinalIgnoreCase) ? CurrentRoot : DeviceRoot;
-            var files = Directory.GetFiles(root, pattern, SearchOption.AllDirectories).Where(x => x.Replace('\\', '/').Contains("/windows_amd64/")).ToArray();
-            if (files.Length != 1) throw new Exception("Не найдена однозначная Windows-утилита: " + pattern);
-            return files[0];
+            bool engine = pattern.StartsWith("ipatool", StringComparison.OrdinalIgnoreCase);
+            var root = engine ? CurrentRoot : DeviceRoot;
+            lock (gate)
+            {
+                var paths = engine ? enginePaths : devicePaths;
+                var previousRoot = engine ? engineRoot : deviceRoot;
+                // Every update is installed in a new GUID directory. Keep only the
+                // active package cache; switching or rolling back invalidates it.
+                if (!String.Equals(root, previousRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    paths.Clear();
+                    if (engine) engineRoot = root; else deviceRoot = root;
+                }
+                string cached;
+                if (paths.TryGetValue(pattern, out cached) && File.Exists(cached)) return cached;
+                paths.Remove(pattern);
+                // Two matches already prove ambiguity. Do not allocate all matches
+                // or traverse the remaining license/source directories needlessly.
+                var files = Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories)
+                    .Where(x => x.Replace('\\', '/').Contains("/windows_amd64/")).Take(2).ToArray();
+                if (files.Length != 1) throw new Exception("Не найдена однозначная Windows-утилита: " + pattern);
+                paths[pattern] = files[0];
+                return files[0];
+            }
         }
     }
 }
 
-// Infrastructure/WindowsAppleSupportProbe.cs
-namespace IpaDesktop
-{
-    /// <summary>Только читает службы и реестр Windows; не устанавливает драйверы и не меняет службы.</summary>
-    public interface IAppleSupportProbe
-    {
-        AppleSupportSnapshot Read();
-    }
-
-    /// <summary>Только читает службы и реестр Windows; не устанавливает драйверы и не меняет службы.</summary>
-    public sealed class WindowsAppleSupportProbe : IAppleSupportProbe
-    {
-        public AppleSupportSnapshot Read()
-        {
-            var result = new AppleSupportSnapshot();
-            var details = new List<string>();
-            ServiceController[] services = null;
-            try
-            {
-                services = ServiceController.GetServices();
-                result.ServiceScanCompleted = true;
-                foreach (var service in services)
-                {
-                    if (!service.ServiceName.Equals("AppleMobileDeviceService", StringComparison.OrdinalIgnoreCase)
-                        && !service.ServiceName.Equals("Apple Mobile Device Service", StringComparison.OrdinalIgnoreCase)
-                        && !service.DisplayName.StartsWith("Apple Mobile Device", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    result.ServiceFound = true;
-                    details.Add("Служба: " + service.ServiceName);
-                    result.ServiceRunning = service.Status == ServiceControllerStatus.Running;
-                    result.ServiceStatusKnown = true;
-                    details.Add("Состояние службы: " + service.Status);
-                    break;
-                }
-            }
-            catch (InvalidOperationException error)
-            {
-                result.ServiceScanCompleted = false;
-                details.Add("Проверка службы: " + error.Message);
-            }
-            catch (Win32Exception error)
-            {
-                result.ServiceScanCompleted = false;
-                details.Add("Проверка службы: " + error.Message);
-            }
-            catch (SecurityException error)
-            {
-                result.ServiceScanCompleted = false;
-                details.Add("Проверка службы: " + error.Message);
-            }
-            finally
-            {
-                if (services != null)
-                    foreach (var service in services) service.Dispose();
-            }
-
-            bool registryComplete = true;
-            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-            {
-                try
-                {
-                    using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view))
-                    {
-                        using (var apple = root.OpenSubKey(@"SOFTWARE\Apple Inc.\Apple Mobile Device Support"))
-                        {
-                            if (apple != null)
-                            {
-                                result.InstallationDetected = true;
-                                details.Add("Регистрация компонентов Apple: " + view);
-                            }
-                        }
-                        using (var uninstall = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
-                        {
-                            if (uninstall == null) continue;
-                            foreach (var keyName in uninstall.GetSubKeyNames())
-                            {
-                                using (var product = uninstall.OpenSubKey(keyName))
-                                {
-                                    if (product == null) continue;
-                                    string name = Convert.ToString(product.GetValue("DisplayName"));
-                                    if (!name.Equals("Apple Mobile Device Support", StringComparison.OrdinalIgnoreCase))
-                                        continue;
-                                    result.InstallationDetected = true;
-                                    details.Add("Установленный компонент: " + name + " " + Convert.ToString(product.GetValue("DisplayVersion")));
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (UnauthorizedAccessException error)
-                {
-                    registryComplete = false;
-                    details.Add("Проверка реестра: " + error.Message);
-                }
-                catch (SecurityException error)
-                {
-                    registryComplete = false;
-                    details.Add("Проверка реестра: " + error.Message);
-                }
-                catch (System.IO.IOException error)
-                {
-                    registryComplete = false;
-                    details.Add("Проверка реестра: " + error.Message);
-                }
-            }
-            result.RegistryScanCompleted = registryComplete;
-            result.Details = String.Join(Environment.NewLine, details);
-            return result;
-        }
-    }
-}
-
-// Services/AppCatalog.cs
-namespace IpaDesktop
-{
-    /// <summary>Ищет по кэшируемому каталогу IPA_Downloader; при сетевой ошибке использует локальную копию.</summary>
-    public sealed class AppCatalog
-    {
-        readonly SettingsStore store;
-        readonly ToolLocator locator;
-        static HttpClient Http
-        {
-            get
-            {
-                return NetworkClient.Http;
-            }
-        }
-        string Root
-        {
-            get
-            {
-                return store.Root;
-            }
-        }
-        bool catalogChecked;
-        readonly SemaphoreSlim searchGate = new SemaphoreSlim(1, 1);
-        readonly Dictionary<string, Tuple<long, long, List<AppRow>>> parsedFiles =
-            new Dictionary<string, Tuple<long, long, List<AppRow>>>(StringComparer.OrdinalIgnoreCase);
-        public Action<string> Log
-        {
-            get;
-            set;
-        }
-        public AppCatalog(SettingsStore store, ToolLocator locator)
-        {
-            this.store = store;
-            this.locator = locator;
-            Log = delegate
-            {
-            };
-        }
-        /// <summary>Ищет по каталогам асинхронно и учитывает токен отмены.</summary>
-        public Task<List<AppRow>> SearchAsync(string query, CancellationToken ct)
-        {
-            // Чтение и разбор файлов не выполняются в UI-потоке даже на повторном поиске без HTTP.
-            return Task.Run(async delegate
-            {
-                await searchGate.WaitAsync(ct);
-                try { return await SearchCore(query, ct); }
-                finally { searchGate.Release(); }
-            }, ct);
-        }
-        /// <summary>Переиспользует разобранный каталог до изменения размера или времени записи файла.</summary>
-        List<AppRow> ReadCatalog(string path)
-        {
-            var file = new FileInfo(path);
-            if (!file.Exists) { parsedFiles.Remove(path); return new List<AppRow>(); }
-            Tuple<long, long, List<AppRow>> cached;
-            if (!parsedFiles.TryGetValue(path, out cached) || cached.Item1 != file.Length || cached.Item2 != file.LastWriteTimeUtc.Ticks)
-            {
-                cached = Tuple.Create(file.Length, file.LastWriteTimeUtc.Ticks,
-                    ToolResponse.ParseCatalog(File.ReadAllText(path, Encoding.UTF8)));
-                parsedFiles[path] = cached;
-            }
-            return cached.Item3;
-        }
-        async Task<List<AppRow>> SearchCore(string query, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            var folder = Path.Combine(Root, "Files");
-            Directory.CreateDirectory(folder);
-            var cache = Path.Combine(folder, "AppsList.txt");
-            if (!File.Exists(cache) && !String.IsNullOrEmpty(store.Settings.Current) && Directory.Exists(locator.CurrentRoot))
-            {
-                var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
-                if (bundled != null) File.Copy(bundled, cache);
-            }
-            if (!catalogChecked)
-            {
-                try
-                {
-                    using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                    {
-                        timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                        using (var response = await Http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
-                        {
-                            response.EnsureSuccessStatusCode();
-                            var content = await response.Content.ReadAsStringAsync();
-                            if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
-                            AtomicFile.WriteUtf8(cache, content);
-                            Log("Каталог приложений обновлён из исходного репозитория.");
-                        }
-                    }
-                } catch (OperationCanceledException)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    Log("Каталог: таймаут обновления, используется сохранённая копия.");
-                } catch (Exception e)
-                {
-                    Log("Каталог: используется сохранённая копия. " + e.Message);
-                }
-                catalogChecked = true;
-            }
-            var customPath = Path.Combine(folder, "AppsListCustom.txt");
-            var custom = ReadCatalog(customPath);
-            var catalog = ReadCatalog(cache);
-            ct.ThrowIfCancellationRequested();
-            // В таблицу уходят копии только совпавших строк: UI не может испортить общий кэш.
-            return ToolResponse.MatchCatalog(query, custom, catalog)
-                .Select(x => new AppRow { ID = x.ID, Name = x.Name }).ToList();
-        }
-    }
-}
-
-// Services/AppCompatibility.cs
-namespace IpaDesktop
-{
-    /// <summary>Блокирует только подтверждённую несовместимость; неизвестные сведения не подменяет догадками.</summary>
-    public static class AppCompatibility
-    {
-        static Version Parse(string value)
-        {
-            if (!Regex.IsMatch(value ?? "", @"^\d+(\.\d+){0,3}$")) return null;
-            var parts = value.Split('.').ToList(); while (parts.Count < 4) parts.Add("0");
-            Version result; return Version.TryParse(String.Join(".", parts), out result) ? result : null;
-        }
-        public static string BlockReason(IpaDetails app, string ios)
-        {
-            if (app.Platforms != null && app.Platforms.Length > 0 && !app.Platforms.Any(x => String.Equals(x, "iPhoneOS", StringComparison.OrdinalIgnoreCase)))
-                return "Пакет предназначен для другой платформы: " + String.Join(", ", app.Platforms) + ". Для iPhone нужен iPhoneOS.";
-            var minimum = Parse(app.MinimumOS); var current = Parse(ios);
-            if (minimum != null && current != null && minimum > current)
-                return "Приложению требуется iOS " + app.MinimumOS + ", на iPhone установлена " + ios + ". Выберите более старую версию приложения.";
-            return null;
-        }
-    }
-}
-
-// Services/AppleLoginService.cs
+// Services/Accounts/AppleLoginService.cs
 namespace IpaDesktop
 {
     public interface IAppleLoginService
@@ -1978,7 +1868,392 @@ namespace IpaDesktop
     }
 }
 
-// Services/AppleSupportService.cs
+// Services/Applications/AppCatalog.cs
+namespace IpaDesktop
+{
+    /// <summary>Ищет по кэшируемому каталогу IPA_Downloader; при сетевой ошибке использует локальную копию.</summary>
+    public sealed class AppCatalog
+    {
+        readonly SettingsStore store;
+        readonly ToolLocator locator;
+        static HttpClient Http
+        {
+            get
+            {
+                return NetworkClient.Http;
+            }
+        }
+        string Root
+        {
+            get
+            {
+                return store.Root;
+            }
+        }
+        bool catalogChecked;
+        readonly SemaphoreSlim searchGate = new SemaphoreSlim(1, 1);
+        readonly Dictionary<string, Tuple<long, long, List<AppRow>>> parsedFiles =
+            new Dictionary<string, Tuple<long, long, List<AppRow>>>(StringComparer.OrdinalIgnoreCase);
+        public Action<string> Log
+        {
+            get;
+            set;
+        }
+        public AppCatalog(SettingsStore store, ToolLocator locator)
+        {
+            this.store = store;
+            this.locator = locator;
+            Log = delegate
+            {
+            };
+        }
+        /// <summary>Ищет по каталогам асинхронно и учитывает токен отмены.</summary>
+        public Task<List<AppRow>> SearchAsync(string query, CancellationToken ct)
+        {
+            // Чтение и разбор файлов не выполняются в UI-потоке даже на повторном поиске без HTTP.
+            return Task.Run(async delegate
+            {
+                await searchGate.WaitAsync(ct);
+                try { return await SearchCore(query, ct); }
+                finally { searchGate.Release(); }
+            }, ct);
+        }
+        /// <summary>Переиспользует разобранный каталог до изменения размера или времени записи файла.</summary>
+        List<AppRow> ReadCatalog(string path)
+        {
+            var file = new FileInfo(path);
+            if (!file.Exists) { parsedFiles.Remove(path); return new List<AppRow>(); }
+            Tuple<long, long, List<AppRow>> cached;
+            if (!parsedFiles.TryGetValue(path, out cached) || cached.Item1 != file.Length || cached.Item2 != file.LastWriteTimeUtc.Ticks)
+            {
+                cached = Tuple.Create(file.Length, file.LastWriteTimeUtc.Ticks,
+                    ToolResponse.ParseCatalog(File.ReadAllText(path, Encoding.UTF8)));
+                parsedFiles[path] = cached;
+            }
+            return cached.Item3;
+        }
+        async Task<List<AppRow>> SearchCore(string query, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var folder = Path.Combine(Root, "Files");
+            Directory.CreateDirectory(folder);
+            var cache = Path.Combine(folder, "AppsList.txt");
+            if (!File.Exists(cache) && !String.IsNullOrEmpty(store.Settings.Current) && Directory.Exists(locator.CurrentRoot))
+            {
+                var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
+                if (bundled != null) File.Copy(bundled, cache);
+            }
+            if (!catalogChecked)
+            {
+                try
+                {
+                    using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                    {
+                        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                        using (var response = await Http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
+                        {
+                            response.EnsureSuccessStatusCode();
+                            var content = await response.Content.ReadAsStringAsync();
+                            if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
+                            AtomicFile.WriteUtf8(cache, content);
+                            Log("Каталог приложений обновлён из исходного репозитория.");
+                        }
+                    }
+                } catch (OperationCanceledException)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    Log("Каталог: таймаут обновления, используется сохранённая копия.");
+                } catch (Exception e)
+                {
+                    Log("Каталог: используется сохранённая копия. " + e.Message);
+                }
+                catalogChecked = true;
+            }
+            var customPath = Path.Combine(folder, "AppsListCustom.txt");
+            var custom = ReadCatalog(customPath);
+            var catalog = ReadCatalog(cache);
+            ct.ThrowIfCancellationRequested();
+            // В таблицу уходят копии только совпавших строк: UI не может испортить общий кэш.
+            return ToolResponse.MatchCatalog(query, custom, catalog)
+                .Select(x => new AppRow { ID = x.ID, Name = x.Name }).ToList();
+        }
+    }
+}
+
+// Services/Applications/ApplicationDownloads.cs
+namespace IpaDesktop
+{
+    /// <summary>Загружает IPA под текущей сессией ipatool в уникальный файл, исключая перезапись чужой копии.</summary>
+    public sealed class ApplicationDownloads
+    {
+        readonly IAppToolClient tools;
+        readonly string folder;
+        public Action<string> Transfer { get; set; }
+        public ApplicationDownloads(IAppToolClient tools, string folder)
+        {
+            this.tools = tools;
+            this.folder = folder;
+            Transfer = delegate { };
+        }
+        /// <summary>Запускает скачивание с получением лицензии и отдельным назначением для каждого запроса.</summary>
+        public async Task DownloadAsync(DownloadItem item, CancellationToken ct)
+        {
+            if (!AppSetStore.ValidId(item.ID)) throw new IOException("Некорректный App Store ID.");
+            Directory.CreateDirectory(folder);
+            // A new destination for every request: never reuse another account's IPA.
+            string title = new string((item.Name ?? "App").Where(c => !Char.IsControl(c) && Array.IndexOf(Path.GetInvalidFileNameChars(), c) < 0).Take(48).ToArray()).Trim().TrimEnd('.');
+            if (title.Length == 0) title = "App";
+            string destination = Path.Combine(folder, title + "-" + item.ID + "-" + Guid.NewGuid().ToString("N") + ".ipa");
+            var arguments = new List<string>
+            {
+                "download", "-i", item.ID, "--purchase", "-o", destination
+            };
+            if (item.VersionID != null) arguments.AddRange(new[]
+            {
+                "--external-version-id", item.VersionID
+            });
+            using (var monitor = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                var observing = ObserveAsync(destination + ".tmp", monitor.Token);
+                // C# 5 не поддерживает await в finally: сохраняем исходную ошибку и дожидаемся наблюдателя перед её повторным выбросом.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo failure = null;
+                try { ToolResponse.Ensure(await tools.RunAsync(arguments.ToArray(), ct, true)); }
+                catch (Exception error) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error); }
+                monitor.Cancel();
+                try { await observing.ConfigureAwait(false); } catch (OperationCanceledException) { }
+                if (failure != null) failure.Throw();
+            }
+        }
+        /// <summary>Раз в секунду читает только размер нашего временного IPA; не сканирует папку и не читает тело файла.</summary>
+        async Task ObserveAsync(string path, CancellationToken ct)
+        {
+            var meter = new FileTransferMeter(); var time = Stopwatch.StartNew();
+            while (true)
+            {
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+                try
+                {
+                    var file = new FileInfo(path);
+                    if (file.Exists) Transfer(meter.Sample(file.Length, time.Elapsed.TotalSeconds).Message);
+                    else meter.Reset();
+                }
+                catch (IOException) { meter.Reset(); }
+                catch (UnauthorizedAccessException) { meter.Reset(); }
+            }
+        }
+    }
+}
+
+// Services/Applications/AppToolClient.cs
+namespace IpaDesktop
+{
+    /// <summary>Адаптер ipatool: находит бинарник, добавляет JSON-формат и делегирует запуск процессному слою.</summary>
+    public sealed class AppToolClient : IAppToolClient
+    {
+        readonly IProcessRunner runner;
+        readonly ToolLocator locator;
+        public AppToolClient(IProcessRunner runner, ToolLocator locator)
+        {
+            this.runner = runner;
+            this.locator = locator;
+        }
+        /// <summary>Добавляет параметры протокола CLI и выполняет команду через подменяемый процессный адаптер.</summary>
+        public Task<Result> RunAsync(string[] args, CancellationToken ct, bool publish)
+        {
+            return Task.Run(async delegate
+            {
+                return await runner.Run(locator.Find("ipatool*.exe"), args.Concat(new[]
+                {
+                    "--format", "json"
+                }).ToArray(), ct, false, publish);
+            }, ct);
+        }
+    }
+}
+
+// Services/Applications/AppVersions.cs
+namespace IpaDesktop
+{
+    /// <summary>Получает список быстро, а дорогие сведения — только для выбранных пользователем версий.</summary>
+    public sealed class AppVersions
+    {
+        readonly IAppToolClient tool;
+        public AppVersions(IAppToolClient tool) { this.tool = tool; }
+        public static List<string> ParseManual(string text)
+        {
+            var ids = (text ?? "").Split(new[] { ',', ';', ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
+            if (ids.Count == 0 || ids.Count > 50 || ids.Any(x => !AppSetStore.ValidId(x))) throw new ArgumentException("Введите от 1 до 50 числовых ID версий через запятую или пробел (до 20 цифр каждый).");
+            return ids;
+        }
+        public async Task<List<AppVersionRow>> ListAsync(string appId, CancellationToken ct)
+        {
+            if (!AppSetStore.ValidId(appId)) throw new ArgumentException("Некорректный App Store ID.");
+            var result = await tool.RunAsync(new[] { "list-versions", "-i", appId }, ct, false);
+            ToolResponse.Ensure(result);
+            return ToolResponse.VersionIds(result.Output).Distinct().Reverse().Select(x => new AppVersionRow { ID = x }).ToList();
+        }
+        public async Task ReadAsync(string appId, AppVersionRow row, CancellationToken ct)
+        {
+            if (!AppSetStore.ValidId(appId) || !AppSetStore.ValidId(row.ID)) throw new ArgumentException("Некорректный ID.");
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
+                try
+                {
+                    var result = await tool.RunAsync(new[] { "get-version-metadata", "-i", appId, "--external-version-id", row.ID }, timeout.Token, false);
+                    ToolResponse.Ensure(result); var data = ToolResponse.Object(result.Output);
+                    row.Version = ToolResponse.Get(data, "displayVersion") as string ?? "не указана";
+                    row.MinimumOS = ToolResponse.Get(data, "minimumOSVersion") as string ?? "не указана";
+                    var platforms = ToolResponse.Get(data, "supportedPlatforms") as object[];
+                    row.Platforms = platforms == null ? "не указаны" : String.Join(", ", platforms.OfType<string>().Where(x => !String.IsNullOrWhiteSpace(x)).Distinct());
+                    if (String.IsNullOrWhiteSpace(row.Platforms)) row.Platforms = "не указаны";
+                    row.State = "Готово";
+                }
+                catch (OperationCanceledException) { ct.ThrowIfCancellationRequested(); throw new System.IO.IOException("Сведения не получены за 30 секунд. Можно повторить."); }
+            }
+        }
+    }
+}
+
+// Services/Applications/IAppToolClient.cs
+namespace IpaDesktop
+{
+    /// <summary>Подменяемый контракт команд ipatool; тесты выполняются без Apple Account и сетевого входа.</summary>
+    public interface IAppToolClient
+    {
+        /// <summary>Добавляет параметры протокола CLI и выполняет команду через подменяемый процессный адаптер.</summary>
+        Task<Result> RunAsync(string[] arguments, CancellationToken cancellation, bool publish);
+    }
+}
+
+// Services/Applications/ToolResponse.cs
+namespace IpaDesktop
+{
+    /// <summary>Разбирает ответы CLI и каталоги, проверяет ошибки и объединяет приложения по ID.</summary>
+    public static class ToolResponse
+    {
+        public static void Ensure(Result r)
+        {
+            if (r.Code != 0) throw new Exception("Код ошибки " + r.Code + "\n" + (r.Output.Length > 8000 ? r.Output.Substring(r.Output.Length - 8000) : r.Output));
+        }
+        public static Dictionary<string, object> Object(string output)
+        {
+            // Structured output is sometimes preceded by a human-readable diagnostic.
+            foreach (var line in output.Split('\n').Reverse())
+            {
+                try
+                {
+                    var d = JsonCodec.DeserializeObject(line.Trim()) as Dictionary<string, object>;
+                    if (d != null) return d;
+                } catch (ArgumentException)
+                {
+                }
+            }
+            try
+            {
+                return JsonCodec.DeserializeObject(output.Trim()) as Dictionary<string, object> ?? new Dictionary<string, object>();
+            } catch (Exception)
+            {
+                throw new Exception("Формат ответа движка изменился. См. журнал или выполните откат.");
+            }
+        }
+        /// <summary>Необязательные поля ipatool 1.1.9/1.2.0: отсутствие данных не означает совместимость с любой ОС.</summary>
+        public static string VersionMetadataText(Dictionary<string, object> data)
+        {
+            Func<string, string> value = key =>
+            {
+                var text = Get(data, key) as string;
+                return String.IsNullOrWhiteSpace(text) ? "не указана" : text.Trim();
+            };
+            var raw = Get(data, "supportedPlatforms") as object[];
+            var platforms = (raw ?? new object[0]).OfType<string>().Where(x => !String.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Select(x =>
+                {
+                    if (String.Equals(x, "iPhoneOS", StringComparison.OrdinalIgnoreCase)) return "iOS (iPhoneOS)";
+                    if (String.Equals(x, "MacOSX", StringComparison.OrdinalIgnoreCase) || String.Equals(x, "macOS", StringComparison.OrdinalIgnoreCase)) return "macOS";
+                    return x;
+                }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            return "Версия: " + value("displayVersion") + Environment.NewLine +
+                "Дата выпуска: " + value("releaseDate") + Environment.NewLine +
+                "Минимальная версия ОС: " + value("minimumOSVersion") + Environment.NewLine +
+                "Платформы: " + (platforms.Length == 0 ? "не указаны" : String.Join(", ", platforms));
+        }
+        public static object Get(Dictionary<string, object> d, string key)
+        {
+            return d.Where(k => String.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase)).Select(k => k.Value).FirstOrDefault();
+        }
+        /// <summary>Извлекает доступные идентификаторы версий без подстановки неподтверждённых значений.</summary>
+        public static List<string> VersionIds(string text)
+        {
+            var values = Get(Object(text), "externalVersionIdentifiers") as object[];
+            if (values == null) throw new Exception("Формат списка версий не поддерживается.");
+            return values.Select(Convert.ToString).Where(x => x.Length > 0 && x.All(Char.IsDigit)).ToList();
+        }
+        /// <summary>Извлекает приложения из JSON-вывода ipatool.</summary>
+        public static List<AppRow> ParseApps(string text)
+        {
+            var d = Object(text);
+            var values = Get(d, "apps") as object[];
+            if (values == null) throw new Exception("В ответе отсутствует список apps. Проверьте совместимость движка.");
+            return values.OfType<Dictionary<string, object>>().Select(x => new AppRow
+            {
+                Name = Convert.ToString(Get(x, "name")), ID = Convert.ToString(Get(x, "id"))
+            }).Where(x => x.ID.All(Char.IsDigit) && x.ID.Length > 0).ToList();
+        }
+        /// <summary>Разбирает строки каталога и отбрасывает некорректные записи.</summary>
+        public static List<AppRow> ParseCatalog(string text)
+        {
+            var rows = new List<AppRow>();
+            foreach (var line in text.Split('\n'))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(line.TrimEnd('\r'), @"^(.*):\s*(\d+)(?:[ \t]+(\d{1,2}\.\d{1,2}\.\d{4}))?\s*$");
+                if (!m.Success) m = System.Text.RegularExpressions.Regex.Match(line, @"^(.*?):\s*(\d+)");
+                if (m.Success) rows.Add(new AppRow
+                {
+                    Name = m.Groups[1].Value.Trim(), ID = m.Groups[2].Value
+                });
+            }
+            return rows.GroupBy(x => x.ID).Select(x => x.First()).ToList();
+        }
+        /// <summary>Фильтрует объединённые каталоги по пользовательскому запросу.</summary>
+        public static List<AppRow> MatchCatalog(string query, List<AppRow> custom, List<AppRow> catalog)
+        {
+            var ids = new HashSet<string>(custom.Select(x => x.ID));
+            return custom.Concat(catalog.Where(x => !ids.Contains(x.ID))).Where(x => x.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).GroupBy(x => x.ID).Select(x => x.First()).ToList();
+        }
+        /// <summary>Объединяет источники по App Store ID, исключая повторяющиеся приложения.</summary>
+        public static List<AppRow> MergeApps(IEnumerable<AppRow> local, IEnumerable<AppRow> online)
+        {
+            return local.Concat(online).GroupBy(x => x.ID).Select(x => x.First()).ToList();
+        }
+    }
+}
+
+// Services/Devices/AppCompatibility.cs
+namespace IpaDesktop
+{
+    /// <summary>Блокирует только подтверждённую несовместимость; неизвестные сведения не подменяет догадками.</summary>
+    public static class AppCompatibility
+    {
+        static Version Parse(string value)
+        {
+            if (!Regex.IsMatch(value ?? "", @"^\d+(\.\d+){0,3}$")) return null;
+            var parts = value.Split('.').ToList(); while (parts.Count < 4) parts.Add("0");
+            Version result; return Version.TryParse(String.Join(".", parts), out result) ? result : null;
+        }
+        public static string BlockReason(IpaDetails app, string ios)
+        {
+            if (app.Platforms != null && app.Platforms.Length > 0 && !app.Platforms.Any(x => String.Equals(x, "iPhoneOS", StringComparison.OrdinalIgnoreCase)))
+                return "Пакет предназначен для другой платформы: " + String.Join(", ", app.Platforms) + ". Для iPhone нужен iPhoneOS.";
+            var minimum = Parse(app.MinimumOS); var current = Parse(ios);
+            if (minimum != null && current != null && minimum > current)
+                return "Приложению требуется iOS " + app.MinimumOS + ", на iPhone установлена " + ios + ". Выберите более старую версию приложения.";
+            return null;
+        }
+    }
+}
+
+// Services/Devices/AppleSupportService.cs
 namespace IpaDesktop
 {
     /// <summary>Преобразует снимок служб и реестра в понятный статус готовности компонентов Apple.</summary>
@@ -2047,321 +2322,7 @@ namespace IpaDesktop
     }
 }
 
-// Services/ApplicationDownloads.cs
-namespace IpaDesktop
-{
-    /// <summary>Загружает IPA под текущей сессией ipatool в уникальный файл, исключая перезапись чужой копии.</summary>
-    public sealed class ApplicationDownloads
-    {
-        readonly IAppToolClient tools;
-        readonly string folder;
-        public Action<string> Transfer { get; set; }
-        public ApplicationDownloads(IAppToolClient tools, string folder)
-        {
-            this.tools = tools;
-            this.folder = folder;
-            Transfer = delegate { };
-        }
-        /// <summary>Запускает скачивание с получением лицензии и отдельным назначением для каждого запроса.</summary>
-        public async Task DownloadAsync(DownloadItem item, CancellationToken ct)
-        {
-            if (!AppSetStore.ValidId(item.ID)) throw new IOException("Некорректный App Store ID.");
-            Directory.CreateDirectory(folder);
-            // A new destination for every request: never reuse another account's IPA.
-            string title = new string((item.Name ?? "App").Where(c => !Char.IsControl(c) && Array.IndexOf(Path.GetInvalidFileNameChars(), c) < 0).Take(48).ToArray()).Trim().TrimEnd('.');
-            if (title.Length == 0) title = "App";
-            string destination = Path.Combine(folder, title + "-" + item.ID + "-" + Guid.NewGuid().ToString("N") + ".ipa");
-            var arguments = new List<string>
-            {
-                "download", "-i", item.ID, "--purchase", "-o", destination
-            };
-            if (item.VersionID != null) arguments.AddRange(new[]
-            {
-                "--external-version-id", item.VersionID
-            });
-            using (var monitor = CancellationTokenSource.CreateLinkedTokenSource(ct))
-            {
-                var observing = ObserveAsync(destination + ".tmp", monitor.Token);
-                // C# 5 не поддерживает await в finally: сохраняем исходную ошибку и дожидаемся наблюдателя перед её повторным выбросом.
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo failure = null;
-                try { ToolResponse.Ensure(await tools.RunAsync(arguments.ToArray(), ct, true)); }
-                catch (Exception error) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error); }
-                monitor.Cancel();
-                try { await observing.ConfigureAwait(false); } catch (OperationCanceledException) { }
-                if (failure != null) failure.Throw();
-            }
-        }
-        /// <summary>Раз в секунду читает только размер нашего временного IPA; не сканирует папку и не читает тело файла.</summary>
-        async Task ObserveAsync(string path, CancellationToken ct)
-        {
-            var meter = new FileTransferMeter(); var time = Stopwatch.StartNew();
-            while (true)
-            {
-                await Task.Delay(1000, ct).ConfigureAwait(false);
-                try
-                {
-                    var file = new FileInfo(path);
-                    if (file.Exists) Transfer(meter.Sample(file.Length, time.Elapsed.TotalSeconds).Message);
-                    else meter.Reset();
-                }
-                catch (IOException) { meter.Reset(); }
-                catch (UnauthorizedAccessException) { meter.Reset(); }
-            }
-        }
-    }
-}
-
-// Services/AppSetStore.cs
-namespace IpaDesktop
-{
-    /// <summary>Хранит наборы отдельно от настроек; проверяет формат, объединяет ID и мигрирует прежние записи.</summary>
-    public sealed class AppSetStore
-    {
-        readonly string file, folder;
-        public AppSetStore(string root, string downloads)
-        {
-            file = Path.Combine(root, "AppSets.json");
-            folder = Path.GetFullPath(downloads);
-        }
-        /// <summary>Читает ограниченный файл наборов и проверяет все записи до передачи в интерфейс.</summary>
-        public List<AppSet> Load()
-        {
-            if (!File.Exists(file)) return new List<AppSet>();
-            if (new FileInfo(file).Length > 1000000) throw new IOException("Файл наборов слишком велик.");
-            var sets = JsonCodec.Deserialize<List<AppSet>>(File.ReadAllText(file, Encoding.UTF8));
-            if (sets == null || sets.Count > 100) throw new IOException("Некорректный файл наборов.");
-            foreach (var set in sets) AppSetRules.Validate(set);
-            if (sets.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) throw new IOException("Имена наборов повторяются.");
-            return sets.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
-        }
-        /// <summary>Проверяет ограничения конфигурации и атомарно заменяет файл наборов.</summary>
-        void Write(List<AppSet> sets)
-        {
-            if (sets.Count > 100) throw new IOException("Можно сохранить не более 100 наборов.");
-            var text = JsonCodec.Serialize(sets);
-            if (Encoding.UTF8.GetByteCount(text) > 1000000) throw new IOException("Файл наборов слишком велик.");
-            AtomicFile.WriteUtf8(file, text);
-        }
-        /// <summary>Проверяет положительный числовой ID без знака, пробелов и управляющих символов.</summary>
-        public static bool ValidId(string id) { return AppSetRules.ValidId(id); }
-        /// <summary>Заменяет содержимое именованного набора после проверки; интерфейс дополнения использует AddApps.</summary>
-        public void SaveApps(string name, IEnumerable<AppRow> apps)
-        {
-            var set = new AppSet { Name = (name ?? "").Trim(), Apps = AppSetRules.UniqueApps(apps) };
-            AppSetRules.Validate(set);
-            var sets = Load();
-            sets.RemoveAll(x => String.Equals(x.Name, set.Name, StringComparison.OrdinalIgnoreCase));
-            sets.Add(set);
-            Write(sets);
-        }
-        /// <summary>Атомарно меняет имя и состав; конфликт имени не перезаписывает другой набор.</summary>
-        public void Update(string originalName, string name, IEnumerable<AppRow> apps)
-        {
-            var updated = new AppSet { Name = (name ?? "").Trim(), Apps = AppSetRules.UniqueApps(apps) };
-            AppSetRules.Validate(updated);
-            var sets = Load();
-            var original = sets.FirstOrDefault(x => String.Equals(x.Name, originalName, StringComparison.OrdinalIgnoreCase));
-            if (original == null) throw new IOException("Набор уже удалён. Обновите список.");
-            if (sets.Any(x => !Object.ReferenceEquals(x, original) && String.Equals(x.Name, updated.Name, StringComparison.OrdinalIgnoreCase)))
-                throw new IOException("Набор с таким именем уже существует.");
-            sets.Remove(original); sets.Add(updated); Write(sets);
-        }
-        /// <summary>Дополняет именованный набор без повторов по ID, сохраняя ранее добавленные приложения.</summary>
-        public void AddApps(string name, IEnumerable<AppRow> apps)
-        {
-            name = (name ?? "").Trim();
-            var existing = Load().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-            var combined = existing == null ? new List<AppRow>() : ResolveApps(existing).ToList();
-            combined.AddRange(apps);
-            SaveApps(name, combined);
-        }
-        /// <summary>Совместимый API извлечения ID из IPA; в интерфейсе создание наборов выполняется из поиска.</summary>
-        public void Save(string name, IEnumerable<LocalRow> rows)
-        {
-            SaveApps(name, rows.Select(row => FromFile(Path.GetFileName(row.Path), row.Path)).ToArray());
-        }
-        /// <summary>Проверяет принадлежность IPA папке загрузок и читает его ID, не угадывая по имени файла.</summary>
-        AppRow FromFile(string name, string path)
-        {
-            path = Path.GetFullPath(path);
-            if (!String.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("IPA отсутствует в папке приложения: " + name + ". Создайте набор из результатов поиска.");
-            var details = IpaMetadata.ReadDetails(path);
-            if (!ValidId(details.AppStoreID)) throw new IOException("В IPA нет App Store ID: " + name + ". Создайте набор из результатов поиска.");
-            return new AppRow { ID = details.AppStoreID, Name = details.AppName ?? ("Приложение " + details.AppStoreID) };
-        }
-        /// <summary>Возвращает копии ID; для прежнего формата извлекает их только из метаданных исходных IPA.</summary>
-        public AppRow[] ResolveApps(AppSet set)
-        {
-            AppSetRules.Validate(set);
-            if (set.Apps != null) return set.Apps.Select(x => new AppRow { ID = x.ID, Name = x.Name }).ToArray();
-            // Convert only from IPA metadata, never infer IDs from filenames or reuse their account.
-            return set.Files.Select(name => FromFile(name, Path.Combine(folder, name))).GroupBy(x => x.ID).Select(g => g.First()).ToArray();
-        }
-        /// <summary>Объединяет наборы по ID. Миграция записывается один раз, только после проверки всех наборов.</summary>
-        public AppRow[] ResolveMany(IEnumerable<AppSet> selected)
-        {
-            var requested = selected.ToArray();
-            if (requested.Length == 0) throw new IOException("Выберите хотя бы один набор.");
-            var resolved = requested.Select(x => new AppSet { Name = x.Name, Apps = ResolveApps(x) }).ToArray();
-            var apps = AppSetRules.UniqueApps(resolved.SelectMany(x => x.Apps));
-            if (requested.Any(x => x.Apps == null))
-            {
-                var saved = Load();
-                foreach (var converted in resolved)
-                {
-                    saved.RemoveAll(x => String.Equals(x.Name, converted.Name, StringComparison.OrdinalIgnoreCase));
-                    saved.Add(converted);
-                }
-                Write(saved);
-            }
-            return apps;
-        }
-        /// <summary>Удаляет именованный набор, не затрагивая загруженные IPA.</summary>
-        public void Delete(string name)
-        {
-            DeleteMany(new[] { name });
-        }
-        /// <summary>Удаляет только конфигурацию выбранных наборов одной атомарной записью.</summary>
-        public void DeleteMany(IEnumerable<string> names)
-        {
-            var selected = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
-            var sets = Load();
-            sets.RemoveAll(x => selected.Contains(x.Name));
-            Write(sets);
-        }
-    }
-}
-
-// Services/AppToolClient.cs
-namespace IpaDesktop
-{
-    /// <summary>Адаптер ipatool: находит бинарник, добавляет JSON-формат и делегирует запуск процессному слою.</summary>
-    public sealed class AppToolClient : IAppToolClient
-    {
-        readonly IProcessRunner runner;
-        readonly ToolLocator locator;
-        public AppToolClient(IProcessRunner runner, ToolLocator locator)
-        {
-            this.runner = runner;
-            this.locator = locator;
-        }
-        /// <summary>Добавляет параметры протокола CLI и выполняет команду через подменяемый процессный адаптер.</summary>
-        public Task<Result> RunAsync(string[] args, CancellationToken ct, bool publish)
-        {
-            return Task.Run(async delegate
-            {
-                return await runner.Run(locator.Find("ipatool*.exe"), args.Concat(new[]
-                {
-                    "--format", "json"
-                }).ToArray(), ct, false, publish);
-            }, ct);
-        }
-    }
-}
-
-// Services/AppVersions.cs
-namespace IpaDesktop
-{
-    /// <summary>Получает список быстро, а дорогие сведения — только для выбранных пользователем версий.</summary>
-    public sealed class AppVersions
-    {
-        readonly IAppToolClient tool;
-        public AppVersions(IAppToolClient tool) { this.tool = tool; }
-        public static List<string> ParseManual(string text)
-        {
-            var ids = (text ?? "").Split(new[] { ',', ';', ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
-            if (ids.Count == 0 || ids.Count > 50 || ids.Any(x => !AppSetStore.ValidId(x))) throw new ArgumentException("Введите от 1 до 50 числовых ID версий через запятую или пробел (до 20 цифр каждый).");
-            return ids;
-        }
-        public async Task<List<AppVersionRow>> ListAsync(string appId, CancellationToken ct)
-        {
-            if (!AppSetStore.ValidId(appId)) throw new ArgumentException("Некорректный App Store ID.");
-            var result = await tool.RunAsync(new[] { "list-versions", "-i", appId }, ct, false);
-            ToolResponse.Ensure(result);
-            return ToolResponse.VersionIds(result.Output).Distinct().Reverse().Select(x => new AppVersionRow { ID = x }).ToList();
-        }
-        public async Task ReadAsync(string appId, AppVersionRow row, CancellationToken ct)
-        {
-            if (!AppSetStore.ValidId(appId) || !AppSetStore.ValidId(row.ID)) throw new ArgumentException("Некорректный ID.");
-            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
-            {
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try
-                {
-                    var result = await tool.RunAsync(new[] { "get-version-metadata", "-i", appId, "--external-version-id", row.ID }, timeout.Token, false);
-                    ToolResponse.Ensure(result); var data = ToolResponse.Object(result.Output);
-                    row.Version = ToolResponse.Get(data, "displayVersion") as string ?? "не указана";
-                    row.MinimumOS = ToolResponse.Get(data, "minimumOSVersion") as string ?? "не указана";
-                    var platforms = ToolResponse.Get(data, "supportedPlatforms") as object[];
-                    row.Platforms = platforms == null ? "не указаны" : String.Join(", ", platforms.OfType<string>().Where(x => !String.IsNullOrWhiteSpace(x)).Distinct());
-                    if (String.IsNullOrWhiteSpace(row.Platforms)) row.Platforms = "не указаны";
-                    row.State = "Готово";
-                }
-                catch (OperationCanceledException) { ct.ThrowIfCancellationRequested(); throw new System.IO.IOException("Сведения не получены за 30 секунд. Можно повторить."); }
-            }
-        }
-    }
-}
-
-// Services/BatchRunner.cs
-namespace IpaDesktop
-{
-    /// <summary>Итог пакета: успешные операции и элементы с ошибками; отмена не считается ошибкой элемента.</summary>
-    public sealed class BatchResult<T>
-    {
-        public int Succeeded { get; internal set; }
-        public List<T> Failed { get; private set; }
-        public BatchResult() { Failed = new List<T>(); }
-    }
-    /// <summary>Последовательно выполняет пакет, продолжая работу после ошибки отдельного приложения.</summary>
-    public static class BatchRunner
-    {
-        /// <summary>Обработчики вызываются в исходном контексте UI. Долгая операция обязана сама быть асинхронной.</summary>
-        public static async Task<BatchResult<T>> Run<T>(IList<T> items, Func<T, CancellationToken, Task> operation,
-            Action<T, int> started, Action<T> succeeded, Action<T, Exception> failed, Action refreshed, CancellationToken ct)
-        {
-            var result = new BatchResult<T>();
-            for (int index = 0; index < items.Count; index++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var item = items[index];
-                started(item, index + 1);
-                Exception error = null;
-                try { await operation(item, ct); }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception e) { error = e; }
-                // Ошибки отображения не выдаются за ошибки скачивания или установки.
-                if (error == null) { succeeded(item); result.Succeeded++; }
-                else { result.Failed.Add(item); failed(item, error); }
-                if (refreshed != null) refreshed();
-            }
-            return result;
-        }
-    }
-}
-
-// Services/CompletionSound.cs
-namespace IpaDesktop
-{
-    /// <summary>Один системный сигнал после полностью успешной очереди; звук не влияет на результат операции.</summary>
-    public sealed class CompletionSound
-    {
-        readonly Action play;
-        public CompletionSound() : this(delegate { SystemSounds.Asterisk.Play(); }) { }
-        public CompletionSound(Action play) { this.play = play; }
-
-        /// <summary>Пустые, частично неудачные и отключённые уведомления остаются без звука.</summary>
-        public void Notify(bool enabled, int succeeded, int failed)
-        {
-            if (!enabled || succeeded <= 0 || failed != 0) return;
-            try { play(); }
-            catch (InvalidOperationException) { }
-            catch (Win32Exception) { }
-        }
-    }
-}
-
-// Services/DeviceCommandClient.cs
+// Services/Devices/DeviceCommandClient.cs
 namespace IpaDesktop
 {
     /// <summary>Единая обвязка CLI: транспорт, ожидание ответа, идентификация устройства и запуск без скрытых повторов.</summary>
@@ -2411,7 +2372,7 @@ namespace IpaDesktop
     }
 }
 
-// Services/DeviceDiscovery.cs
+// Services/Devices/DeviceDiscovery.cs
 namespace IpaDesktop
 {
     /// <summary>Обнаружение USB и Wi-Fi сохраняет независимые результаты и не выполняет параллельные операции с одним runner.</summary>
@@ -2467,7 +2428,7 @@ namespace IpaDesktop
     }
 }
 
-// Services/DeviceInstallation.cs
+// Services/Devices/DeviceInstallation.cs
 namespace IpaDesktop
 {
     /// <summary>Проверяет устройство и исходный IPA до копирования; затем повторно проверяет фактически отправляемый пакет.</summary>
@@ -2509,7 +2470,7 @@ namespace IpaDesktop
     }
 }
 
-// Services/DeviceService.cs
+// Services/Devices/DeviceService.cs
 namespace IpaDesktop
 {
     /// <summary>Фасад инструментов iPhone. Обнаружение, команды и установка разделены и доступны для независимых проверок.</summary>
@@ -2539,43 +2500,6 @@ namespace IpaDesktop
             if (!values.TryGetValue("ProductVersion", out version)) version = "не удалось прочитать";
             return "Имя: " + device.Name + Environment.NewLine + "Подключение: " + device.Connection + Environment.NewLine +
                 "Модель (ProductType): " + model + Environment.NewLine + "iOS: " + version + Environment.NewLine + "UDID: " + device.ID;
-        }
-    }
-}
-
-// Services/DiagnosticReport.cs
-namespace IpaDesktop
-{
-    /// <summary>Создаёт диагностический отчёт и удаляет известные секреты, почту и идентификаторы до записи.</summary>
-    public static class DiagnosticReport
-    {
-        static string Replace(string text, string pattern, string replacement)
-        {
-            return Regex.Replace(text, pattern, replacement, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
-        }
-        /// <summary>Очищает текст по структурным шаблонам и известным приватным значениям до экспорта.</summary>
-        public static string Redact(string text, IEnumerable<string> privateValues)
-        {
-            text = text ?? "";
-            if (text.Length > 1000000) text = text.Substring(text.Length - 1000000);
-            foreach (var value in (privateValues ?? new string[0]).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length >= 3).Distinct().OrderByDescending(x => x.Length)) text = Replace(text, Regex.Escape(value), "[СКРЫТО]");
-            text = Replace(text, @"(?m)^.*(?:Authorization|Cookie|Set-Cookie|X-Apple-[A-Za-z-]+)\s*[:=].*$", "[СКРЫТ ЗАГОЛОВОК]");
-            text = Replace(text, @"(""(?:password[^""\r\n]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|verification[_-]?code|passphrase|keychain-passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie|authorization)""\s*:\s*)(?:""(?:\\.|[^""\\])*""|[^,}\r\n]+)", "$1\"[СКРЫТО]\"");
-            text = Replace(text, @"(<key>\s*(?:password[^<]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie)\s*</key>\s*<(?:string|data|integer)>)[\s\S]*?(</(?:string|data|integer)>)", "$1[СКРЫТО]$2");
-            text = Replace(text, @"(?<!\w)(--(?:password|auth-code|keychain-passphrase|email|token|udid)|-p|-e|-u)(?:=|\s+)(?:""(?:\\.|[^""\\])*""|'[^']*'|\S+)", "$1 [СКРЫТО]");
-            text = Replace(text, @"\b(password(?:Token)?|access[_-]?token|refresh[_-]?token|token|auth[_ -]?code|verification[_ -]?code|passphrase|keychain-passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid)\s*[:=]\s*[^\r\n]+", "$1=[СКРЫТО]");
-            text = Replace(text, @"[\p{L}\p{N}._%+\-]+@[\p{L}\p{N}.\-]+\.[\p{L}]{2,}", "[ПОЧТА]");
-            text = Replace(text, @"\b[A-Z]:\\Users\\[^\\\r\n""<>]+", @"C:\Users\[ПОЛЬЗОВАТЕЛЬ]");
-            text = Replace(text, @"/(?:Users|home)/[^/\s""']+", "/home/[ПОЛЬЗОВАТЕЛЬ]");
-            text = Replace(text, @"\b[0-9a-f]{8}-[0-9a-f]{16}\b|\b[0-9a-f]{40}\b|\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", "[ИДЕНТИФИКАТОР]");
-            text = Replace(text, @"\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", "[ТОКЕН]");
-            return text;
-        }
-        /// <summary>Формирует сводку версий и журнал, затем очищает весь отчёт от чувствительных данных.</summary>
-        public static string Create(string journal, string engineVersion, string toolsVersion, IEnumerable<string> privateValues)
-        {
-            var header = "IPA Desktop " + GuiUpdater.CurrentVersion + Environment.NewLine + "Windows: " + Environment.OSVersion.Version + Environment.NewLine + "ipatool: " + engineVersion + Environment.NewLine + "Device tools: " + toolsVersion + Environment.NewLine + "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine + Environment.NewLine;
-            return Redact(header + journal, privateValues);
         }
     }
 }
@@ -2789,7 +2713,336 @@ namespace IpaDesktop
     }
 }
 
-// Services/EngineUpdater.cs
+// Services/Operations/BatchRunner.cs
+namespace IpaDesktop
+{
+    /// <summary>Итог пакета: успешные операции и элементы с ошибками; отмена не считается ошибкой элемента.</summary>
+    public sealed class BatchResult<T>
+    {
+        public int Succeeded { get; internal set; }
+        public List<T> Failed { get; private set; }
+        public BatchResult() { Failed = new List<T>(); }
+    }
+    /// <summary>Последовательно выполняет пакет, продолжая работу после ошибки отдельного приложения.</summary>
+    public static class BatchRunner
+    {
+        /// <summary>Обработчики вызываются в исходном контексте UI. Долгая операция обязана сама быть асинхронной.</summary>
+        public static async Task<BatchResult<T>> Run<T>(IList<T> items, Func<T, CancellationToken, Task> operation,
+            Action<T, int> started, Action<T> succeeded, Action<T, Exception> failed, Action refreshed, CancellationToken ct)
+        {
+            var result = new BatchResult<T>();
+            for (int index = 0; index < items.Count; index++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var item = items[index];
+                started(item, index + 1);
+                Exception error = null;
+                try { await operation(item, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception e) { error = e; }
+                // Ошибки отображения не выдаются за ошибки скачивания или установки.
+                if (error == null) { succeeded(item); result.Succeeded++; }
+                else { result.Failed.Add(item); failed(item, error); }
+                if (refreshed != null) refreshed();
+            }
+            return result;
+        }
+    }
+}
+
+// Services/Operations/CompletionSound.cs
+namespace IpaDesktop
+{
+    /// <summary>Один системный сигнал после полностью успешной очереди; звук не влияет на результат операции.</summary>
+    public sealed class CompletionSound
+    {
+        readonly Action play;
+        public CompletionSound() : this(delegate { SystemSounds.Asterisk.Play(); }) { }
+        public CompletionSound(Action play) { this.play = play; }
+
+        /// <summary>Пустые, частично неудачные и отключённые уведомления остаются без звука.</summary>
+        public void Notify(bool enabled, int succeeded, int failed)
+        {
+            if (!enabled || succeeded <= 0 || failed != 0) return;
+            try { play(); }
+            catch (InvalidOperationException) { }
+            catch (Win32Exception) { }
+        }
+    }
+}
+
+// Services/Operations/DiagnosticReport.cs
+namespace IpaDesktop
+{
+    /// <summary>Создаёт диагностический отчёт и удаляет известные секреты, почту и идентификаторы до записи.</summary>
+    public static class DiagnosticReport
+    {
+        static string Replace(string text, string pattern, string replacement)
+        {
+            return Regex.Replace(text, pattern, replacement, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+        }
+        /// <summary>Очищает текст по структурным шаблонам и известным приватным значениям до экспорта.</summary>
+        public static string Redact(string text, IEnumerable<string> privateValues)
+        {
+            text = text ?? "";
+            if (text.Length > 1000000) text = text.Substring(text.Length - 1000000);
+            foreach (var value in (privateValues ?? new string[0]).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length >= 3).Distinct().OrderByDescending(x => x.Length)) text = Replace(text, Regex.Escape(value), "[СКРЫТО]");
+            text = Replace(text, @"(?m)^.*(?:Authorization|Cookie|Set-Cookie|X-Apple-[A-Za-z-]+)\s*[:=].*$", "[СКРЫТ ЗАГОЛОВОК]");
+            text = Replace(text, @"(""(?:password[^""\r\n]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|verification[_-]?code|passphrase|keychain-passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie|authorization)""\s*:\s*)(?:""(?:\\.|[^""\\])*""|[^,}\r\n]+)", "$1\"[СКРЫТО]\"");
+            text = Replace(text, @"(<key>\s*(?:password[^<]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie)\s*</key>\s*<(?:string|data|integer)>)[\s\S]*?(</(?:string|data|integer)>)", "$1[СКРЫТО]$2");
+            text = Replace(text, @"(?<!\w)(--(?:password|auth-code|keychain-passphrase|email|token|udid)|-p|-e|-u)(?:=|\s+)(?:""(?:\\.|[^""\\])*""|'[^']*'|\S+)", "$1 [СКРЫТО]");
+            text = Replace(text, @"\b(password(?:Token)?|access[_-]?token|refresh[_-]?token|token|auth[_ -]?code|verification[_ -]?code|passphrase|keychain-passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid)\s*[:=]\s*[^\r\n]+", "$1=[СКРЫТО]");
+            text = Replace(text, @"[\p{L}\p{N}._%+\-]+@[\p{L}\p{N}.\-]+\.[\p{L}]{2,}", "[ПОЧТА]");
+            text = Replace(text, @"\b[A-Z]:\\Users\\[^\\\r\n""<>]+", @"C:\Users\[ПОЛЬЗОВАТЕЛЬ]");
+            text = Replace(text, @"/(?:Users|home)/[^/\s""']+", "/home/[ПОЛЬЗОВАТЕЛЬ]");
+            text = Replace(text, @"\b[0-9a-f]{8}-[0-9a-f]{16}\b|\b[0-9a-f]{40}\b|\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", "[ИДЕНТИФИКАТОР]");
+            text = Replace(text, @"\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", "[ТОКЕН]");
+            return text;
+        }
+        /// <summary>Формирует сводку версий и журнал, затем очищает весь отчёт от чувствительных данных.</summary>
+        public static string Create(string journal, string engineVersion, string toolsVersion, IEnumerable<string> privateValues)
+        {
+            var header = "IPA Desktop " + GuiUpdater.CurrentVersion + Environment.NewLine + "Windows: " + Environment.OSVersion.Version + Environment.NewLine + "ipatool: " + engineVersion + Environment.NewLine + "Device tools: " + toolsVersion + Environment.NewLine + "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine + Environment.NewLine;
+            return Redact(header + journal, privateValues);
+        }
+    }
+}
+
+// Services/Storage/AppSetStore.cs
+namespace IpaDesktop
+{
+    /// <summary>Хранит наборы отдельно от настроек; проверяет формат, объединяет ID и мигрирует прежние записи.</summary>
+    public sealed class AppSetStore
+    {
+        readonly string file, folder;
+        public AppSetStore(string root, string downloads)
+        {
+            file = Path.Combine(root, "AppSets.json");
+            folder = Path.GetFullPath(downloads);
+        }
+        /// <summary>Читает ограниченный файл наборов и проверяет все записи до передачи в интерфейс.</summary>
+        public List<AppSet> Load()
+        {
+            if (!File.Exists(file)) return new List<AppSet>();
+            if (new FileInfo(file).Length > 1000000) throw new IOException("Файл наборов слишком велик.");
+            var sets = JsonCodec.Deserialize<List<AppSet>>(File.ReadAllText(file, Encoding.UTF8));
+            if (sets == null || sets.Count > 100) throw new IOException("Некорректный файл наборов.");
+            foreach (var set in sets) AppSetRules.Validate(set);
+            if (sets.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) throw new IOException("Имена наборов повторяются.");
+            return sets.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+        /// <summary>Проверяет ограничения конфигурации и атомарно заменяет файл наборов.</summary>
+        void Write(List<AppSet> sets)
+        {
+            if (sets.Count > 100) throw new IOException("Можно сохранить не более 100 наборов.");
+            var text = JsonCodec.Serialize(sets);
+            if (Encoding.UTF8.GetByteCount(text) > 1000000) throw new IOException("Файл наборов слишком велик.");
+            AtomicFile.WriteUtf8(file, text);
+        }
+        /// <summary>Проверяет положительный числовой ID без знака, пробелов и управляющих символов.</summary>
+        public static bool ValidId(string id) { return AppSetRules.ValidId(id); }
+        /// <summary>Заменяет содержимое именованного набора после проверки; интерфейс дополнения использует AddApps.</summary>
+        public void SaveApps(string name, IEnumerable<AppRow> apps)
+        {
+            var set = new AppSet { Name = (name ?? "").Trim(), Apps = AppSetRules.UniqueApps(apps) };
+            AppSetRules.Validate(set);
+            var sets = Load();
+            sets.RemoveAll(x => String.Equals(x.Name, set.Name, StringComparison.OrdinalIgnoreCase));
+            sets.Add(set);
+            Write(sets);
+        }
+        /// <summary>Атомарно меняет имя и состав; конфликт имени не перезаписывает другой набор.</summary>
+        public void Update(string originalName, string name, IEnumerable<AppRow> apps)
+        {
+            var updated = new AppSet { Name = (name ?? "").Trim(), Apps = AppSetRules.UniqueApps(apps) };
+            AppSetRules.Validate(updated);
+            var sets = Load();
+            var original = sets.FirstOrDefault(x => String.Equals(x.Name, originalName, StringComparison.OrdinalIgnoreCase));
+            if (original == null) throw new IOException("Набор уже удалён. Обновите список.");
+            if (sets.Any(x => !Object.ReferenceEquals(x, original) && String.Equals(x.Name, updated.Name, StringComparison.OrdinalIgnoreCase)))
+                throw new IOException("Набор с таким именем уже существует.");
+            sets.Remove(original); sets.Add(updated); Write(sets);
+        }
+        /// <summary>Дополняет именованный набор без повторов по ID, сохраняя ранее добавленные приложения.</summary>
+        public void AddApps(string name, IEnumerable<AppRow> apps)
+        {
+            name = (name ?? "").Trim();
+            var existing = Load().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            var combined = existing == null ? new List<AppRow>() : ResolveApps(existing).ToList();
+            combined.AddRange(apps);
+            SaveApps(name, combined);
+        }
+        /// <summary>Совместимый API извлечения ID из IPA; в интерфейсе создание наборов выполняется из поиска.</summary>
+        public void Save(string name, IEnumerable<LocalRow> rows)
+        {
+            SaveApps(name, rows.Select(row => FromFile(Path.GetFileName(row.Path), row.Path)).ToArray());
+        }
+        /// <summary>Проверяет принадлежность IPA папке загрузок и читает его ID, не угадывая по имени файла.</summary>
+        AppRow FromFile(string name, string path)
+        {
+            path = Path.GetFullPath(path);
+            if (!String.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("IPA отсутствует в папке приложения: " + name + ". Создайте набор из результатов поиска.");
+            var details = IpaMetadata.ReadDetails(path);
+            if (!ValidId(details.AppStoreID)) throw new IOException("В IPA нет App Store ID: " + name + ". Создайте набор из результатов поиска.");
+            return new AppRow { ID = details.AppStoreID, Name = details.AppName ?? ("Приложение " + details.AppStoreID) };
+        }
+        /// <summary>Возвращает копии ID; для прежнего формата извлекает их только из метаданных исходных IPA.</summary>
+        public AppRow[] ResolveApps(AppSet set)
+        {
+            AppSetRules.Validate(set);
+            if (set.Apps != null) return set.Apps.Select(x => new AppRow { ID = x.ID, Name = x.Name }).ToArray();
+            // Convert only from IPA metadata, never infer IDs from filenames or reuse their account.
+            return set.Files.Select(name => FromFile(name, Path.Combine(folder, name))).GroupBy(x => x.ID).Select(g => g.First()).ToArray();
+        }
+        /// <summary>Объединяет наборы по ID. Миграция записывается один раз, только после проверки всех наборов.</summary>
+        public AppRow[] ResolveMany(IEnumerable<AppSet> selected)
+        {
+            var requested = selected.ToArray();
+            if (requested.Length == 0) throw new IOException("Выберите хотя бы один набор.");
+            var resolved = requested.Select(x => new AppSet { Name = x.Name, Apps = ResolveApps(x) }).ToArray();
+            var apps = AppSetRules.UniqueApps(resolved.SelectMany(x => x.Apps));
+            if (requested.Any(x => x.Apps == null))
+            {
+                var saved = Load();
+                foreach (var converted in resolved)
+                {
+                    saved.RemoveAll(x => String.Equals(x.Name, converted.Name, StringComparison.OrdinalIgnoreCase));
+                    saved.Add(converted);
+                }
+                Write(saved);
+            }
+            return apps;
+        }
+        /// <summary>Удаляет именованный набор, не затрагивая загруженные IPA.</summary>
+        public void Delete(string name)
+        {
+            DeleteMany(new[] { name });
+        }
+        /// <summary>Удаляет только конфигурацию выбранных наборов одной атомарной записью.</summary>
+        public void DeleteMany(IEnumerable<string> names)
+        {
+            var selected = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+            var sets = Load();
+            sets.RemoveAll(x => selected.Contains(x.Name));
+            Write(sets);
+        }
+    }
+}
+
+// Services/Storage/LocalAppRepository.cs
+namespace IpaDesktop
+{
+    /// <summary>Импорт, просмотр и удаление локальных IPA с проверкой путей и кэшем метаданных.</summary>
+    public sealed class LocalAppRepository
+    {
+        readonly string folder;
+        readonly object gate = new object();
+        readonly Dictionary<string, Tuple<long, long, IpaDetails>> metadataCache = new Dictionary<string, Tuple<long, long, IpaDetails>>(StringComparer.OrdinalIgnoreCase);
+        public LocalAppRepository(string folder)
+        {
+            this.folder = Path.GetFullPath(folder);
+        }
+        /// <summary>Сканирует IPA вне UI-потока, обновляя кэш только для изменившихся файлов.</summary>
+        public Task<List<LocalRow>> ListAsync()
+        {
+            return Task.Run(delegate
+            {
+                lock (gate)
+                {
+                var rows = new List<LocalRow>();
+                foreach (var path in Directory.GetFiles(folder, "*.ipa"))
+                {
+                    try
+                    {
+                        var file = new FileInfo(path);
+                        if ((file.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+                        Tuple<long, long, IpaDetails> cached;
+                        if (!metadataCache.TryGetValue(path, out cached) || cached.Item1 != file.Length || cached.Item2 != file.LastWriteTimeUtc.Ticks)
+                        {
+                            cached = Tuple.Create(file.Length, file.LastWriteTimeUtc.Ticks, IpaMetadata.ReadDetails(path));
+                            metadataCache[path] = cached;
+                        }
+                        var metadata = cached.Item3;
+                        rows.Add(new LocalRow { Name = file.Name, Size = StorageAnalysis.Bytes(file.Length), Bytes = file.Length, Path = file.FullName, AppleAccount = metadata.Account, AppStoreID = metadata.AppStoreID, BundleID = metadata.BundleID, AppName = metadata.AppName, Version = metadata.Version, Build = metadata.Build, MinimumOS = metadata.MinimumOS, Platforms = metadata.Platforms == null ? null : (string[])metadata.Platforms.Clone() });
+                    }
+                    catch (FileNotFoundException) { }
+                    catch (DirectoryNotFoundException) { }
+                }
+                StorageAnalysis.Mark(rows);
+                var present = new HashSet<string>(rows.Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+                foreach (var missing in metadataCache.Keys.Where(x => !present.Contains(x)).ToArray()) metadataCache.Remove(missing);
+                return rows.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+                }
+            });
+        }
+        /// <summary>Копирует выбранные IPA в рабочую папку без перезаписи существующих файлов.</summary>
+        public Task ImportAsync(IEnumerable<string> paths, CancellationToken ct)
+        {
+            return Task.Run(delegate
+            {
+                foreach (var path in paths)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var target = Path.Combine(folder, Path.GetFileName(path));
+                    if (String.Equals(Path.GetFullPath(path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) continue;
+                    if (File.Exists(target)) throw new IOException("Файл уже существует: " + Path.GetFileName(path));
+                    File.Copy(path, target);
+                }
+            }, ct);
+        }
+        /// <summary>Разрешает удаление только IPA из рабочей папки; символические ссылки не принимаются.</summary>
+        public void Delete(string file)
+        {
+            var path = Path.GetFullPath(file);
+            if (!String.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
+            if (!File.Exists(path)) return;
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("Удаление ссылок не поддерживается.");
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin, Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+        }
+    }
+}
+
+// Services/Storage/StorageAnalysis.cs
+namespace IpaDesktop
+{
+    /// <summary>Считает размеры и отмечает старые числовые версии только внутри одного приложения и аккаунта.</summary>
+    public static class StorageAnalysis
+    {
+        /// <summary>Форматирует размер в удобные единицы без изменения исходного числа байт.</summary>
+        public static string Bytes(long bytes)
+        {
+            if (bytes >= 1073741824) return (bytes / 1073741824.0).ToString("N2") + " ГБ";
+            return (bytes / 1048576.0).ToString("N1") + " МБ";
+        }
+        static Version Parse(string text)
+        {
+            Version value;
+            if (!Version.TryParse(text, out value)) return null;
+            return new Version(value.Major, value.Minor, Math.Max(0, value.Build), Math.Max(0, value.Revision));
+        }
+        /// <summary>Помечает старые версии только при известных bundle ID, аккаунте и числовой версии.</summary>
+        public static void Mark(IEnumerable<LocalRow> rows)
+        {
+            var list = rows.ToList();
+            foreach (var row in list) { row.IsOld = false; row.StorageStatus = "Версия не определена"; }
+            // Parse each version once, then reuse it for grouping, max and comparison.
+            var known = list.Where(x => !String.IsNullOrWhiteSpace(x.BundleID) && x.AppleAccount != null && x.AppleAccount.Contains("@"))
+                .Select(x => Tuple.Create(x, Parse(x.Version))).Where(x => x.Item2 != null);
+            foreach (var group in known.GroupBy(x => x.Item1.BundleID.ToLowerInvariant() + "\n" + x.Item1.AppleAccount.ToLowerInvariant()))
+            {
+                var newest = group.Select(x => x.Item2).Max();
+                foreach (var entry in group)
+                {
+                    var row = entry.Item1;
+                    row.IsOld = entry.Item2.CompareTo(newest) < 0;
+                    row.StorageStatus = row.IsOld ? "Старая версия" : "Самая новая в папке";
+                }
+            }
+        }
+    }
+}
+
+// Services/Updates/EngineUpdater.cs
 namespace IpaDesktop
 {
     /// <summary>Проверяет, устанавливает и откатывает ipatool и отдельный комплект libimobiledevice.</summary>
@@ -3158,230 +3411,6 @@ namespace IpaDesktop
                 throw;
             }
             Log("Откат выполнен. Автообновление отключено, чтобы не вернуть проблемный релиз.");
-        }
-    }
-}
-
-// Services/IAppToolClient.cs
-namespace IpaDesktop
-{
-    /// <summary>Подменяемый контракт команд ipatool; тесты выполняются без Apple Account и сетевого входа.</summary>
-    public interface IAppToolClient
-    {
-        /// <summary>Добавляет параметры протокола CLI и выполняет команду через подменяемый процессный адаптер.</summary>
-        Task<Result> RunAsync(string[] arguments, CancellationToken cancellation, bool publish);
-    }
-}
-
-// Services/LocalAppRepository.cs
-namespace IpaDesktop
-{
-    /// <summary>Импорт, просмотр и удаление локальных IPA с проверкой путей и кэшем метаданных.</summary>
-    public sealed class LocalAppRepository
-    {
-        readonly string folder;
-        readonly object gate = new object();
-        readonly Dictionary<string, Tuple<long, long, IpaDetails>> metadataCache = new Dictionary<string, Tuple<long, long, IpaDetails>>(StringComparer.OrdinalIgnoreCase);
-        public LocalAppRepository(string folder)
-        {
-            this.folder = Path.GetFullPath(folder);
-        }
-        /// <summary>Сканирует IPA вне UI-потока, обновляя кэш только для изменившихся файлов.</summary>
-        public Task<List<LocalRow>> ListAsync()
-        {
-            return Task.Run(delegate
-            {
-                lock (gate)
-                {
-                var rows = new List<LocalRow>();
-                foreach (var path in Directory.GetFiles(folder, "*.ipa"))
-                {
-                    try
-                    {
-                        var file = new FileInfo(path);
-                        if ((file.Attributes & FileAttributes.ReparsePoint) != 0) continue;
-                        Tuple<long, long, IpaDetails> cached;
-                        if (!metadataCache.TryGetValue(path, out cached) || cached.Item1 != file.Length || cached.Item2 != file.LastWriteTimeUtc.Ticks)
-                        {
-                            cached = Tuple.Create(file.Length, file.LastWriteTimeUtc.Ticks, IpaMetadata.ReadDetails(path));
-                            metadataCache[path] = cached;
-                        }
-                        var metadata = cached.Item3;
-                        rows.Add(new LocalRow { Name = file.Name, Size = StorageAnalysis.Bytes(file.Length), Bytes = file.Length, Path = file.FullName, AppleAccount = metadata.Account, AppStoreID = metadata.AppStoreID, BundleID = metadata.BundleID, AppName = metadata.AppName, Version = metadata.Version, Build = metadata.Build, MinimumOS = metadata.MinimumOS, Platforms = metadata.Platforms == null ? null : (string[])metadata.Platforms.Clone() });
-                    }
-                    catch (FileNotFoundException) { }
-                    catch (DirectoryNotFoundException) { }
-                }
-                StorageAnalysis.Mark(rows);
-                var present = new HashSet<string>(rows.Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
-                foreach (var missing in metadataCache.Keys.Where(x => !present.Contains(x)).ToArray()) metadataCache.Remove(missing);
-                return rows.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
-                }
-            });
-        }
-        /// <summary>Копирует выбранные IPA в рабочую папку без перезаписи существующих файлов.</summary>
-        public Task ImportAsync(IEnumerable<string> paths, CancellationToken ct)
-        {
-            return Task.Run(delegate
-            {
-                foreach (var path in paths)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var target = Path.Combine(folder, Path.GetFileName(path));
-                    if (String.Equals(Path.GetFullPath(path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) continue;
-                    if (File.Exists(target)) throw new IOException("Файл уже существует: " + Path.GetFileName(path));
-                    File.Copy(path, target);
-                }
-            }, ct);
-        }
-        /// <summary>Разрешает удаление только IPA из рабочей папки; символические ссылки не принимаются.</summary>
-        public void Delete(string file)
-        {
-            var path = Path.GetFullPath(file);
-            if (!String.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
-            if (!File.Exists(path)) return;
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("Удаление ссылок не поддерживается.");
-            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin, Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
-        }
-    }
-}
-
-// Services/StorageAnalysis.cs
-namespace IpaDesktop
-{
-    /// <summary>Считает размеры и отмечает старые числовые версии только внутри одного приложения и аккаунта.</summary>
-    public static class StorageAnalysis
-    {
-        /// <summary>Форматирует размер в удобные единицы без изменения исходного числа байт.</summary>
-        public static string Bytes(long bytes)
-        {
-            if (bytes >= 1073741824) return (bytes / 1073741824.0).ToString("N2") + " ГБ";
-            return (bytes / 1048576.0).ToString("N1") + " МБ";
-        }
-        static Version Parse(string text)
-        {
-            Version value;
-            if (!Version.TryParse(text, out value)) return null;
-            return new Version(value.Major, value.Minor, Math.Max(0, value.Build), Math.Max(0, value.Revision));
-        }
-        /// <summary>Помечает старые версии только при известных bundle ID, аккаунте и числовой версии.</summary>
-        public static void Mark(IEnumerable<LocalRow> rows)
-        {
-            var list = rows.ToList();
-            foreach (var row in list) { row.IsOld = false; row.StorageStatus = "Версия не определена"; }
-            var known = list.Where(x => !String.IsNullOrWhiteSpace(x.BundleID) && x.AppleAccount != null && x.AppleAccount.Contains("@") && Parse(x.Version) != null);
-            foreach (var group in known.GroupBy(x => x.BundleID.ToLowerInvariant() + "\n" + x.AppleAccount.ToLowerInvariant()))
-            {
-                var newest = group.Select(x => Parse(x.Version)).Max();
-                foreach (var row in group)
-                {
-                    row.IsOld = Parse(row.Version).CompareTo(newest) < 0;
-                    row.StorageStatus = row.IsOld ? "Старая версия" : "Самая новая в папке";
-                }
-            }
-        }
-    }
-}
-
-// Services/ToolResponse.cs
-namespace IpaDesktop
-{
-    /// <summary>Разбирает ответы CLI и каталоги, проверяет ошибки и объединяет приложения по ID.</summary>
-    public static class ToolResponse
-    {
-        public static void Ensure(Result r)
-        {
-            if (r.Code != 0) throw new Exception("Код ошибки " + r.Code + "\n" + (r.Output.Length > 8000 ? r.Output.Substring(r.Output.Length - 8000) : r.Output));
-        }
-        public static Dictionary<string, object> Object(string output)
-        {
-            // Structured output is sometimes preceded by a human-readable diagnostic.
-            foreach (var line in output.Split('\n').Reverse())
-            {
-                try
-                {
-                    var d = JsonCodec.DeserializeObject(line.Trim()) as Dictionary<string, object>;
-                    if (d != null) return d;
-                } catch (ArgumentException)
-                {
-                }
-            }
-            try
-            {
-                return JsonCodec.DeserializeObject(output.Trim()) as Dictionary<string, object> ?? new Dictionary<string, object>();
-            } catch (Exception)
-            {
-                throw new Exception("Формат ответа движка изменился. См. журнал или выполните откат.");
-            }
-        }
-        /// <summary>Необязательные поля ipatool 1.1.9/1.2.0: отсутствие данных не означает совместимость с любой ОС.</summary>
-        public static string VersionMetadataText(Dictionary<string, object> data)
-        {
-            Func<string, string> value = key =>
-            {
-                var text = Get(data, key) as string;
-                return String.IsNullOrWhiteSpace(text) ? "не указана" : text.Trim();
-            };
-            var raw = Get(data, "supportedPlatforms") as object[];
-            var platforms = (raw ?? new object[0]).OfType<string>().Where(x => !String.IsNullOrWhiteSpace(x))
-                .Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Select(x =>
-                {
-                    if (String.Equals(x, "iPhoneOS", StringComparison.OrdinalIgnoreCase)) return "iOS (iPhoneOS)";
-                    if (String.Equals(x, "MacOSX", StringComparison.OrdinalIgnoreCase) || String.Equals(x, "macOS", StringComparison.OrdinalIgnoreCase)) return "macOS";
-                    return x;
-                }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            return "Версия: " + value("displayVersion") + Environment.NewLine +
-                "Дата выпуска: " + value("releaseDate") + Environment.NewLine +
-                "Минимальная версия ОС: " + value("minimumOSVersion") + Environment.NewLine +
-                "Платформы: " + (platforms.Length == 0 ? "не указаны" : String.Join(", ", platforms));
-        }
-        public static object Get(Dictionary<string, object> d, string key)
-        {
-            return d.Where(k => String.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase)).Select(k => k.Value).FirstOrDefault();
-        }
-        /// <summary>Извлекает доступные идентификаторы версий без подстановки неподтверждённых значений.</summary>
-        public static List<string> VersionIds(string text)
-        {
-            var values = Get(Object(text), "externalVersionIdentifiers") as object[];
-            if (values == null) throw new Exception("Формат списка версий не поддерживается.");
-            return values.Select(Convert.ToString).Where(x => x.Length > 0 && x.All(Char.IsDigit)).ToList();
-        }
-        /// <summary>Извлекает приложения из JSON-вывода ipatool.</summary>
-        public static List<AppRow> ParseApps(string text)
-        {
-            var d = Object(text);
-            var values = Get(d, "apps") as object[];
-            if (values == null) throw new Exception("В ответе отсутствует список apps. Проверьте совместимость движка.");
-            return values.OfType<Dictionary<string, object>>().Select(x => new AppRow
-            {
-                Name = Convert.ToString(Get(x, "name")), ID = Convert.ToString(Get(x, "id"))
-            }).Where(x => x.ID.All(Char.IsDigit) && x.ID.Length > 0).ToList();
-        }
-        /// <summary>Разбирает строки каталога и отбрасывает некорректные записи.</summary>
-        public static List<AppRow> ParseCatalog(string text)
-        {
-            var rows = new List<AppRow>();
-            foreach (var line in text.Split('\n'))
-            {
-                var m = System.Text.RegularExpressions.Regex.Match(line.TrimEnd('\r'), @"^(.*):\s*(\d+)(?:[ \t]+(\d{1,2}\.\d{1,2}\.\d{4}))?\s*$");
-                if (!m.Success) m = System.Text.RegularExpressions.Regex.Match(line, @"^(.*?):\s*(\d+)");
-                if (m.Success) rows.Add(new AppRow
-                {
-                    Name = m.Groups[1].Value.Trim(), ID = m.Groups[2].Value
-                });
-            }
-            return rows.GroupBy(x => x.ID).Select(x => x.First()).ToList();
-        }
-        /// <summary>Фильтрует объединённые каталоги по пользовательскому запросу.</summary>
-        public static List<AppRow> MatchCatalog(string query, List<AppRow> custom, List<AppRow> catalog)
-        {
-            var ids = new HashSet<string>(custom.Select(x => x.ID));
-            return custom.Concat(catalog.Where(x => !ids.Contains(x.ID))).Where(x => x.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).GroupBy(x => x.ID).Select(x => x.First()).ToList();
-        }
-        /// <summary>Объединяет источники по App Store ID, исключая повторяющиеся приложения.</summary>
-        public static List<AppRow> MergeApps(IEnumerable<AppRow> local, IEnumerable<AppRow> online)
-        {
-            return local.Concat(online).GroupBy(x => x.ID).Select(x => x.First()).ToList();
         }
     }
 }

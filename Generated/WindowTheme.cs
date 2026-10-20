@@ -4,7 +4,7 @@ using System.Windows.Interop;
 using System.Windows;
 using System;
 
-// Presentation/WindowTheme.cs
+// Presentation/Shared/WindowTheme.cs
 namespace IpaDesktop
 {
     /// <summary>Применяет оформление заголовка Windows через DWM, учитывая доступность API системы.</summary>

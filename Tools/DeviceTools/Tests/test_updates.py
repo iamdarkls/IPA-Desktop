@@ -1,5 +1,5 @@
 import unittest
-from check_updates import PROJECTS,discover,resolve_tag,version,published
+from device_tools.updates import PROJECTS,discover,resolve_tag,version,published
 
 class UpdateChecks(unittest.TestCase):
     def setUp(self):

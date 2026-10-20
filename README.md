@@ -6,7 +6,7 @@
 
 **Поиск, скачивание и установка приложений для iPhone в Windows 10/11.**
 
-Графическая оболочка на C# и WPF: работает напрямую с **ipatool**, использует отдельный комплект инструментов для iPhone и сохраняет наборы приложений по App Store ID.
+Приложение на C# и WPF с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
 
 **[Скачать для Windows](https://github.com/iamdarkls/IPA-Desktop/releases/latest)** · [История изменений](https://github.com/iamdarkls/IPA-Desktop/releases) · [Сообщить об ошибке](https://github.com/iamdarkls/IPA-Desktop/issues)
 
@@ -75,9 +75,15 @@
 
 Рабочая папка: **`%LOCALAPPDATA%\IPA-Desktop`**. IPA находятся в `Apps`, наборы — в `AppSets.json`, настройки — в `state.json`, версии инструментов — в `Versions`. Кнопка **«Папка IPA»** открывает скачанные файлы.
 
-## Разработка
+## Структура проекта и сборка
 
-Исходники разделены на Domain, Infrastructure, Services и Presentation. Подробнее — [архитектура](Docs/ARCHITECTURE.md), [тесты](Tests) и [сборка инструментов iPhone](Tools/DeviceTools/README.md).
+| Каталог | Назначение |
+|---|---|
+| [Source](Source) | Domain, Infrastructure, Services и Presentation; внутри — каталоги по функциям |
+| [Generated](Generated) | Переносимые снимки исходников для компиляции |
+| [Assets](Assets), [Tests](Tests), [Scripts](Scripts) | Иконки, проверки и сценарии сборки/обновления |
+| [Tools/DeviceTools](Tools/DeviceTools) | Независимая сборка инструментов: модули, сценарии и тесты |
+| [Docs](Docs), [changelogs](changelogs) | Архитектура и история выпусков |
 
 Сборка в Windows штатным компилятором .NET Framework, без Visual Studio и NuGet:
 
@@ -86,7 +92,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Sync-Sources.ps1
 .\Build.cmd
 ```
 
-GitHub Actions выполняет проверки и собирает выпуски. Установку на физический iPhone проверяют отдельно.
+После изменения классов повторяйте синхронизацию: она рекурсивно собирает Source в Generated. [Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
+
+GitHub Actions проверяет Windows-сборку и пакеты обновления перед публикацией. Вход с личным аккаунтом и установку на физический iPhone проверяют отдельно.
 
 ## Авторы и лицензии
 

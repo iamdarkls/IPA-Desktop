@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System;
 
-// Services/GuiUpdater.cs
+// Services/Updates/GuiUpdater.cs
 namespace IpaDesktop
 {
     /// <summary>Проверяет источник, размер и SHA-256 GUI-сборки; готовит обновление с восстановлением при ошибке.</summary>

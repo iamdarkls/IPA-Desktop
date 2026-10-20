@@ -16,11 +16,13 @@ namespace IpaDesktop
     /// <summary>Группирует только аккаунты из метаданных IPA, без подстановки текущей сессии ipatool.</summary>
     public static class LocalFileAccounts
     {
+        static readonly string[] MissingStatuses = { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" };
+
         static string Normalize(string account)
         {
             var value = (account ?? "").Trim();
             // Эти значения возвращает IpaMetadata при отсутствии или ошибке чтения, это не имена аккаунтов.
-            foreach (var status in new[] { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" })
+            foreach (var status in MissingStatuses)
                 if (String.Equals(value, status, StringComparison.OrdinalIgnoreCase)) return "";
             return value;
         }
