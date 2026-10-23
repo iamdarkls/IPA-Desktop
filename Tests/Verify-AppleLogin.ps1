@@ -83,6 +83,22 @@ public static class LoginContract {
   Assert(protocol.Append("\rEnter 2FA code: ******")==AppleLoginPrompt.None,"2FA redraw resent the code");
   protocol.Append("\r\n{\"success\":true,\"email\":\"fixture@example.com\"}\r\n");
   Assert(protocol.Complete(0)=="fixture@example.com","Redraw consumed the login result");
+  protocol=new AppleLoginProtocol();
+  Assert(protocol.Append("\x1b[3")==AppleLoginPrompt.None,"Partial ANSI was treated as a prompt");
+  Assert(protocol.Append("2mENTER\tE-MAIL : \x1b[0m")==AppleLoginPrompt.Identifier,"Case/spacing/ANSI changed identifier recognition");
+  Assert(protocol.Append("\rENTER E-MAIL : fixture@example.com\nEnter  pass")==AppleLoginPrompt.None,"Redraw or incomplete password resent input");
+  Assert(protocol.Append("word : ")==AppleLoginPrompt.Password,"Fragmented password variant missing");
+  Assert(protocol.Append("ENTER PASSWORD : ******\nEnter verification code : ")==AppleLoginPrompt.Code,"Verification code variant missing");
+  Assert(protocol.Append("Enter verification code : ******\n{\"success\":true,\"email\":\"fixture@example.com\"}")==AppleLoginPrompt.None,"Code redraw resent secret");
+  Assert(protocol.Complete(0)=="fixture@example.com","Variant redraw lost success response");
+  protocol=new AppleLoginProtocol();bool outOfOrder=false;
+  try{protocol.Append("ENTER PASSWORD : ");}catch(AppleLoginException){outOfOrder=true;}
+  Assert(outOfOrder,"Variant prompt bypassed stage validation");
+  protocol=new AppleLoginProtocol();
+  Assert(protocol.Append("Enter Apple Account:")==AppleLoginPrompt.Identifier,"Apple Account identifier variant missing");
+  protocol.Append("Enter password:");
+  protocol.Append("{\"success\":true,\"email\":\"fixture@example.com\"}");
+  Assert(protocol.Complete(0)=="fixture@example.com","Account variant could not complete");
 
   foreach(string mode in new[]{"success","2fa","repaint","reject","save","changed","huge","slow","mismatch"}){
    File.WriteAllText(Path.Combine(folder,"mode.txt"),mode=="mismatch"?"success":mode);

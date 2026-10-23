@@ -3,15 +3,21 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase,System.Xaml
 [Reflection.Assembly]::LoadFrom((Join-Path $projectRoot 'IPA-Desktop.exe'))|Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'IPA-Desktop.exe') -Destination (Join-Path $projectRoot 'IPA-Desktop-test.dll') -Force
-Add-Type -ReferencedAssemblies @((Join-Path $projectRoot 'IPA-Desktop-test.dll'),'System.dll','System.Core.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') -TypeDefinition @'
+Add-Type -ReferencedAssemblies @((Join-Path $projectRoot 'IPA-Desktop-test.dll'),'System.dll','System.Core.dll','System.Net.Http.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') -TypeDefinition @'
 using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
+using System.Net.Http;
 using IpaDesktop;
 public static class DesktopContract {
+ public static object Files(Desktop view){return typeof(Desktop).GetField("files",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(view);}
+ public static Task ScanDevices(Desktop view){var files=Files(view);return (Task)files.GetType().GetMethod("RefreshDevicesAsync",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
+ public static void StartMonitoring(Desktop view){var files=Files(view);files.GetType().GetMethod("StartDeviceDetection",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
+ public static void StopMonitoring(Desktop view){var files=Files(view);files.GetType().GetMethod("StopDeviceDetection",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
  public static TaskCompletionSource<bool> BeginWait(Desktop view) {
   var pending = new TaskCompletionSource<bool>();
   Func<CancellationToken, Task> action = delegate(CancellationToken ct) { return pending.Task; };
@@ -47,6 +53,10 @@ public sealed class RecordingProcessRunner : IProcessRunner
     public string LastWorkingDirectory;
     public bool FailInstall;
     public bool FailDownload;
+    public string DeviceIds="00008030-0000111ABC000DEF\n00008030-0000111ABC000ABC\n";
+    public bool HoldDiscovery,FailDiscovery;
+    public int CanceledDiscoveries;
+    async Task<Result> Hold(CancellationToken ct){try{await Task.Delay(Timeout.Infinite,ct);return null;}finally{CanceledDiscoveries++;}}
     public CancellationTokenSource CancelInstall;
     public Action<string> Log { get; set; }
     public Process Active { get { return null; } }
@@ -55,6 +65,10 @@ public sealed class RecordingProcessRunner : IProcessRunner
     {
         ct.ThrowIfCancellationRequested();
         lock (gate) { Calls.Add((string[])args.Clone()); }
+        if(Path.GetFileName(exe)=="idevice_id.exe"){
+            if(HoldDiscovery)return Hold(ct);
+            if(FailDiscovery)return Task.FromResult(new Result{Code=1,Output="discovery unavailable"});
+        }
         if (args.Length == 4 && args[2] == "install")
         {
             LastWorkingDirectory = workingDirectory;
@@ -69,7 +83,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
             return Task.FromResult(new Result { Code = 1, Output = "ERROR: fixture download failure" });
         string output = "{\"success\":true}";
         if (Path.GetFileName(exe) == "idevice_id.exe")
-            output = "00008030-0000111ABC000DEF\n00008030-0000111ABC000ABC\n";
+            output = DeviceIds;
         else if (Path.GetFileName(exe) == "ideviceinfo.exe")
             output = args.Length == 2 ? "ProductType: iPhone16,2\nProductVersion: 18.0\n" : "Test iPhone";
         else if (args.Length >= 2 && args[0] == "auth" && args[1] == "info")
@@ -188,6 +202,68 @@ public static class DownloadMeterContract {
  }
 }
 
+public sealed class CatalogResponseHandler : HttpMessageHandler {
+ public int Calls; public Func<CancellationToken,HttpResponseMessage> Reply;
+ protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;return Task.FromResult(Reply(ct));}
+}
+public sealed class CancelAfterReadStream : MemoryStream {
+ readonly CancellationTokenSource stop;
+ public CancelAfterReadStream(CancellationTokenSource stop):base(new byte[262144]){this.stop=stop;}
+ public override Task<int> ReadAsync(byte[] bytes,int offset,int count,CancellationToken ct){int read=Read(bytes,offset,count);stop.Cancel();return Task.FromResult(read);}
+}
+public static class ReliabilityContract {
+ static void Assert(bool ok,string message){if(!ok)throw new Exception(message);}
+ public static void Run(string root){
+  Directory.CreateDirectory(root);
+  var store=new SettingsStore(Path.Combine(root,"catalog"));var locator=new ToolLocator(store);
+  var files=Path.Combine(store.Root,"Files");Directory.CreateDirectory(files);
+  var path=Path.Combine(files,"AppsList.txt");File.WriteAllText(path,"Cached app: 100001");
+  var now=new DateTime(2026,10,23,0,0,0,DateTimeKind.Utc);var handler=new CatalogResponseHandler();
+  handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+  using(var http=new HttpClient(handler)){
+   var catalog=new AppCatalog(store,locator,http,()=>now);
+   Assert(catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult()[0].Name=="Cached app","HTTP failure discarded cached catalog");
+   catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult();
+   Assert(handler.Calls==1,"Catalog retries delayed every search during backoff");
+   handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("Updated app: 100001")};
+   now=now.AddSeconds(31);
+   Assert(catalog.SearchAsync("Updated",CancellationToken.None).GetAwaiter().GetResult().Count==1&&handler.Calls==2,"Catalog did not recover after transient failure");
+   now=now.AddMinutes(1);catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult();
+   Assert(handler.Calls==2,"Successful catalog refreshed on every search");
+   // Explicit cancellation must propagate and must not consume the next retry.
+   var retry=new AppCatalog(store,locator,http,()=>now);
+   using(var stop=new CancellationTokenSource()){
+    handler.Reply=ct=>{stop.Cancel();ct.ThrowIfCancellationRequested();return null;};
+    bool cancelled=false;try{retry.SearchAsync("app",stop.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+    Assert(cancelled,"User cancellation was treated as a catalog network failure");
+   }
+   int calls=handler.Calls;
+   handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("Recovered app: 100001")};
+   Assert(retry.SearchAsync("Recovered",CancellationToken.None).GetAwaiter().GetResult().Count==1&&handler.Calls==calls+1,"Canceled catalog request suppressed next attempt");
+  }
+  var imports=Path.Combine(root,"imports");Directory.CreateDirectory(imports);var repo=new LocalAppRepository(imports);
+  var source=Path.Combine(root,"source.ipa");var data=new byte[262144];data[0]=17;data[data.Length-1]=93;File.WriteAllBytes(source,data);
+  repo.ImportAsync(new[]{source},CancellationToken.None).GetAwaiter().GetResult();
+  var destination=Path.Combine(imports,"source.ipa");
+  var copied=File.ReadAllBytes(destination);Assert(copied.Length==data.Length&&copied[0]==17&&copied[copied.Length-1]==93,"Imported IPA was truncated");
+  File.WriteAllText(source,"replacement");bool rejected=false;
+  try{AtomicFile.CopyAsync(source,destination,CancellationToken.None).GetAwaiter().GetResult();}catch(IOException){rejected=true;}
+  Assert(rejected&&File.ReadAllBytes(destination).Length==data.Length,"Atomic import overwrote an existing IPA");
+  Assert(Directory.GetFiles(imports,"*.tmp").Length==0,"Failed import retained staging files");
+  using(var stop=new CancellationTokenSource()){
+   stop.Cancel();bool cancelled=false;
+   try{repo.ImportAsync(new[]{source},stop.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+   Assert(cancelled,"Pre-canceled import succeeded");
+  }
+  // Cancel at a deterministic point inside a read, independent of disk speed or file size.
+  using(var stop=new CancellationTokenSource())using(var input=new CancelAfterReadStream(stop))using(var output=new MemoryStream()){
+   var copy=typeof(AtomicFile).GetMethod("CopyStreamAsync",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+   bool cancelled=false;try{((Task)copy.Invoke(null,new object[]{input,output,stop.Token})).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+   Assert(cancelled&&output.Length==0,"Mid-copy cancellation wrote another block or was swallowed");
+  }
+ }
+}
+
 '@
 # Реальные схемы get-version-metadata: 1.1.8 без новых полей, 1.1.9 с minimumOSVersion, 1.2.0 с supportedPlatforms.
 $old=[IpaDesktop.ToolResponse]::VersionMetadataText([IpaDesktop.ToolResponse]::Object('{"displayVersion":"2.3","releaseDate":"2026-10-15","success":true}'))
@@ -205,6 +281,8 @@ $temp=Join-Path ([IO.Path]::GetTempPath()) ('ipa-oop-'+[Guid]::NewGuid().ToStrin
 $window=$null
 $originalContext=[Threading.SynchronizationContext]::Current
 try {
+ [ReliabilityContract]::Run((Join-Path $temp 'reliability'))
+ Write-Host 'PASS: offline catalog failure/backoff/recovery and cancellation; atomic IPA import, collision preservation, staging cleanup and cancellation during copying'
  [DownloadMeterContract]::Run((Join-Path $temp 'download-meter'))
  Write-Host 'PASS: measured file growth, rate window, stalled transfer, counter reset, percentage preservation, actual temporary-file sampling and monitor cleanup on success/cancel'
  [WifiVersionContract]::Run((Join-Path $temp 'wifi-contract'))
@@ -450,11 +528,58 @@ public static class InstallPathProbe {
  $soundReload=New-Object IpaDesktop.Engine($temp)
  if($soundReload.Settings.SoundsEnabled){throw 'Sound checkbox did not persist disabled preference'}
  Write-Host 'PASS: double-click IPA action queue, bottom delete placement, empty-queue guard and sound checkbox persistence'
- if($window.FindName('Devices').Background.Color.ToString() -ne '#FF16704C'){throw 'Initial device-search color changed'}
+ if($null -ne $window.FindName('Devices') -or !$window.FindName('DeviceDetectionStatus')){throw 'Manual search button was not replaced by automatic status'}
  Click 'CheckAppleSupport';WaitIdle
  if(!$window.FindName('AppleSupportStatus').Text.Contains('Apple') -or $window.FindName('AppleSupportStatus').Foreground.Color.ToString() -ne '#FF81D4AD'){throw 'Apple support check did not render the running state'}
- Click 'Devices';WaitIdle
- if($window.FindName('DeviceList').Items.Count -ne 2 -or !$window.FindName('DeviceList').SelectedItem.Name.StartsWith('Test iPhone')){throw 'Named device discovery failed'}
+ function ScanAndWait {
+  $scan=[DesktopContract]::ScanDevices($desktop);$clock=[Diagnostics.Stopwatch]::StartNew()
+  while(!$scan.IsCompleted){Pump;Start-Sleep -Milliseconds 10;if($clock.Elapsed.TotalSeconds -gt 5){throw 'Automatic device scan did not finish'}}
+  $scan.GetAwaiter().GetResult();Pump
+ }
+ $deviceList=$window.FindName('DeviceList')
+ $runner.DeviceIds='';ScanAndWait
+ if($deviceList.Items.Count -ne 0 -or !$window.FindName('Login').IsEnabled){throw 'Empty automatic scan blocked the UI'}
+ $runner.DeviceIds='00008030-0000111ABC000DEF';ScanAndWait
+ if($deviceList.Items.Count -ne 1 -or $deviceList.SelectedItem.ID -ne $runner.DeviceIds){throw 'Single iPhone was not selected automatically'}
+ $snapshot=$deviceList.ItemsSource;ScanAndWait
+ if(![object]::ReferenceEquals($snapshot,$deviceList.ItemsSource)){throw 'Unchanged scan rebuilt device choices'}
+ $runner.DeviceIds="00008030-0000111ABC000DEF`n00008030-0000111ABC000ABC";ScanAndWait
+ $deviceList.SelectedIndex=1;$selectedID=$deviceList.SelectedItem.ID;ScanAndWait
+ if($deviceList.SelectedItem.ID -ne $selectedID){throw 'Automatic scan lost selected iPhone'}
+ $runner.DeviceIds='00008030-0000111ABC000DEF';ScanAndWait
+ if($deviceList.Items.Count -ne 1 -or $null -ne $deviceList.SelectedItem){throw 'Disconnect silently selected another iPhone'}
+ $runner.DeviceIds='';ScanAndWait
+ if($null -ne $deviceList.SelectedItem -or $window.FindName('InstallFiles').IsEnabled){throw 'Disconnected iPhone stayed available for installation'}
+ $runner.DeviceIds='00008030-0000111ABC000DEF';ScanAndWait
+ $window.FindName('SearchWifi').IsChecked=$true;Click 'SearchWifi';ScanAndWait
+ if($deviceList.Items.Count -ne 2){throw 'Automatic Wi-Fi mode did not refresh both transports'}
+ $deviceList.SelectedItem=@($deviceList.Items|Where-Object Network)[0];ScanAndWait
+ if(!$deviceList.SelectedItem.Network){throw 'Automatic scan switched Wi-Fi selection to USB'}
+ $window.FindName('SearchWifi').IsChecked=$false;Click 'SearchWifi';ScanAndWait
+ $runner.FailDiscovery=$true;ScanAndWait
+ if($deviceList.Items.Count -ne 0 -or !$window.FindName('DeviceDetectionStatus').ToolTip.Contains('discovery unavailable')){throw 'Discovery failure retained a stale phone or hid the error'}
+ $runner.FailDiscovery=$false;ScanAndWait
+ if($deviceList.Items.Count -ne 1){throw 'Automatic detection did not recover after failure'}
+ $runner.HoldDiscovery=$true;$scan=[DesktopContract]::ScanDevices($desktop)
+ if(![object]::ReferenceEquals($scan,[DesktopContract]::ScanDevices($desktop))){throw 'Automatic discovery overlapped itself'}
+ $pending=[DesktopContract]::BeginWait($desktop);Pump
+ $pending.SetResult($true);WaitIdle
+ if(!$scan.IsCompleted -or $runner.CanceledDiscoveries -lt 1){throw 'User operation did not cancel and await background CLI'}
+ $runner.HoldDiscovery=$false
+ # Exercise actual dispatcher polling, then verify that stopping cancels a pending scan.
+ $filesController=[DesktopContract]::Files($desktop)
+ $deviceTimer=$filesController.GetType().GetField('deviceTimer',[Reflection.BindingFlags]'Instance,NonPublic').GetValue($filesController)
+ if($deviceTimer.Interval.TotalSeconds -ne 3){throw 'Automatic device polling interval changed'}
+ $deviceTimer.Interval=[TimeSpan]::FromMilliseconds(50)
+ $callsBefore=$runner.Calls.Count;[DesktopContract]::StartMonitoring($desktop)
+ $clock=[Diagnostics.Stopwatch]::StartNew()
+ while($runner.Calls.Count -le $callsBefore){Pump;Start-Sleep -Milliseconds 10;if($clock.Elapsed.TotalSeconds -gt 3){throw 'Device timer did not poll automatically'}}
+ $runner.HoldDiscovery=$true
+ $scan=[DesktopContract]::ScanDevices($desktop);[DesktopContract]::StopMonitoring($desktop)
+ $clock.Restart();while(!$scan.IsCompleted){Pump;Start-Sleep -Milliseconds 10;if($clock.Elapsed.TotalSeconds -gt 3){throw 'Stopping detection did not cancel discovery'}}
+ $runner.HoldDiscovery=$false
+ ScanAndWait
+ Write-Host 'PASS: automatic iPhone polling, hotplug/disconnect/reconnect, stable selection and transport, no silent switching, failure recovery, no overlapping scans, operation pause and timer shutdown'
  Click 'AccountInfo';WaitIdle
  if($window.FindName('Login').IsEnabled -or !$window.FindName('Logout').IsEnabled){throw 'Signed-in button state failed'}
  # Retry uses failure snapshots, preserving a different version already selected for the same app.
@@ -640,7 +765,19 @@ public static class InstallPathProbe {
  Write-Host 'PASS: simultaneous sets, overlapping IDs, version preservation, repeated additions, persistence and independent deletion'
  Write-Host 'PASS: editable inline set picker, additive deduplication, cross-tab refresh, both save buttons after completed download and explicit clear'
  Write-Host 'PASS: retry snapshot/version isolation, queue progress, saved set UI and storage UI'
- Write-Host 'PASS: real controller composition; search/clear/selection/removal; IPA selection/removal; device button/names; account state'
+ Write-Host 'PASS: real controller composition; search/clear/selection/removal; IPA selection/removal; automatic device names; account state'
+ $closingRunner=New-Object RecordingProcessRunner;$closingRunner.HoldDiscovery=$true
+ $closingEngine=New-Object IpaDesktop.Engine((Join-Path $temp 'closing-monitor'),$closingRunner,$supportProbe)
+ $closingEngine.Settings.Current='test'
+ $closingBins=Join-Path $closingEngine.Root 'Versions/test/windows_amd64';[IO.Directory]::CreateDirectory($closingBins)|Out-Null
+ foreach($name in @('idevice_id.exe','ideviceinfo.exe')){[IO.File]::WriteAllText((Join-Path $closingBins $name),'fixture')}
+ $closingDesktop=New-Object IpaDesktop.Desktop($closingEngine,$false,$projectRoot)
+ $closingWindow=$closingDesktop.Window;$closingWindow.Show();Pump
+ $closingScan=[DesktopContract]::ScanDevices($closingDesktop)
+ $closingWindow.Close();$clock=[Diagnostics.Stopwatch]::StartNew()
+ while($closingWindow.IsVisible){Pump;Start-Sleep -Milliseconds 10;if($clock.Elapsed.TotalSeconds -gt 3){throw 'Window did not wait for discovery cleanup and close'}}
+ if(!$closingScan.IsCompleted -or $closingRunner.CanceledDiscoveries -lt 1){throw 'Closing window left a pending discovery process'}
+ Write-Host 'PASS: closing the actual window cancels and awaits pending device discovery'
 }finally{
  if($window){$window.Close()}
  [Threading.SynchronizationContext]::SetSynchronizationContext($originalContext)

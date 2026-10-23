@@ -1,6 +1,8 @@
 name: Windows release
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -20,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-release
+  group: windows-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -87,6 +89,7 @@ jobs:
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tests/Verify-Layout.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Layout migration or organized update failed' }
       - name: Publish releases
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'

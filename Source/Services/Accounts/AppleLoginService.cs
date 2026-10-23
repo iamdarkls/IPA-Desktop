@@ -21,6 +21,12 @@ namespace IpaDesktop
     {
         string buffer = "";
         bool identifierSent, passwordSent, codeSent;
+        static readonly Regex[] prompts =
+        {
+            new Regex(@"\bEnter[ \t]+(?:e-?mail|Apple[ \t]+(?:ID|Account))[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+            new Regex(@"\bEnter[ \t]+password[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+            new Regex(@"\bEnter[ \t]+(?:2FA|two-factor|verification)[ \t]+code[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+        };
         public AppleLoginPrompt Append(string chunk)
         {
             if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
@@ -28,27 +34,29 @@ namespace IpaDesktop
             string text = Text();
             // ConPTY может повторно прислать всю строку при перерисовке, включая старые запросы.
             // Реагируем только на следующий этап; пароль/код повторно не отправляем.
-            if (!identifierSent && text.Contains("Enter email:"))
+            var identifier = prompts[0].Match(text);
+            var password = prompts[1].Match(text);
+            var code = prompts[2].Match(text);
+            if (!identifierSent && identifier.Success)
             {
-                identifierSent = true; buffer = ""; return AppleLoginPrompt.Identifier;
+                identifierSent = true; buffer = text.Substring(identifier.Index + identifier.Length); return AppleLoginPrompt.Identifier;
             }
-            if (!passwordSent && text.Contains("Enter password:"))
+            if (!passwordSent && password.Success)
             {
                 if (!identifierSent) throw Changed();
-                passwordSent = true; buffer = ""; return AppleLoginPrompt.Password;
+                passwordSent = true; buffer = text.Substring(password.Index + password.Length); return AppleLoginPrompt.Password;
             }
-            if (!codeSent && text.Contains("Enter 2FA code:"))
+            if (!codeSent && code.Success)
             {
                 if (!passwordSent) throw Changed();
-                codeSent = true; buffer = ""; return AppleLoginPrompt.Code;
+                codeSent = true; buffer = text.Substring(code.Index + code.Length); return AppleLoginPrompt.Code;
             }
             // Отбрасываем обработанный префикс перерисовки, сохраняя хвост и частичные ANSI-последовательности.
             // Иначе многократное эхо старого запроса раздувало бы ограниченный буфер.
             int consumed = 0;
-            foreach (var prompt in new[] { "Enter email:", "Enter password:", "Enter 2FA code:" })
+            foreach (var prompt in prompts)
             {
-                int index = text.LastIndexOf(prompt, StringComparison.Ordinal);
-                if (index >= 0) consumed = Math.Max(consumed, index + prompt.Length);
+                foreach (Match match in prompt.Matches(text)) consumed = Math.Max(consumed, match.Index + match.Length);
             }
             if (consumed > 0) buffer = text.Substring(consumed);
             return AppleLoginPrompt.None;

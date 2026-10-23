@@ -47,4 +47,19 @@ try {
  Push-Location $target
  try {& cmd.exe /d /c 'Build.cmd < nul';if($LASTEXITCODE -ne 0){throw 'Migrated portable compilation failed'}}finally{Pop-Location}
  Write-Host 'PASS: organized extraction/update and migrated portable compilation'
+ # A checkout build must regenerate edited canonical sources without a manual sync.
+ $checkout=Join-Path $temp 'checkout build'
+ [IO.Compression.ZipFile]::ExtractToDirectory($zip,$checkout)
+ Copy-Item -LiteralPath (Join-Path $projectRoot 'Source') -Destination $checkout -Recurse
+ $canonical=Join-Path $checkout 'Source/Domain/Updates/AppInfo.cs'
+ [IO.File]::AppendAllText($canonical,"`r`n// automatic-build-sync-fixture`r`n")
+ Push-Location $checkout
+ try {
+  & cmd.exe /d /c 'Build.cmd < nul'
+  if($LASTEXITCODE -ne 0){throw 'Checkout build did not regenerate canonical sources'}
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Scripts/Sync-Sources.ps1 -Check
+  if($LASTEXITCODE -ne 0){throw 'Checkout build left stale generated snapshots'}
+ }finally{Pop-Location}
+ if(!([IO.File]::ReadAllText((Join-Path $checkout 'Generated/Core.cs'))).Contains('automatic-build-sync-fixture')){throw 'Build compiled stale generated sources'}
+ Write-Host 'PASS: checkout compilation synchronizes edited canonical sources automatically'
 }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Recurse -Force}}
