@@ -705,7 +705,7 @@ namespace IpaDesktop
     /// <summary>Единые сведения о версии и репозитории GUI; версия в XAML сверяется при выпуске.</summary>
     public static class AppInfo
     {
-        public const string Version = "0.2.11";
+        public const string Version = "0.2.12";
         public const string Repository = "iamdarkls/IPA-Desktop";
         public const string ReleasesUrl = "https://github.com/" + Repository + "/releases";
     }
@@ -1419,6 +1419,37 @@ namespace IpaDesktop
     /// <summary>Записывает конфигурацию целиком, затем атомарно заменяет прежний файл.</summary>
     public static class AtomicFile
     {
+        /// <summary>Публикует копию только целиком; отмена и ошибка не оставляют частичный IPA и не заменяют существующий файл.</summary>
+        public static async Task CopyAsync(string source, string destination, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var temporary = Path.Combine(Path.GetDirectoryName(destination), ".import-" + Guid.NewGuid().ToString("N") + ".tmp");
+            try
+            {
+                using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true))
+                using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true))
+                    await CopyStreamAsync(input, output, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                File.Move(temporary, destination);
+            }
+            finally
+            {
+                try { if (File.Exists(temporary)) File.Delete(temporary); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+        internal static async Task CopyStreamAsync(Stream input, Stream output, CancellationToken ct)
+        {
+            var buffer = new byte[131072];
+            int count;
+            while ((count = await input.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) != 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                await output.WriteAsync(buffer, 0, count, ct).ConfigureAwait(false);
+            }
+            await output.FlushAsync(ct).ConfigureAwait(false);
+        }
         /// <summary>Уникальный временный файл исключает пересечение записей; ошибка не удаляет оригинал.</summary>
         public static void WriteUtf8(string path, string contents)
         {
@@ -1730,6 +1761,12 @@ namespace IpaDesktop
     {
         string buffer = "";
         bool identifierSent, passwordSent, codeSent;
+        static readonly Regex[] prompts =
+        {
+            new Regex(@"\bEnter[ \t]+(?:e-?mail|Apple[ \t]+(?:ID|Account))[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+            new Regex(@"\bEnter[ \t]+password[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+            new Regex(@"\bEnter[ \t]+(?:2FA|two-factor|verification)[ \t]+code[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+        };
         public AppleLoginPrompt Append(string chunk)
         {
             if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
@@ -1737,27 +1774,29 @@ namespace IpaDesktop
             string text = Text();
             // ConPTY может повторно прислать всю строку при перерисовке, включая старые запросы.
             // Реагируем только на следующий этап; пароль/код повторно не отправляем.
-            if (!identifierSent && text.Contains("Enter email:"))
+            var identifier = prompts[0].Match(text);
+            var password = prompts[1].Match(text);
+            var code = prompts[2].Match(text);
+            if (!identifierSent && identifier.Success)
             {
-                identifierSent = true; buffer = ""; return AppleLoginPrompt.Identifier;
+                identifierSent = true; buffer = text.Substring(identifier.Index + identifier.Length); return AppleLoginPrompt.Identifier;
             }
-            if (!passwordSent && text.Contains("Enter password:"))
+            if (!passwordSent && password.Success)
             {
                 if (!identifierSent) throw Changed();
-                passwordSent = true; buffer = ""; return AppleLoginPrompt.Password;
+                passwordSent = true; buffer = text.Substring(password.Index + password.Length); return AppleLoginPrompt.Password;
             }
-            if (!codeSent && text.Contains("Enter 2FA code:"))
+            if (!codeSent && code.Success)
             {
                 if (!passwordSent) throw Changed();
-                codeSent = true; buffer = ""; return AppleLoginPrompt.Code;
+                codeSent = true; buffer = text.Substring(code.Index + code.Length); return AppleLoginPrompt.Code;
             }
             // Отбрасываем обработанный префикс перерисовки, сохраняя хвост и частичные ANSI-последовательности.
             // Иначе многократное эхо старого запроса раздувало бы ограниченный буфер.
             int consumed = 0;
-            foreach (var prompt in new[] { "Enter email:", "Enter password:", "Enter 2FA code:" })
+            foreach (var prompt in prompts)
             {
-                int index = text.LastIndexOf(prompt, StringComparison.Ordinal);
-                if (index >= 0) consumed = Math.Max(consumed, index + prompt.Length);
+                foreach (Match match in prompt.Matches(text)) consumed = Math.Max(consumed, match.Index + match.Length);
             }
             if (consumed > 0) buffer = text.Substring(consumed);
             return AppleLoginPrompt.None;
@@ -1891,6 +1930,9 @@ namespace IpaDesktop
             }
         }
         bool catalogChecked;
+        DateTime nextCatalogAttemptUtc;
+        readonly HttpClient http;
+        readonly Func<DateTime> utcNow;
         readonly SemaphoreSlim searchGate = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Tuple<long, long, List<AppRow>>> parsedFiles =
             new Dictionary<string, Tuple<long, long, List<AppRow>>>(StringComparer.OrdinalIgnoreCase);
@@ -1899,10 +1941,15 @@ namespace IpaDesktop
             get;
             set;
         }
-        public AppCatalog(SettingsStore store, ToolLocator locator)
+        public AppCatalog(SettingsStore store, ToolLocator locator) : this(store, locator, Http, delegate { return DateTime.UtcNow; })
+        {
+        }
+        public AppCatalog(SettingsStore store, ToolLocator locator, HttpClient http, Func<DateTime> utcNow)
         {
             this.store = store;
             this.locator = locator;
+            this.http = http;
+            this.utcNow = utcNow;
             Log = delegate
             {
             };
@@ -1943,19 +1990,20 @@ namespace IpaDesktop
                 var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
                 if (bundled != null) File.Copy(bundled, cache);
             }
-            if (!catalogChecked)
+            if (!catalogChecked && utcNow() >= nextCatalogAttemptUtc)
             {
                 try
                 {
                     using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
                     {
                         timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                        using (var response = await Http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
+                        using (var response = await http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
                         {
                             response.EnsureSuccessStatusCode();
                             var content = await response.Content.ReadAsStringAsync();
                             if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
                             AtomicFile.WriteUtf8(cache, content);
+                            catalogChecked = true;
                             Log("Каталог приложений обновлён из исходного репозитория.");
                         }
                     }
@@ -1967,7 +2015,8 @@ namespace IpaDesktop
                 {
                     Log("Каталог: используется сохранённая копия. " + e.Message);
                 }
-                catalogChecked = true;
+                // Ошибка не отключает обновления до перезапуска; короткая пауза не задерживает каждый поиск.
+                if (!catalogChecked) nextCatalogAttemptUtc = utcNow().AddSeconds(30);
             }
             var customPath = Path.Combine(folder, "AppsListCustom.txt");
             var custom = ReadCatalog(customPath);
@@ -2978,7 +3027,7 @@ namespace IpaDesktop
         /// <summary>Копирует выбранные IPA в рабочую папку без перезаписи существующих файлов.</summary>
         public Task ImportAsync(IEnumerable<string> paths, CancellationToken ct)
         {
-            return Task.Run(delegate
+            return Task.Run(async delegate
             {
                 foreach (var path in paths)
                 {
@@ -2986,7 +3035,7 @@ namespace IpaDesktop
                     var target = Path.Combine(folder, Path.GetFileName(path));
                     if (String.Equals(Path.GetFullPath(path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) continue;
                     if (File.Exists(target)) throw new IOException("Файл уже существует: " + Path.GetFileName(path));
-                    File.Copy(path, target);
+                    await AtomicFile.CopyAsync(path, target, ct).ConfigureAwait(false);
                 }
             }, ct);
         }

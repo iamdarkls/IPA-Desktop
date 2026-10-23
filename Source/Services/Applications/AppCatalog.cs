@@ -34,6 +34,9 @@ namespace IpaDesktop
             }
         }
         bool catalogChecked;
+        DateTime nextCatalogAttemptUtc;
+        readonly HttpClient http;
+        readonly Func<DateTime> utcNow;
         readonly SemaphoreSlim searchGate = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Tuple<long, long, List<AppRow>>> parsedFiles =
             new Dictionary<string, Tuple<long, long, List<AppRow>>>(StringComparer.OrdinalIgnoreCase);
@@ -42,10 +45,15 @@ namespace IpaDesktop
             get;
             set;
         }
-        public AppCatalog(SettingsStore store, ToolLocator locator)
+        public AppCatalog(SettingsStore store, ToolLocator locator) : this(store, locator, Http, delegate { return DateTime.UtcNow; })
+        {
+        }
+        public AppCatalog(SettingsStore store, ToolLocator locator, HttpClient http, Func<DateTime> utcNow)
         {
             this.store = store;
             this.locator = locator;
+            this.http = http;
+            this.utcNow = utcNow;
             Log = delegate
             {
             };
@@ -86,19 +94,20 @@ namespace IpaDesktop
                 var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
                 if (bundled != null) File.Copy(bundled, cache);
             }
-            if (!catalogChecked)
+            if (!catalogChecked && utcNow() >= nextCatalogAttemptUtc)
             {
                 try
                 {
                     using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
                     {
                         timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                        using (var response = await Http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
+                        using (var response = await http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
                         {
                             response.EnsureSuccessStatusCode();
                             var content = await response.Content.ReadAsStringAsync();
                             if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
                             AtomicFile.WriteUtf8(cache, content);
+                            catalogChecked = true;
                             Log("Каталог приложений обновлён из исходного репозитория.");
                         }
                     }
@@ -110,7 +119,8 @@ namespace IpaDesktop
                 {
                     Log("Каталог: используется сохранённая копия. " + e.Message);
                 }
-                catalogChecked = true;
+                // Ошибка не отключает обновления до перезапуска; короткая пауза не задерживает каждый поиск.
+                if (!catalogChecked) nextCatalogAttemptUtc = utcNow().AddSeconds(30);
             }
             var customPath = Path.Combine(folder, "AppsListCustom.txt");
             var custom = ReadCatalog(customPath);

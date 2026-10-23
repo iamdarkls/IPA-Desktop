@@ -92,7 +92,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Sync-Sources.ps1
 .\Build.cmd
 ```
 
-После изменения классов повторяйте синхронизацию: она рекурсивно собирает Source в Generated. [Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
+`Build.cmd` автоматически синхронизирует Source с Generated перед компиляцией. В переносимом пакете без Source используются готовые снимки. Перед коммитом проверяйте синхронизацию командой `Scripts/Sync-Sources.ps1 -Check`. [Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
 
 GitHub Actions проверяет Windows-сборку и пакеты обновления перед публикацией. Вход с личным аккаунтом и установку на физический iPhone проверяют отдельно.
 

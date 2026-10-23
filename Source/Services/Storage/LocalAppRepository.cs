@@ -60,7 +60,7 @@ namespace IpaDesktop
         /// <summary>Копирует выбранные IPA в рабочую папку без перезаписи существующих файлов.</summary>
         public Task ImportAsync(IEnumerable<string> paths, CancellationToken ct)
         {
-            return Task.Run(delegate
+            return Task.Run(async delegate
             {
                 foreach (var path in paths)
                 {
@@ -68,7 +68,7 @@ namespace IpaDesktop
                     var target = Path.Combine(folder, Path.GetFileName(path));
                     if (String.Equals(Path.GetFullPath(path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) continue;
                     if (File.Exists(target)) throw new IOException("Файл уже существует: " + Path.GetFileName(path));
-                    File.Copy(path, target);
+                    await AtomicFile.CopyAsync(path, target, ct).ConfigureAwait(false);
                 }
             }, ct);
         }

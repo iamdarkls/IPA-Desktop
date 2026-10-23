@@ -3,13 +3,15 @@ $ErrorActionPreference='Stop'
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase,System.Xaml
 [Reflection.Assembly]::LoadFrom((Join-Path $projectRoot 'IPA-Desktop.exe'))|Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'IPA-Desktop.exe') -Destination (Join-Path $projectRoot 'IPA-Desktop-test.dll') -Force
-Add-Type -ReferencedAssemblies @((Join-Path $projectRoot 'IPA-Desktop-test.dll'),'System.dll','System.Core.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') -TypeDefinition @'
+Add-Type -ReferencedAssemblies @((Join-Path $projectRoot 'IPA-Desktop-test.dll'),'System.dll','System.Core.dll','System.Net.Http.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') -TypeDefinition @'
 using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
+using System.Net.Http;
 using IpaDesktop;
 public static class DesktopContract {
  public static TaskCompletionSource<bool> BeginWait(Desktop view) {
@@ -188,6 +190,68 @@ public static class DownloadMeterContract {
  }
 }
 
+public sealed class CatalogResponseHandler : HttpMessageHandler {
+ public int Calls; public Func<CancellationToken,HttpResponseMessage> Reply;
+ protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;return Task.FromResult(Reply(ct));}
+}
+public sealed class CancelAfterReadStream : MemoryStream {
+ readonly CancellationTokenSource stop;
+ public CancelAfterReadStream(CancellationTokenSource stop):base(new byte[262144]){this.stop=stop;}
+ public override Task<int> ReadAsync(byte[] bytes,int offset,int count,CancellationToken ct){int read=Read(bytes,offset,count);stop.Cancel();return Task.FromResult(read);}
+}
+public static class ReliabilityContract {
+ static void Assert(bool ok,string message){if(!ok)throw new Exception(message);}
+ public static void Run(string root){
+  Directory.CreateDirectory(root);
+  var store=new SettingsStore(Path.Combine(root,"catalog"));var locator=new ToolLocator(store);
+  var files=Path.Combine(store.Root,"Files");Directory.CreateDirectory(files);
+  var path=Path.Combine(files,"AppsList.txt");File.WriteAllText(path,"Cached app: 100001");
+  var now=new DateTime(2026,10,23,0,0,0,DateTimeKind.Utc);var handler=new CatalogResponseHandler();
+  handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+  using(var http=new HttpClient(handler)){
+   var catalog=new AppCatalog(store,locator,http,()=>now);
+   Assert(catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult()[0].Name=="Cached app","HTTP failure discarded cached catalog");
+   catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult();
+   Assert(handler.Calls==1,"Catalog retries delayed every search during backoff");
+   handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("Updated app: 100001")};
+   now=now.AddSeconds(31);
+   Assert(catalog.SearchAsync("Updated",CancellationToken.None).GetAwaiter().GetResult().Count==1&&handler.Calls==2,"Catalog did not recover after transient failure");
+   now=now.AddMinutes(1);catalog.SearchAsync("app",CancellationToken.None).GetAwaiter().GetResult();
+   Assert(handler.Calls==2,"Successful catalog refreshed on every search");
+   // Explicit cancellation must propagate and must not consume the next retry.
+   var retry=new AppCatalog(store,locator,http,()=>now);
+   using(var stop=new CancellationTokenSource()){
+    handler.Reply=ct=>{stop.Cancel();ct.ThrowIfCancellationRequested();return null;};
+    bool cancelled=false;try{retry.SearchAsync("app",stop.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+    Assert(cancelled,"User cancellation was treated as a catalog network failure");
+   }
+   int calls=handler.Calls;
+   handler.Reply=ct=>new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("Recovered app: 100001")};
+   Assert(retry.SearchAsync("Recovered",CancellationToken.None).GetAwaiter().GetResult().Count==1&&handler.Calls==calls+1,"Canceled catalog request suppressed next attempt");
+  }
+  var imports=Path.Combine(root,"imports");Directory.CreateDirectory(imports);var repo=new LocalAppRepository(imports);
+  var source=Path.Combine(root,"source.ipa");var data=new byte[262144];data[0]=17;data[data.Length-1]=93;File.WriteAllBytes(source,data);
+  repo.ImportAsync(new[]{source},CancellationToken.None).GetAwaiter().GetResult();
+  var destination=Path.Combine(imports,"source.ipa");
+  var copied=File.ReadAllBytes(destination);Assert(copied.Length==data.Length&&copied[0]==17&&copied[copied.Length-1]==93,"Imported IPA was truncated");
+  File.WriteAllText(source,"replacement");bool rejected=false;
+  try{AtomicFile.CopyAsync(source,destination,CancellationToken.None).GetAwaiter().GetResult();}catch(IOException){rejected=true;}
+  Assert(rejected&&File.ReadAllBytes(destination).Length==data.Length,"Atomic import overwrote an existing IPA");
+  Assert(Directory.GetFiles(imports,"*.tmp").Length==0,"Failed import retained staging files");
+  using(var stop=new CancellationTokenSource()){
+   stop.Cancel();bool cancelled=false;
+   try{repo.ImportAsync(new[]{source},stop.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+   Assert(cancelled,"Pre-canceled import succeeded");
+  }
+  // Cancel at a deterministic point inside a read, independent of disk speed or file size.
+  using(var stop=new CancellationTokenSource())using(var input=new CancelAfterReadStream(stop))using(var output=new MemoryStream()){
+   var copy=typeof(AtomicFile).GetMethod("CopyStreamAsync",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+   bool cancelled=false;try{((Task)copy.Invoke(null,new object[]{input,output,stop.Token})).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
+   Assert(cancelled&&output.Length==0,"Mid-copy cancellation wrote another block or was swallowed");
+  }
+ }
+}
+
 '@
 # Реальные схемы get-version-metadata: 1.1.8 без новых полей, 1.1.9 с minimumOSVersion, 1.2.0 с supportedPlatforms.
 $old=[IpaDesktop.ToolResponse]::VersionMetadataText([IpaDesktop.ToolResponse]::Object('{"displayVersion":"2.3","releaseDate":"2026-10-15","success":true}'))
@@ -205,6 +269,8 @@ $temp=Join-Path ([IO.Path]::GetTempPath()) ('ipa-oop-'+[Guid]::NewGuid().ToStrin
 $window=$null
 $originalContext=[Threading.SynchronizationContext]::Current
 try {
+ [ReliabilityContract]::Run((Join-Path $temp 'reliability'))
+ Write-Host 'PASS: offline catalog failure/backoff/recovery and cancellation; atomic IPA import, collision preservation, staging cleanup and cancellation during copying'
  [DownloadMeterContract]::Run((Join-Path $temp 'download-meter'))
  Write-Host 'PASS: measured file growth, rate window, stalled transfer, counter reset, percentage preservation, actual temporary-file sampling and monitor cleanup on success/cancel'
  [WifiVersionContract]::Run((Join-Path $temp 'wifi-contract'))

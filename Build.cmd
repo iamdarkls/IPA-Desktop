@@ -1,6 +1,10 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+if exist "Source\" (
+ powershell.exe -NoProfile -ExecutionPolicy Bypass -File Scripts\Sync-Sources.ps1
+ if errorlevel 1 exit /b 1
+)
 set "IPA_FRAMEWORK=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319"
 if not exist "%IPA_FRAMEWORK%\csc.exe" (
  echo Windows x64 and .NET Framework 4.x are required.
