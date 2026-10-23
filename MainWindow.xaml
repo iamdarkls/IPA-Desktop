@@ -467,10 +467,10 @@
             <WrapPanel>
               <Button x:Name="RefreshFiles" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Обновить файлы"/>
               <Button x:Name="ImportFile" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Добавить IPA…"/>
-              <Button x:Name="Devices" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Найти iPhone" Background="#16704C"/>
               <Button x:Name="DeviceInfo" FontSize="12" Padding="10,6" Margin="0,0,8,6" Content="Об iPhone…"/>
-              <ComboBox x:Name="DeviceList" DisplayMemberPath="DisplayLabel" FontSize="12" Margin="0,0,8,6"/>
+              <ComboBox x:Name="DeviceList" DisplayMemberPath="DisplayLabel" FontSize="12" MinWidth="230" Margin="0,0,8,6" ToolTip="Подключённые iPhone определяются автоматически"/>
             </WrapPanel>
+            <TextBlock x:Name="DeviceDetectionStatus" Text="Подключите и разблокируйте iPhone — он появится автоматически" Foreground="#AFC6E7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <DockPanel Margin="0,0,0,6" LastChildFill="True">
               <Button x:Name="OpenAppleSupportHelp" Content="Помощь Apple" DockPanel.Dock="Right" FontSize="12" Padding="8,4" Margin="6,0,0,0"/>
               <Button x:Name="CheckAppleSupport" Content="Проверить драйвер" DockPanel.Dock="Right" FontSize="12" Padding="8,4" Margin="6,0,0,0"/>

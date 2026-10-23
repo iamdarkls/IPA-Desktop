@@ -616,6 +616,7 @@ namespace IpaDesktop
         bool busy;
         bool setting;
         bool exitingForUpdate;
+        bool closingAfterDeviceScan;
         long lastProgress;
         AccountController account;
         SearchController search;
@@ -806,7 +807,7 @@ namespace IpaDesktop
             cancellation = new CancellationTokenSource();
             string[] buttons =
             {
-                "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "Devices", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
+                "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
             };
             foreach (var name in buttons) C<Button>(name).IsEnabled = false;
             C<ItemsControl>("ChosenFiles").IsEnabled = false;
@@ -821,6 +822,7 @@ namespace IpaDesktop
             ApplyActions();
             try
             {
+                await files.PauseDeviceDetectionAsync();
                 await action(cancellation.Token);
                 C<TextBlock>("Status").Text = "Готово";
             } catch (OperationCanceledException)
@@ -851,6 +853,7 @@ namespace IpaDesktop
                 RefreshFiles();
                 ApplyActions();
                 if (exitingForUpdate) w.Close();
+                else files.ResumeDeviceDetection();
             }
         }
         public Desktop() : this(null, true)
@@ -956,12 +959,26 @@ namespace IpaDesktop
                     e.Cancel = true;
                     MessageBox.Show(w, "Сначала отмените текущую операцию и дождитесь её завершения.", "Выполняется операция");
                 }
+                else if (!closingAfterDeviceScan && files.IsDetecting)
+                {
+                    e.Cancel = true;
+                    closingAfterDeviceScan = true;
+                    w.IsEnabled = false;
+                    files.StopDeviceDetection();
+                    // Defer the second Close until this Closing event has returned and CLI cleanup is complete.
+                    w.Dispatcher.BeginInvoke(new Action(async delegate
+                    {
+                        await files.PauseDeviceDetectionAsync();
+                        w.Close();
+                    }));
+                }
             };
             ApplyActions();
             w.Loaded += delegate
             {
                 Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + engine.Downloads);
                 if (!checkAtStartup) return;
+                files.StartDeviceDetection();
                 Work("Проверка движка и сохранённого входа…", async delegate(CancellationToken ct)
                 {
                     await files.CheckSupport(ct);
@@ -1055,6 +1072,13 @@ namespace IpaDesktop
         List<LocalRow> allFiles = new List<LocalRow>();
         List<LocalRow> visibleFiles = new List<LocalRow>();
         bool updatingAccounts;
+        readonly System.Windows.Threading.DispatcherTimer deviceTimer = new System.Windows.Threading.DispatcherTimer();
+        CancellationTokenSource deviceScanCancellation;
+        Task deviceScan = Task.FromResult(true);
+        bool deviceMonitoring, deviceClosed;
+        int deviceGeneration;
+        string deviceSignature = "", deviceWarning = "";
+        internal bool IsDetecting { get { return !deviceScan.IsCompleted; } }
         string AccountKey
         {
             get
@@ -1065,6 +1089,9 @@ namespace IpaDesktop
         }
         public FilesController(Desktop view, Engine engine) : base(view, engine)
         {
+            deviceTimer.Interval = TimeSpan.FromSeconds(3);
+            deviceTimer.Tick += async delegate { await RefreshDevicesAsync(); };
+            w.Closed += delegate { StopDeviceDetection(); };
             C<ComboBox>("FileAccount").SelectionChanged += delegate
             {
                 if (!updatingAccounts) ApplyFileFilter();
@@ -1145,37 +1172,120 @@ namespace IpaDesktop
                 string url = appleSupport == null ? "https://support.apple.com/ru-ru/118290" : appleSupport.HelpUrl;
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             });
-            On("Devices", delegate
+            C<CheckBox>("SearchWifi").Click += async delegate
             {
-                Work("Поиск iPhone…", async delegate(CancellationToken ct)
-                {
-                    await CheckSupport(ct);
-                    var combo = C<ComboBox>("DeviceList");
-                    combo.ItemsSource = null;
-                    ApplyActions();
-                    var devices = await engine.Devices.FindAsync(C<CheckBox>("SearchWifi").IsChecked == true, ct);
-                    combo.ItemsSource = devices;
-                    C<TextBlock>("WifiStatus").Text = "USB: " + devices.Count(x => !x.Network) + " · Wi-Fi: " + devices.Count(x => x.Network);
-                    if (devices.Count > 0)
-                    {
-                        foreach (var device in devices) { view.RegisterPrivate(device.ID); view.RegisterPrivate(device.Name); }
-                        combo.SelectedIndex = 0;
-                        Log("Найдено: " + String.Join(", ", devices.Select(x => x.DisplayLabel)));
-                    } else Log("iPhone не обнаружен. Проверьте USB, доверие и драйвер Apple.");
-                    ApplyActions();
-                });
-            });
-            C<CheckBox>("SearchWifi").Click += delegate
-            {
+                deviceGeneration++;
                 C<ComboBox>("DeviceList").ItemsSource = null;
-                C<TextBlock>("WifiStatus").Text = "Нажмите «Найти iPhone»";
+                deviceSignature = "";
+                C<TextBlock>("DeviceDetectionStatus").Text = "Определение iPhone…";
+                C<TextBlock>("WifiStatus").Text = "";
                 ApplyActions();
+                await PauseDeviceDetectionAsync();
+                await RefreshDevicesAsync();
             };
             On("WifiHelp", delegate { AppDialogs.ShowText(w, "Подключение iPhone по Wi-Fi",
-                "1. Подключите iPhone по USB и подтвердите доверие компьютеру.\n2. В Apple Devices включите «Показывать это устройство при подключении к Wi-Fi» и примените настройки. В iTunes — «Синхронизировать с этим iPhone по Wi-Fi».\n3. Подключите компьютер и iPhone к одной локальной сети, затем отключите USB.\n4. Включите «USB + Wi-Fi (экспериментально)» и нажмите «Найти iPhone». Выберите строку с отметкой Wi-Fi.\n\nЕсли телефон не найден: разблокируйте его, проверьте службу Apple Mobile Device, Bonjour, разрешения Apple в брандмауэре и отсутствие изоляции устройств в гостевой сети. VPN может мешать обнаружению.\n\nРежим экспериментальный. При обрыве не переключаемся автоматически на USB и не повторяем установку без вашего действия. Проверьте результат на телефоне, прежде чем нажимать «Повторить ошибки». "); });
+                "1. Подключите iPhone по USB и подтвердите доверие компьютеру.\n2. В Apple Devices включите «Показывать это устройство при подключении к Wi-Fi» и примените настройки. В iTunes — «Синхронизировать с этим iPhone по Wi-Fi».\n3. Подключите компьютер и iPhone к одной локальной сети, затем отключите USB.\n4. Включите «USB + Wi-Fi (экспериментально)»: список обновится автоматически. Выберите строку с отметкой Wi-Fi.\n\nЕсли телефон не найден: разблокируйте его, проверьте службу Apple Mobile Device, Bonjour, разрешения Apple в брандмауэре и отсутствие изоляции устройств в гостевой сети. VPN может мешать обнаружению.\n\nПри обрыве установка не переключается автоматически на USB. Проверьте результат на телефоне перед повтором."); });
             On("InstallFiles", delegate { StartInstall(installChosen.Snapshot()); });
             On("RetryInstalls", delegate { StartInstall(failedInstalls.Snapshot()); });
             On("ForgetInstallErrors", delegate { failedInstalls.Clear(); ApplyActions(); });
+        }
+        internal void StartDeviceDetection()
+        {
+            if (deviceClosed) return;
+            deviceMonitoring = true;
+            deviceTimer.Start();
+        }
+        internal void StopDeviceDetection()
+        {
+            deviceClosed = true;
+            deviceMonitoring = false;
+            deviceGeneration++;
+            deviceTimer.Stop();
+            if (deviceScanCancellation != null) deviceScanCancellation.Cancel();
+        }
+        internal async Task PauseDeviceDetectionAsync()
+        {
+            if (deviceScanCancellation != null) deviceScanCancellation.Cancel();
+            await deviceScan;
+        }
+        internal async void ResumeDeviceDetection()
+        {
+            if (deviceMonitoring) await RefreshDevicesAsync();
+        }
+        /// <summary>Один фоновый поиск за раз; рабочая операция отменяет и дожидается его до запуска CLI.</summary>
+        internal Task RefreshDevicesAsync()
+        {
+            if (deviceClosed || busy || IsDetecting) return deviceScan;
+            if (String.IsNullOrEmpty(engine.Settings.DeviceCurrent ?? engine.Settings.Current))
+            {
+                ApplyDevices(new List<DeviceRow>());
+                C<TextBlock>("DeviceDetectionStatus").Text = "Установите инструменты iPhone в настройках";
+                return Task.FromResult(true);
+            }
+            var stop = new CancellationTokenSource();
+            stop.CancelAfter(TimeSpan.FromSeconds(25));
+            deviceScanCancellation = stop;
+            deviceScan = DetectDevicesAsync(C<CheckBox>("SearchWifi").IsChecked == true, deviceGeneration, stop);
+            return deviceScan;
+        }
+        async Task DetectDevicesAsync(bool wifi, int generation, CancellationTokenSource stop)
+        {
+            try
+            {
+                var warnings = new List<string>();
+                var devices = await engine.Devices.FindAsync(wifi, stop.Token, warnings.Add);
+                if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
+                ApplyDevices(devices);
+                ShowDeviceWarning(String.Join(Environment.NewLine, warnings));
+            }
+            catch (OperationCanceledException)
+            {
+                // User work and window close intentionally cancel background discovery.
+                if (!deviceClosed && !busy && generation == deviceGeneration)
+                {
+                    ApplyDevices(new List<DeviceRow>());
+                    ShowDeviceWarning("iPhone не ответил вовремя. Разблокируйте телефон и проверьте соединение.");
+                }
+            }
+            catch (Exception error)
+            {
+                if (!deviceClosed && !busy && generation == deviceGeneration)
+                {
+                    ApplyDevices(new List<DeviceRow>());
+                    ShowDeviceWarning(error.Message);
+                }
+            }
+            finally
+            {
+                if (deviceScanCancellation == stop) deviceScanCancellation = null;
+                stop.Dispose();
+            }
+        }
+        void ShowDeviceWarning(string warning)
+        {
+            C<TextBlock>("DeviceDetectionStatus").ToolTip = warning.Length == 0 ? "Список проверяется автоматически каждые 3 секунды в отсутствие других операций." : warning;
+            if (warning.Length > 0) C<TextBlock>("DeviceDetectionStatus").Text = "Проверьте подключение iPhone — подробности в подсказке";
+            if (warning != deviceWarning && warning.Length > 0) Log("Автоопределение iPhone: " + warning);
+            deviceWarning = warning;
+        }
+        void ApplyDevices(List<DeviceRow> devices)
+        {
+            var combo = C<ComboBox>("DeviceList");
+            var previous = combo.SelectedItem as DeviceRow;
+            var signature = String.Join("\n", devices.Select(x => x.ID.ToUpperInvariant() + "|" + x.Network + "|" + x.Name).OrderBy(x => x, StringComparer.Ordinal));
+            if (signature != deviceSignature)
+            {
+                combo.ItemsSource = devices;
+                combo.SelectedItem = previous == null ? (devices.Count == 1 ? devices[0] : null) :
+                    devices.FirstOrDefault(x => x.Network == previous.Network && String.Equals(x.ID, previous.ID, StringComparison.OrdinalIgnoreCase));
+                foreach (var device in devices) { view.RegisterPrivate(device.ID); view.RegisterPrivate(device.Name); }
+                Log(devices.Count == 0 ? "iPhone отключён." : "Обнаружены iPhone: " + String.Join(", ", devices.Select(x => x.DisplayLabel)));
+                deviceSignature = signature;
+            }
+            C<TextBlock>("WifiStatus").Text = "USB: " + devices.Count(x => !x.Network) + " · Wi-Fi: " + devices.Count(x => x.Network);
+            C<TextBlock>("DeviceDetectionStatus").Text = devices.Count == 0 ? "Подключите и разблокируйте iPhone — он появится автоматически" :
+                combo.SelectedItem == null ? "Выберите iPhone для установки" : "iPhone подключён · автоопределение включено";
+            ApplyActions();
         }
         /// <summary>После подтверждения перемещает IPA в корзину, продолжая обработку при ошибке отдельного файла.</summary>
         internal void DeleteRows(List<LocalRow> rows)
@@ -1264,7 +1374,7 @@ namespace IpaDesktop
             C<Button>("DeleteFiles").Content = "Удалить выбранные IPA (" + installChosen.Count + ")";
             C<Button>("ClearInstall").IsEnabled = !busy && installChosen.Count > 0;
             C<Button>("InstallFiles").IsEnabled = !busy && installChosen.Count > 0 && C<ComboBox>("DeviceList").SelectedItem != null;
-            C<Button>("Devices").Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color) System.Windows.Media.ColorConverter.ConvertFromString(C<ComboBox>("DeviceList").Items.Count == 0 ? "#16704C" : "#243247"));
+            C<ComboBox>("DeviceList").IsEnabled = !busy;
         }
         void RefreshInstallChosen()
         {

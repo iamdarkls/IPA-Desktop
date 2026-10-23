@@ -22,6 +22,7 @@ namespace IpaDesktop
         bool busy;
         bool setting;
         bool exitingForUpdate;
+        bool closingAfterDeviceScan;
         long lastProgress;
         AccountController account;
         SearchController search;
@@ -212,7 +213,7 @@ namespace IpaDesktop
             cancellation = new CancellationTokenSource();
             string[] buttons =
             {
-                "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "Devices", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
+                "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
             };
             foreach (var name in buttons) C<Button>(name).IsEnabled = false;
             C<ItemsControl>("ChosenFiles").IsEnabled = false;
@@ -227,6 +228,7 @@ namespace IpaDesktop
             ApplyActions();
             try
             {
+                await files.PauseDeviceDetectionAsync();
                 await action(cancellation.Token);
                 C<TextBlock>("Status").Text = "Готово";
             } catch (OperationCanceledException)
@@ -257,6 +259,7 @@ namespace IpaDesktop
                 RefreshFiles();
                 ApplyActions();
                 if (exitingForUpdate) w.Close();
+                else files.ResumeDeviceDetection();
             }
         }
         public Desktop() : this(null, true)
@@ -362,12 +365,26 @@ namespace IpaDesktop
                     e.Cancel = true;
                     MessageBox.Show(w, "Сначала отмените текущую операцию и дождитесь её завершения.", "Выполняется операция");
                 }
+                else if (!closingAfterDeviceScan && files.IsDetecting)
+                {
+                    e.Cancel = true;
+                    closingAfterDeviceScan = true;
+                    w.IsEnabled = false;
+                    files.StopDeviceDetection();
+                    // Defer the second Close until this Closing event has returned and CLI cleanup is complete.
+                    w.Dispatcher.BeginInvoke(new Action(async delegate
+                    {
+                        await files.PauseDeviceDetectionAsync();
+                        w.Close();
+                    }));
+                }
             };
             ApplyActions();
             w.Loaded += delegate
             {
                 Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + engine.Downloads);
                 if (!checkAtStartup) return;
+                files.StartDeviceDetection();
                 Work("Проверка движка и сохранённого входа…", async delegate(CancellationToken ct)
                 {
                     await files.CheckSupport(ct);
