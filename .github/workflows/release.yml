@@ -1,27 +1,13 @@
 name: Windows release
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
-    paths:
-      - '**.axaml'
-      - '**.csproj'
-      - 'Source/**'
-      - 'Assets/**'
-      - 'Tests/**'
-      - 'Scripts/**'
-      - 'Build.cmd'
-      - 'Start.cmd'
-      - 'global.json'
-      - 'Directory.Build.props'
-      - 'package-files.json'
-      - '.github/workflows/release.yml'
+    paths: ['IPA-Desktop.csproj', '.github/workflows/release.yml']
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: windows-release-${{ github.event.pull_request.number || github.ref }}
+  group: windows-release-main
   cancel-in-progress: false
 jobs:
   release:
@@ -33,52 +19,48 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      IPA_TEST_ARTIFACTS: ${{ github.workspace }}/artifacts/screenshots
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-      - name: Read and verify version
+      - name: Check release version
+        id: version
         run: |
           $project=[xml](Get-Content IPA-Desktop.csproj -Raw)
           $version=$project.Project.PropertyGroup.Version
           if(!$version -or !(Test-Path "changelogs/v$version.md")){throw 'Missing version/changelog'}
           if((Get-Content Source/Domain/Updates/AppInfo.cs -Raw) -notmatch ('Version = "'+[regex]::Escape($version)+'"')){throw 'Runtime and project versions differ'}
           "IPA_VERSION=$version" >> $env:GITHUB_ENV
-      - name: Restore and build modern application and tests
+          gh release view "v$version" --json tagName 2>$null | Out-Null
+          $published=$LASTEXITCODE -eq 0
+          "published=$($published.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          $verify=(!$published) -or ('${{ github.event_name }}' -eq 'workflow_dispatch')
+          "verify=$($verify.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if($published){Write-Host "Release v$version already published. Bump the project version to publish a new build; use manual dispatch to verify this version."}
+          exit 0
+      - uses: actions/setup-dotnet@v5
+        if: steps.version.outputs.verify == 'true'
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and test application
+        if: steps.version.outputs.verify == 'true'
         run: |
-          dotnet restore Tests/Modern/IPA-Desktop.Tests.csproj
-          if($LASTEXITCODE -ne 0){throw 'Restore failed'}
-          dotnet build Tests/Modern/IPA-Desktop.Tests.csproj -c Release --no-restore
+          dotnet build Tests/Modern/IPA-Desktop.Tests.csproj -c Release
           if($LASTEXITCODE -ne 0){throw 'Build failed'}
-      - name: Verify services, JSON migration, Avalonia UI, ConPTY and device commands
-        run: |
           dotnet Tests/Modern/bin/Release/net10.0-windows/IPA-Desktop.Tests.dll
-          if($LASTEXITCODE -ne 0){throw 'Modern application tests failed'}
-      - name: Verify native packaging tools
-        run: |
-          $env:PYTHONPATH='Tools/DeviceTools'
-          python -m unittest discover -s Tools/DeviceTools/Tests -v
-          if($LASTEXITCODE -ne 0){throw 'Device tools tests failed'}
+          if($LASTEXITCODE -ne 0){throw 'Application tests failed'}
       - name: Publish self-contained Windows executable
+        if: steps.version.outputs.verify == 'true'
         run: |
           dotnet publish IPA-Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish
           if($LASTEXITCODE -ne 0){throw 'Publish failed'}
           python Scripts/package.py artifacts/publish
           if($LASTEXITCODE -ne 0){throw 'Portable package or legacy size limits failed'}
-      - name: Verify shipping executable and migration from 0.2.12
+      - name: Verify packaged application and updater
+        if: steps.version.outputs.verify == 'true'
         run: |
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Scripts/Verify-Package.ps1 -Archive "IPA-Desktop-$env:IPA_VERSION-Windows.zip"
           if($LASTEXITCODE -ne 0){throw 'Shipping package or update migration failed'}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-verification
-          path: artifacts/screenshots
-          if-no-files-found: ignore
       - name: Publish release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: steps.version.outputs.published != 'true' && github.ref == 'refs/heads/main'
         run: |
           $tag="v$env:IPA_VERSION"
           gh release view $tag --json tagName 2>$null

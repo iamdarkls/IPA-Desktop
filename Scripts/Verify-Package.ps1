@@ -37,7 +37,6 @@ try {
  }finally{$env:DOTNET_ROOT=$savedRoot;$env:PATH=$savedPath}
  Assert (Test-Path (Join-Path $data 'smoke-ok.txt')) 'Published runtime did not finish its scenario checks'
  Get-Content (Join-Path $data 'smoke-ok.txt')|Write-Host
- if($env:IPA_TEST_ARTIFACTS){New-Item -ItemType Directory $env:IPA_TEST_ARTIFACTS -Force|Out-Null;Copy-Item (Join-Path $data 'published-tab-*.png') $env:IPA_TEST_ARTIFACTS}
  # Exercise the new updater after arriving through the unmodified 0.2.12 helper.
  $nextStage=Join-Path $temp 'next-update/stage'
  [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $Archive),$nextStage)

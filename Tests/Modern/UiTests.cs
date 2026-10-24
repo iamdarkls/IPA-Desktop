@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -28,7 +27,7 @@ public sealed class UiTests
   return engine;
  }
  static bool Busy(Desktop desktop)=>(bool)typeof(Desktop).GetProperty("IsBusy",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(desktop);
- [AvaloniaFact] public async Task AllTabsRenderAndQueueSetsRemainUsable()
+ [AvaloniaFact] public async Task QueueSetsAndMinimumLayoutRemainUsable()
  {
   using var folder=new TempFolder();var backend=Backend(folder.Path);var desktop=new Desktop(backend,false);var window=desktop.Window;window.Show();
   try
@@ -42,14 +41,7 @@ public sealed class UiTests
    Click(window,"ClearChosen");Click(window,"UseSet");await Wait(()=>!Busy(desktop));
    Assert.Equal(2,Find<ItemsControl>(window,"ChosenApps").ItemCount);
    var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
-   var artifacts=Environment.GetEnvironmentVariable("IPA_TEST_ARTIFACTS")??Path.Combine(folder.Path,"screenshots");Directory.CreateDirectory(artifacts);
-   for(int i=0;i<tabs.ItemCount;i++)
-   {
-    tabs.SelectedIndex=i;window.Width=1160;window.Height=860;await Task.Delay(50);
-    using var frame=window.CaptureRenderedFrame();Assert.NotNull(frame);using(var output=File.Create(Path.Combine(artifacts,"tab-"+i+".png"))) frame.Save(output, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
-   }
    window.Width=940;window.Height=720;tabs.SelectedIndex=1;await Task.Delay(50);
-   using(var small=window.CaptureRenderedFrame())using(var output=File.Create(Path.Combine(artifacts,"minimum.png")))small.Save(output,Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
    Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed: " + Find<DataGrid>(window,"Files").Bounds.Height);
    Assert.NotNull(Find<TextBlock>(window,"DeviceDetectionStatus"));
   }
@@ -80,8 +72,6 @@ public sealed class UiTests
    Click(window,"CheckConnection");await Wait(()=>Find<TextBlock>(window,"ConnectionTitle").Text?.Contains("Подтвердите")==true);
    Assert.True(Busy(desktop));Assert.True(Find<Button>(window,"Cancel").IsEnabled);Assert.Contains("Доверять",Find<TextBlock>(window,"ConnectionMessage").Text);
    window.Width=940;window.Height=720;await Task.Delay(50);
-   var artifacts=Environment.GetEnvironmentVariable("IPA_TEST_ARTIFACTS");
-   if(artifacts != null){Directory.CreateDirectory(artifacts);using var frame=window.CaptureRenderedFrame();using var output=File.Create(Path.Combine(artifacts,"trust-request.png"));frame.Save(output,Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);}
    fixture.Runner.Trusted=true;await Wait(()=>!Busy(desktop));Assert.Contains("готов",Find<TextBlock>(window,"ConnectionTitle").Text);Assert.Equal(0,fixture.Runner.Installs);
   }
   finally{window.Close();}

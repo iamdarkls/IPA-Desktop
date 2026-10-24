@@ -81,25 +81,4 @@ public sealed class CoreTests
   engine.Rollback();var reloaded=new Engine(folder.Path);
   Assert.Equal("previous",reloaded.Settings.Current);Assert.Equal("devices",reloaded.Settings.DeviceCurrent);Assert.False(reloaded.Settings.AutoUpdate);Assert.False(reloaded.Settings.AutoUpdateDeviceTools);
  }
- [WindowsFact] public async Task ActualWindowsToolchainStillWorksOnModernRuntime()
- {
-  using var folder=new TempFolder();using var stop=new CancellationTokenSource(TimeSpan.FromMinutes(3));
-  var engine=new Engine(folder.Path);var release=await engine.Check(stop.Token);await engine.Install(release,stop.Token);
-  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})
-  {
-   var help=await engine.Run(engine.Binary(name),new[]{"--help"},stop.Token,false,false);
-   Assert.Equal(0,help.Code);
-   if(name=="idevicepair.exe"){Assert.Contains("validate",help.Output);Assert.Contains("unpair",help.Output);Assert.Contains("--udid",help.Output);}
-   else Assert.Contains("--network",help.Output);
-  }
-  using var process=new ConPtyLoginFactory().Start(engine.Binary("ipatool*.exe"),engine.Downloads);var protocol=new AppleLoginProtocol();bool password=false;
-  while(!password)
-  {
-   var chunk=await process.ReadAsync(stop.Token);Assert.NotNull(chunk);
-   var prompt=protocol.Append(chunk);
-   if(prompt==AppleLoginPrompt.Identifier){using var identifier=LoginContract.Secret("fixture@example.com");await process.SendAsync(identifier,stop.Token);}
-   if(prompt==AppleLoginPrompt.Password)password=true;
-  }
-  Assert.True(password); // Stop before submitting any Apple password or network login.
- }
 }

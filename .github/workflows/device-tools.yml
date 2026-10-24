@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 Tools/DeviceTools/Scripts/check_updates.py
       - uses: actions/upload-artifact@v4
-        if: steps.prepare.outputs.build == 'true'
+        if: steps.prepare.outputs.build == 'true' && steps.prepare.outputs.update == 'true'
         with:
           name: device-tools-candidate
           retention-days: 7
@@ -41,16 +41,14 @@ jobs:
             Tools/DeviceTools/stable.json
             Tools/DeviceTools/VERSION
             Tools/DeviceTools/changelog.md
-  recover:
+  build:
     needs: prepare
     if: needs.prepare.outputs.build == 'true'
     runs-on: windows-2022
-    timeout-minutes: 10
-    outputs:
-      published: ${{ steps.recover.outputs.published }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Recover a tested native draft without recompiling
+      - name: Recover previously tested native draft
         if: needs.prepare.outputs.update != 'true'
         id: recover
         shell: pwsh
@@ -58,18 +56,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: ./Tools/DeviceTools/Scripts/Publish-TestedDraft.ps1
-  build:
-    needs: [prepare, recover]
-    if: needs.prepare.outputs.build == 'true' && needs.recover.outputs.published != 'true'
-    runs-on: windows-2022
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+        if: needs.prepare.outputs.update == 'true'
         with:
           name: device-tools-candidate
           path: Tools/DeviceTools
       - uses: msys2/setup-msys2@v2
+        if: steps.recover.outputs.published != 'true'
         with:
           msystem: MINGW64
           update: true
@@ -79,9 +72,11 @@ jobs:
             mingw-w64-x86_64-openssl mingw-w64-x86_64-curl
             mingw-w64-x86_64-libzip mingw-w64-x86_64-python
       - name: Build pinned sources and package Windows binaries
+        if: steps.recover.outputs.published != 'true'
         shell: msys2 {0}
         run: bash Tools/DeviceTools/Scripts/build.sh
       - name: Verify standalone Windows command line tools
+        if: steps.recover.outputs.published != 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -119,6 +114,7 @@ jobs:
           git push origin HEAD:main
           if($LASTEXITCODE -ne 0){throw 'Main changed or source update was rejected; no release will be published. Retry the workflow.'}
       - name: Publish own tools and source archives
+        if: steps.recover.outputs.published != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
