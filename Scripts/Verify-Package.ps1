@@ -39,7 +39,9 @@ try {
  Get-Content (Join-Path $data 'smoke-ok.txt')|Write-Host
  if($env:IPA_TEST_ARTIFACTS){New-Item -ItemType Directory $env:IPA_TEST_ARTIFACTS -Force|Out-Null;Copy-Item (Join-Path $data 'published-tab-*.png') $env:IPA_TEST_ARTIFACTS}
  # Exercise the new updater after arriving through the unmodified 0.2.12 helper.
- & (Join-Path $projectRoot 'Scripts/Update-App.ps1') -Stage $stage -Target $legacy -NoRestart
+ $nextStage=Join-Path $temp 'next-update/stage'
+ [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $Archive),$nextStage)
+ & (Join-Path $projectRoot 'Scripts/Update-App.ps1') -Stage $nextStage -Target $legacy -NoRestart
  $manifest=@(Get-Content (Join-Path $stage 'package-files.json') -Raw|ConvertFrom-Json)
  foreach($file in $manifest){Assert ((Get-FileHash (Join-Path $stage $file)).Hash -eq (Get-FileHash (Join-Path $legacy $file)).Hash) "Modern update mismatch: $file"}
  Assert ([IO.File]::ReadAllText((Join-Path $legacy 'keep.ipa')) -eq 'keep') 'Modern updater modified user data'
