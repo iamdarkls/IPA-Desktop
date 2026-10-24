@@ -59,12 +59,12 @@ foreach($entry in $pins.PSObject.Properties){if($builtPins.PSObject.Properties[$
 $savedPath=$env:PATH
 try{
  $env:PATH="$env:SystemRoot\System32;$env:SystemRoot"
- foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller')){
+ foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')){
   $exe=Join-Path $package "windows_amd64/$name.exe"
   $reported=& $exe --version 2>&1
   if($LASTEXITCODE -ne 0 -or !$reported){throw 'Recovered native tool does not run independently'}
   $help=& $exe --help 2>&1
-  if($LASTEXITCODE -ne 0 -or ($help -join "`n") -notmatch '--network'){throw 'Recovered native network support missing'}
+  if($LASTEXITCODE -ne 0 -or ($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network')){throw 'Recovered native network support missing'}
   Write-Host "$name : $reported"
  }
 }finally{$env:PATH=$savedPath}

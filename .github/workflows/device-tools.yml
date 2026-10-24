@@ -92,7 +92,7 @@ jobs:
             if((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $entry.Value){throw 'Device package checksum mismatch'}
           }
           $folder=Join-Path $PWD 'device-build/package/windows_amd64'
-          foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller')){
+          foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')){
             $version=& "$folder/$name.exe" --version 2>&1
             if($LASTEXITCODE -ne 0 -or !$version){throw "$name failed outside MSYS2"}
             $help=& "$folder/$name.exe" --help 2>&1
@@ -100,7 +100,10 @@ jobs:
             if($name -eq 'idevice_id' -and (($help -join "`n") -notmatch '--list')){throw 'Device listing CLI contract changed'}
             if($name -eq 'ideviceinfo' -and ((($help -join "`n") -notmatch '--udid') -or (($help -join "`n") -notmatch '--key'))){throw 'Device info CLI contract changed'}
             if($name -eq 'ideviceinstaller' -and (($help -join "`n") -notmatch 'install PATH')){throw 'Installer CLI contract changed'}
-            if(($help -join "`n") -notmatch '--network'){throw "$name network transport missing"}
+            if($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network'){throw "$name network transport missing"}
+            if($name -eq 'idevicepair'){
+              foreach($command in @('validate','pair','unpair')){if(($help -join "`n") -notmatch ("\b"+$command+"\b")){throw "Pairing command missing: $command"}}
+            }
             Write-Host "$name : $version"
           }
       - name: Persist tested upstream versions

@@ -35,7 +35,7 @@ class PackagingChecks(unittest.TestCase):
         self.builder = PackageBuilder(self.root, self.mingw, self.system, lambda p: [])
 
     def test_rebuild_excludes_stale_files_and_hashes_every_payload(self):
-        self.assertEqual(self.builder.create(), 3)
+        self.assertEqual(self.builder.create(), len(TOOLS))
         out = self.build / 'package'
         (out / 'windows_amd64/obsolete.dll').write_bytes(b'stale')
         self.builder.create()

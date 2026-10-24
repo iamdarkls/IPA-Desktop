@@ -9,7 +9,7 @@ import zipfile
 from .dependencies import DependencyCollector, sha256_file
 
 
-TOOLS = ('idevice_id.exe', 'ideviceinfo.exe', 'ideviceinstaller.exe')
+TOOLS = ('idevice_id.exe', 'ideviceinfo.exe', 'ideviceinstaller.exe', 'idevicepair.exe')
 LICENSE_NAMES = (
     'COPYING', 'COPYING.LESSER', 'COPYING.GPLv3', 'LICENSE',
     'LICENSE.md', 'LICENSE.txt', 'COPYING.LGPLv2.1',
