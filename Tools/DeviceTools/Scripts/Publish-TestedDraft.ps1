@@ -21,7 +21,7 @@ $runs=gh api "repos/$repo/actions/workflows/device-tools.yml/runs?head_sha=$targ
 if($LASTEXITCODE -ne 0){throw 'Could not verify tested build'}
 $tested=$false
 foreach($run in @($runs.workflow_runs|Where-Object { $_.head_sha -eq $target -and $_.head_branch -eq 'main' })){
- $jobs=gh api "repos/$repo/actions/runs/$($run.id)/jobs?filter=latest&per_page=100" | ConvertFrom-Json
+ $jobs=gh api "repos/$repo/actions/runs/$($run.id)/jobs?filter=all&per_page=100" | ConvertFrom-Json
  if($LASTEXITCODE -ne 0){throw 'Could not verify native build steps'}
  foreach($job in @($jobs.jobs|Where-Object name -eq 'build')){
   $compiled=@($job.steps|Where-Object { $_.name -eq 'Build pinned sources and package Windows binaries' -and $_.conclusion -eq 'success' })
@@ -32,11 +32,10 @@ foreach($run in @($runs.workflow_runs|Where-Object { $_.head_sha -eq $target -an
 if(!$tested){throw 'No successful compile and native validation for draft target'}
 git fetch --no-tags --depth=1 origin $target
 if($LASTEXITCODE -ne 0){throw 'Could not read tested native source commit'}
-# Compare the complete native tool tree; new modules cannot escape draft validation.
-$built=git rev-parse "${target}:Tools/DeviceTools"
-if($LASTEXITCODE -ne 0){throw 'Missing tested native inputs'}
-$current=git rev-parse 'HEAD:Tools/DeviceTools'
-if($LASTEXITCODE -ne 0 -or $built -ne $current){throw 'Native inputs changed since tested build; rebuild instead of recovering draft'}
+# Compare every build/package input. This recovery validator itself does not enter
+# the compiled binaries, license metadata or upstream source archives.
+$changed=@(git diff --name-only $target HEAD -- Tools/DeviceTools ':!Tools/DeviceTools/Scripts/Publish-TestedDraft.ps1')
+if($LASTEXITCODE -ne 0 -or $changed.Count -gt 0){throw 'Native build inputs changed since tested build; rebuild instead of recovering draft'}
 $cache=Join-Path $PWD 'native-draft-recovery'
 New-Item -ItemType Directory -Path $cache|Out-Null
 foreach($name in $names){

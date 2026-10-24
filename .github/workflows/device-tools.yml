@@ -148,9 +148,16 @@ jobs:
             $target=git rev-parse HEAD
             gh release create $tag "IPA-DeviceTools-$version-Windows-x64.zip" "IPA-DeviceTools-$version-Sources.zip" --draft --target $target --title "IPA Desktop Device Tools $version" --notes-file Tools/DeviceTools/changelog.md --latest=false
             if($LASTEXITCODE -ne 0){throw 'Failed to create tool release draft'}
-            $all=gh api "repos/$env:GH_REPO/releases?per_page=100"|ConvertFrom-Json
-            if($LASTEXITCODE -ne 0){throw 'Could not locate created draft'}
-            $match=@($all|Where-Object tag_name -eq $tag)
+            # A newly created draft can take a few seconds to appear in the collection.
+            $match=@()
+            for($attempt=0;$attempt -lt 6;$attempt++){
+              $all=gh api "repos/$env:GH_REPO/releases?per_page=100"|ConvertFrom-Json
+              if($LASTEXITCODE -ne 0){throw 'Could not locate created draft'}
+              $match=@($all|Where-Object tag_name -eq $tag)
+              if($match.Count -eq 1){break}
+              if($match.Count -gt 1){throw 'Ambiguous uploaded draft'}
+              Start-Sleep -Seconds 2
+            }
             if($match.Count -ne 1){throw 'Uploaded draft not found unambiguously'}
             $release=$match[0]
           }
