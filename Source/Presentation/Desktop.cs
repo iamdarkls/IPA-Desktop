@@ -149,7 +149,12 @@ namespace IpaDesktop
             var names = String.Join(", ", lastReport.Items.Where(x => !x.Success).Take(1).Select(x => x.Name + ": " + x.ShortError));
             C<TextBlock>("NoticeText").Text = lastReport.Summary + (names.Length == 0 ? "" : " · " + names);
             ToolTip.SetTip(C<TextBlock>("NoticeText"), lastReport.Details);
-            bool errors = lastReport.Failed > 0;
+            var failure=lastReport.Items.LastOrDefault(x=>!x.Success);
+            C<TextBlock>("NoticeCause").Text=failure?.Cause;
+            C<TextBlock>("NoticeCause").IsVisible=failure != null;
+            C<TextBlock>("NoticeRemedy").Text=failure == null ? lastReport.StopReason : "Что сделать: " + failure.Remedy;
+            C<TextBlock>("NoticeRemedy").IsVisible=failure != null || !String.IsNullOrEmpty(lastReport.StopReason);
+            bool errors = lastReport.Failed > 0 || !String.IsNullOrEmpty(lastReport.StopReason);
             var notice = C<Border>("OperationNotice");
             notice.Background = new Avalonia.Media.SolidColorBrush((Avalonia.Media.Color)Avalonia.Media.Color.Parse(errors ? "#38232C" : lastReport.Canceled ? "#383122" : "#173529"));
             notice.BorderBrush = new Avalonia.Media.SolidColorBrush((Avalonia.Media.Color)Avalonia.Media.Color.Parse(errors ? "#E17B8B" : lastReport.Canceled ? "#D7BC79" : "#6AB893"));
@@ -198,8 +203,10 @@ namespace IpaDesktop
         internal void Error(Exception e)
         {
             Log(e.Message);
-            C<TextBlock>("Status").Text = "Ошибка — подробности в журнале";
-            if (activeReport == null || activeReport.Failed == 0)
+            var failure=ErrorLocalizer.Describe(e);
+            C<TextBlock>("Status").Text = failure.Title;
+            if(activeReport != null && e is DeviceConnectionException) activeReport.StopReason=failure.Description;
+            if (activeReport == null || (activeReport.Failed == 0 && activeReport.Succeeded == 0))
             {
                 lastReport = new OperationReport { Kind = "Операция", Total = 1 };
                 lastReport.Add(activeReport == null ? "Ошибка операции" : activeReport.Kind, e);
@@ -224,12 +231,13 @@ namespace IpaDesktop
         {
             if (busy) return;
             busy = true;
+            C<Border>("ConnectionNotice").IsVisible=false;
             queueProgress.Reset();
             C<TextBlock>("OperationDetail").Text = "";
             cancellation = new CancellationTokenSource();
             string[] buttons =
             {
-                "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
+                "CheckConnection", "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
             };
             foreach (var name in buttons) C<Button>(name).IsEnabled = false;
             C<ItemsControl>("ChosenFiles").IsEnabled = false;
@@ -251,6 +259,7 @@ namespace IpaDesktop
             {
                 queueProgress.Stop("Отменено");
                 if (activeReport != null) { activeReport.Canceled = true; lastReport = activeReport; RenderNotice(); }
+                files.ConnectionCanceled();
                 Log("Операция отменена.");
                 C<TextBlock>("Status").Text = "Отменено";
             } catch (Exception e)

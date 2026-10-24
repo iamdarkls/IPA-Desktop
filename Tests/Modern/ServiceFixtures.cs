@@ -79,7 +79,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
         if (Path.GetFileName(exe) == "idevice_id.exe")
             output = DeviceIds;
         else if (Path.GetFileName(exe) == "ideviceinfo.exe")
-            output = args.Length == 2 ? "ProductType: iPhone16,2\nProductVersion: 18.0\n" : "Test iPhone";
+            output = args.Length == 2 ? "UniqueDeviceID: " + args[1] + "\nProductType: iPhone16,2\nProductVersion: 18.0\n" : "Test iPhone";
         else if (args.Length >= 2 && args[0] == "auth" && args[1] == "info")
             output = "{\"success\":true,\"email\":\"test@example.com\"}";
         return Task.FromResult(new Result { Code = 0, Output = output });
@@ -105,6 +105,7 @@ public sealed class WifiRunner : IProcessRunner {
    if(!File.Exists(Path.Combine(workingDirectory,args[offset+3])))throw new Exception("Missing staged package");
    return Task.FromResult(new Result{Code=InstallFailure?1:0,Output=InstallFailure?"connection lost":"OK"});
   }
+  if(exe.EndsWith("idevicepair.exe"))return Task.FromResult(new Result{Code=0,Output="SUCCESS"});
   throw new Exception("Unexpected command");
  }
 }
@@ -130,7 +131,7 @@ public static class WifiVersionContract {
   var ct=CancellationToken.None;Directory.CreateDirectory(root);
   var runner=new WifiRunner();var engine=new Engine(root,runner);engine.Settings.Current="test";
   string bins=Path.Combine(root,"Versions/test/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
   var devices=engine.Devices.FindAsync(true,ct).GetAwaiter().GetResult();
   Assert(devices.Count==2&&!devices[0].Network&&devices[1].Network&&devices[1].DisplayLabel.Contains("Wi-Fi"),"Discovery merged transports or duplicated UDIDs");
   runner.UsbFailure=true;Assert(engine.Devices.FindAsync(true,ct).GetAwaiter().GetResult().Count==1,"USB failure blocked Wi-Fi");runner.UsbFailure=false;

@@ -10,9 +10,10 @@ namespace IpaDesktop
     public sealed class DeviceInstallation
     {
         readonly DeviceCommandClient client;
+        readonly DeviceReadiness readiness;
         public Action<string> Log { get; set; }
-        public DeviceInstallation(DeviceCommandClient client) { this.client = client; Log = delegate { }; }
-        public async Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct)
+        public DeviceInstallation(DeviceCommandClient client, DeviceReadiness readiness = null) { this.client = client; this.readiness = readiness ?? new DeviceReadiness(client); Log = delegate { }; }
+        public async Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct, Action<DeviceConnectionProgress> progress = null)
         {
             if (!File.Exists(file.Path)) throw new IOException("IPA-файл больше не существует.");
             try
@@ -20,7 +21,7 @@ namespace IpaDesktop
                 var source = await Task.Run(() => IpaMetadata.ReadDetails(file.Path), ct);
                 string platformError = AppCompatibility.BlockReason(source, null);
                 if (platformError != null) throw new IOException(platformError);
-                var info = await client.ReadDeviceAsync(device, ct);
+                var info = await readiness.EnsureAsync(device, progress, ct);
                 string ios; info.TryGetValue("ProductVersion", out ios);
                 string reason = AppCompatibility.BlockReason(source, ios);
                 if (reason != null) throw new IOException(reason);
@@ -32,10 +33,17 @@ namespace IpaDesktop
                     if (String.IsNullOrEmpty(details.MinimumOS) || details.Platforms == null || details.Platforms.Length == 0 || String.IsNullOrEmpty(ios))
                         Log("Совместимость " + file.DisplayName + ": часть метаданных недоступна; окончательную проверку выполнит iPhone.");
                     ct.ThrowIfCancellationRequested();
-                    await client.InstallAsync(device, package, ct);
+                    try { await client.InstallAsync(device, package, ct); }
+                    catch(DeviceConnectionException connection) when(connection.Failure.Code is FailureCode.Pairing or FailureCode.TrustPending or FailureCode.Locked)
+                    {
+                        // The first attempt failed at the handshake. Repair and retry this IPA exactly once.
+                        await readiness.EnsureAsync(device, progress, ct, true);
+                        await client.InstallAsync(device, package, ct);
+                    }
                 }
             }
             catch (OperationCanceledException) { throw; }
+            catch (DeviceConnectionException) { throw; }
             catch (Exception e)
             {
                 if (!device.Network) throw;

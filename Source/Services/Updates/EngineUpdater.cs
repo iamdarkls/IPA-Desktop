@@ -20,7 +20,7 @@ namespace IpaDesktop
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";
         public const string WindowsAssetName = "windows_amd64_ipatool-cpp.zip";
-        static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
+        static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
         /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
         public static Asset SelectAsset(Release release)
         {
@@ -58,7 +58,7 @@ namespace IpaDesktop
         {
             if (!HasDeviceTools(root) || !Directory.Exists(Path.Combine(root, "LICENSES")) || !File.Exists(Path.Combine(root, "sources.json"))) throw new IOException("Неполный комплект: нужны утилиты, DLL, лицензии и исходные ревизии.");
             var names = Directory.GetFiles(root, "*.exe", SearchOption.AllDirectories).Select(Path.GetFileName).ToArray();
-            if (names.Length != 3 || DeviceFiles.Take(3).Any(name => !names.Contains(name))) throw new IOException("Комплект содержит неожиданные программы.");
+            if (names.Length != 4 || DeviceFiles.Take(4).Any(name => !names.Contains(name))) throw new IOException("Комплект содержит неожиданные программы.");
         }
 
         readonly SettingsStore store;
@@ -289,7 +289,7 @@ namespace IpaDesktop
         async Task ValidateDeviceTools(string root, CancellationToken ct)
         {
             if (!HasDeviceTools(root)) throw new IOException("Неполный комплект инструментов для iPhone.");
-            foreach (var name in DeviceFiles.Take(3))
+            foreach (var name in DeviceFiles.Take(4))
             {
                 var file = Directory.GetFiles(root, name, SearchOption.AllDirectories).Single();
                 using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
