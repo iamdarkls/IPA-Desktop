@@ -2,8 +2,11 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 
 namespace IpaDesktop
 {
@@ -20,13 +23,13 @@ namespace IpaDesktop
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var title = new TextBox { Text = name, MaxLength = 64, Margin = new Thickness(0, 0, 0, 12) };
             title.Name = "DraftName"; grid.Children.Add(title);
-            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = draft, DisplayMemberPath = "Name" };
-            list.Style = (Style)owner.FindResource("SetList"); list.Name = "DraftApps";
+            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = draft, DisplayMemberBinding = new Avalonia.Data.Binding("Name") };
+            list.Name = "DraftApps";
             Grid.SetRow(list, 1); grid.Children.Add(list);
             var bottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
             var hint = new TextBlock { Text = "Клик — отметить приложение. Новые приложения добавляются в набор через поиск.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
             var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-            status.Foreground = System.Windows.Media.Brushes.Salmon;
+            status.Foreground = Avalonia.Media.Brushes.Salmon;
             var buttons = new WrapPanel();
             var remove = new Button { Content = "Убрать отмеченные" }; remove.Name = "DraftRemove";
             remove.Click += delegate { foreach (var item in list.SelectedItems.Cast<AppRow>().ToArray()) draft.Remove(item); };
@@ -36,7 +39,7 @@ namespace IpaDesktop
                 try
                 {
                     save(title.Text.Trim(), draft.ToArray());
-                    dialog.DialogResult = true;
+                    dialog.Close(true);
                 }
                 catch (Exception e) { status.Text = e.Message; }
             };

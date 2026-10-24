@@ -1,10 +1,14 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 namespace IpaDesktop
 {
     /// <summary>Таблица версий с ручным ID, выборочной загрузкой метаданных и прерываемыми запросами.</summary>
@@ -19,12 +23,12 @@ namespace IpaDesktop
         readonly TextBlock status;
         readonly TextBox manual;
         readonly Button details, add, insert, cancel;
-        readonly List<AppVersionRow> rows;
+        readonly ObservableCollection<AppVersionRow> rows;
         readonly AppVersions service;
         readonly string appId;
         public AppVersionWindow(Window owner, string name, string appId, List<AppVersionRow> rows, AppVersions service, CancellationToken ct)
         {
-            this.appId = appId; this.rows = rows; this.service = service;
+            this.appId = appId; this.rows = new ObservableCollection<AppVersionRow>(rows); this.service = service;
             lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
             SelectedIDs = new List<string>();
             Window = AppDialogs.Create(owner, "Версии — " + name, 920, 610); Window.MinWidth = 750; Window.MinHeight = 470;
@@ -35,13 +39,13 @@ namespace IpaDesktop
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var heading = new TextBlock { Text = "Выберите несколько версий (Ctrl / Shift). Сведения запрашиваются только по кнопке, до 20 версий за раз.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,12) };
             layout.Children.Add(heading);
-            grid = new DataGrid { AutoGenerateColumns = false, IsReadOnly = true, CanUserAddRows = false, SelectionMode = DataGridSelectionMode.Extended, EnableRowVirtualization = true, EnableColumnVirtualization = false, ItemsSource = rows };
+            grid = new DataGrid { AutoGenerateColumns = false, IsReadOnly = true, SelectionMode = DataGridSelectionMode.Extended, ItemsSource = this.rows };
             foreach (var column in new[] { new[] { "ID версии", "ID", "135" }, new[] { "Версия", "Version", "100" }, new[] { "Мин. ОС", "MinimumOS", "90" }, new[] { "Платформы", "Platforms", "135" }, new[] { "Состояние", "State", "280" } })
                 grid.Columns.Add(new DataGridTextColumn { Header = column[0], Binding = new Binding(column[1]), Width = new DataGridLength(Int32.Parse(column[2])) });
             Grid.SetRow(grid,1);layout.Children.Add(grid);
             var input = new DockPanel { Margin = new Thickness(0,12,0,0) };
             insert = new Button { Content = "Добавить ID в таблицу", Margin = new Thickness(8,0,0,0) };DockPanel.SetDock(insert,Dock.Right);input.Children.Add(insert);
-            manual = new TextBox { ToolTip = "Один или несколько ID версий через запятую или пробел", MinWidth = 150 };input.Children.Add(manual);Grid.SetRow(input,2);layout.Children.Add(input);
+            manual = new TextBox { PlaceholderText = "ID версий через запятую или пробел", MinWidth = 150 };input.Children.Add(manual);Grid.SetRow(input,2);layout.Children.Add(input);
             var footer = new StackPanel { Margin = new Thickness(0,10,0,0) };
             status = new TextBlock { Text = "Версий: " + rows.Count + ". Можно ввести известный ID вручную; доступность проверит Apple.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) };footer.Children.Add(status);
             var actions = new WrapPanel();details = new Button { Content = "Получить сведения" }; add = new Button { Content = "Добавить выбранные в очередь" };cancel = new Button { Content = "Закрыть" };
@@ -54,10 +58,10 @@ namespace IpaDesktop
                     var ids = AppVersions.ParseManual(manual.Text);grid.SelectedItems.Clear();
                     foreach(var id in ids)
                     {
-                        var row=rows.FirstOrDefault(x=>x.ID==id);
-                        if(row==null){row=new AppVersionRow{ID=id};rows.Insert(0,row);}
+                        var row=this.rows.FirstOrDefault(x=>x.ID==id);
+                        if(row==null){row=new AppVersionRow{ID=id};this.rows.Insert(0,row);}
                     }
-                    grid.Items.Refresh();foreach(var row in rows.Where(x=>ids.Contains(x.ID)))grid.SelectedItems.Add(row);
+                    foreach(var row in this.rows.Where(x=>ids.Contains(x.ID)))grid.SelectedItems.Add(row);
                     manual.Text="";status.Text="Добавлено ID: "+ids.Count+". Можно запросить сведения или добавить в очередь.";Refresh();
                 }
                 catch(ArgumentException e){status.Text=e.Message;}
@@ -76,16 +80,16 @@ namespace IpaDesktop
                         try { await service.ReadAsync(appId,row,operation.Token); }
                         catch(OperationCanceledException){throw;}
                         catch(Exception e){row.State=e.Message.Length>240?e.Message.Substring(0,240):e.Message;}
-                        grid.Items.Refresh();
+
                     }
                     status.Text="Обработано версий: "+selected.Count+". Неизвестные данные не подтверждают совместимость с iPhone.";
                 }
                 catch(OperationCanceledException){status.Text="Запрос отменён. Полученные сведения сохранены в таблице.";}
                 finally{loading=false;operation.Dispose();operation=null;Refresh();if(closing)Window.Close();}
             };
-            add.Click+=delegate {SelectedIDs=grid.SelectedItems.Cast<AppVersionRow>().Select(x=>x.ID).ToList();Window.DialogResult=true;};
+            add.Click+=delegate {SelectedIDs=grid.SelectedItems.Cast<AppVersionRow>().Select(x=>x.ID).ToList();Window.Close(true);};
             cancel.Click+=delegate{if(loading)operation.Cancel();else Window.Close();};
-            Window.Closing+=delegate(object sender,System.ComponentModel.CancelEventArgs e){if(loading){closing=true;e.Cancel=true;operation.Cancel();}};
+            Window.Closing+=delegate(object sender,WindowClosingEventArgs e){if(loading){closing=true;e.Cancel=true;operation.Cancel();}};
             Refresh();
         }
         void Refresh()

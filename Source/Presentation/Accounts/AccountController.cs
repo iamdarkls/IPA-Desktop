@@ -6,9 +6,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 using Microsoft.Win32;
 
 namespace IpaDesktop
@@ -21,26 +24,25 @@ namespace IpaDesktop
         {
             On("Login", delegate
             {
-                Work("Вход в Apple Account…", delegate(CancellationToken ct)
+                Work("Вход в Apple Account…", async delegate(CancellationToken ct)
                 {
                     using (var login = new AppleLoginWindow(w, engine.AppleLogin, ct))
                     {
-                        if (login.Window.ShowDialog() != true) throw new OperationCanceledException();
+                        if (!await login.Window.ShowDialog<bool>(w)) throw new OperationCanceledException();
                         signedIn = true;
                         view.RegisterPrivate(login.SignedInEmail);
                         C<TextBlock>("AccountLabel").Text = login.SignedInEmail;
                         Log("Вход в Apple Account подтверждён.");
                     }
-                    return Task.FromResult(0);
                 });
             });
             On("AccountInfo", delegate
             {
                 Work("Проверка аккаунта…", Account);
             });
-            On("Logout", delegate
+            OnAsync("Logout", async delegate
             {
-                if (MessageBox.Show(w, "Выйти из текущей сессии ipatool? Это завершит сохранённую сессию ipatool.", "Выход", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+                if (!await AppDialogs.Confirm(w, "Выход", "Выйти из текущей сессии ipatool?")) return;
                 Work("Выход…", async delegate(CancellationToken ct)
                 {
                     Engine.Ensure(await engine.Tool(new[]

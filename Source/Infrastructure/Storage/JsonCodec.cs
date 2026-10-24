@@ -1,43 +1,78 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Diagnostics;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Net;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.IO.Compression;
-using System.Web.Script.Serialization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-namespace IpaDesktop
+namespace IpaDesktop;
+
+/// <summary>Preserves the previous JSON field names and untyped dictionary/array contracts.</summary>
+public static class JsonCodec
 {
-    /// <summary>Единая обёртка JSON-сериализации для совместимости с .NET Framework без внешних пакетов.</summary>
-    public static class JsonCodec
+    static readonly JsonSerializerOptions Options = CreateOptions();
+    static readonly StorageJsonContext Context = new StorageJsonContext(Options);
+    static JsonSerializerOptions CreateOptions()
     {
-        static JavaScriptSerializer Serializer
+        var options = new JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true, MaxDepth = 128 };
+        options.Converters.Add(new UntypedConverter());
+        return options;
+    }
+    public static string Serialize(object value) => JsonSerializer.Serialize(value, value?.GetType() ?? typeof(object), Context);
+    public static T Deserialize<T>(string value)
+    {
+        if (value == null || value.Length > 16000000) throw new JsonException("Invalid JSON size.");
+        return (T)JsonSerializer.Deserialize(value, typeof(T), Context);
+    }
+    public static object DeserializeObject(string value) => Deserialize<object>(value);
+    sealed class UntypedConverter : JsonConverter<object>
+    {
+        public override object Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
         {
-            get
-            {
-                return new JavaScriptSerializer
-                {
-                    MaxJsonLength = 16000000
-                };
-            }
+            using var document = JsonDocument.ParseValue(ref reader);
+            return Convert(document.RootElement);
         }
-        public static string Serialize(object value)
+        static object Convert(JsonElement element) => element.ValueKind switch
         {
-            return Serializer.Serialize(value);
+            JsonValueKind.Object => Dictionary(element),
+            JsonValueKind.Array => Array(element),
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt64(out var number) ? (object)number : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+        static Dictionary<string, object> Dictionary(JsonElement element)
+        {
+            var result = new Dictionary<string, object>(StringComparer.Ordinal);
+            foreach (var property in element.EnumerateObject()) result[property.Name] = Convert(property.Value);
+            return result;
         }
-        public static T Deserialize<T> (string value)
+        static object[] Array(JsonElement element)
         {
-            return Serializer.Deserialize<T> (value);
+            var result = new List<object>();
+            foreach (var item in element.EnumerateArray()) result.Add(Convert(item));
+            return result.ToArray();
         }
-        public static object DeserializeObject(string value)
+        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
         {
-            return Serializer.DeserializeObject(value);
+            if (value.GetType() == typeof(object)) { writer.WriteStartObject(); writer.WriteEndObject(); }
+            else JsonSerializer.Serialize(writer, value, value.GetType(), Context);
         }
     }
 }
+
+[JsonSourceGenerationOptions(IncludeFields = true, PropertyNameCaseInsensitive = true, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(State))]
+[JsonSerializable(typeof(Release))]
+[JsonSerializable(typeof(Release[]))]
+[JsonSerializable(typeof(List<AppSet>))]
+[JsonSerializable(typeof(AppSet[]))]
+[JsonSerializable(typeof(Dictionary<string,object>))]
+[JsonSerializable(typeof(object[]))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(object))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(double))]
+internal partial class StorageJsonContext : JsonSerializerContext { }

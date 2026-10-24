@@ -1,6 +1,13 @@
 ﻿param([Parameter(Mandatory=$true)][string]$Stage,[Parameter(Mandatory=$true)][string]$Target,[int]$ParentId=0,[switch]$NoRestart)
 $ErrorActionPreference='Stop'
-$files=@('IPA-Desktop.exe','IPA-Desktop.exe.config','MainWindow.xaml','Build.cmd','Start.cmd','README.md','LICENSE.txt','Docs/ARCHITECTURE.md','Assets/App.ico','Assets/App.svg','Scripts/Update-App.ps1','Scripts/Sync-Sources.ps1','Scripts/Resources.rsp','Generated/Core.cs','Generated/App.cs','Generated/IpaMetadata.cs','Generated/WindowTheme.cs','Generated/GuiUpdater.cs','Tests/Verify.ps1','Tests/Verify-IpaMetadata.ps1','Tests/Verify-Updater.ps1','Tests/Verify-Design.ps1','Tests/Verify-Services.ps1','Tests/Verify-AppleLogin.ps1', 'Tests/Verify-Engine.ps1','Tests/Verify-WorkflowFeatures.ps1','Tests/Verify-Layout.ps1','Tests/Fixtures/Legacy-Update-App.ps1')
+$manifest=Join-Path $Stage 'package-files.json'
+$files=@(Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json)
+if($files.Count -eq 0 -or $files -notcontains 'IPA-Desktop.exe' -or $files -notcontains 'package-files.json'){throw 'Invalid package manifest'}
+$seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach($file in $files){
+ if([string]::IsNullOrWhiteSpace($file) -or [IO.Path]::IsPathRooted($file) -or $file -match '(^|[\\/])\.\.?([\\/]|$)' -or $file.Contains(':') -or !$seen.Add($file)){throw 'Unsafe or duplicate package path'}
+}
+
 $backup=Join-Path (Split-Path $Stage -Parent) 'backup'
 $changed=New-Object 'System.Collections.Generic.List[string]'
 $backedUp=New-Object 'System.Collections.Generic.HashSet[string]'

@@ -10,7 +10,6 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.IO.Compression;
-using System.Web.Script.Serialization;
 
 namespace IpaDesktop
 {

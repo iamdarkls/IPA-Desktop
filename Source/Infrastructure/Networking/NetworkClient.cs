@@ -10,7 +10,6 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.IO.Compression;
-using System.Web.Script.Serialization;
 
 namespace IpaDesktop
 {
@@ -21,7 +20,6 @@ namespace IpaDesktop
         /// <summary>Создаёт клиент с заданным временем ожидания и User-Agent текущей версии приложения.</summary>
         static HttpClient CreateHttp()
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var h = new HttpClient();
             h.Timeout = TimeSpan.FromMinutes(15);
             h.DefaultRequestHeaders.UserAgent.ParseAdd("IPA-Desktop/" + AppInfo.Version);

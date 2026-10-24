@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><IsTestProject>true</IsTestProject><OutputType>Exe</OutputType><IsPackable>false</IsPackable><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../IPA-Desktop.csproj" />
+    <ProjectReference Include="../LoginFixture/LoginFixture.csproj" ReferenceOutputAssembly="false" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.4" />
+    <None Include="metadata-fixtures.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,7 +1,8 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Windows.Controls;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 namespace IpaDesktop
 {
     /// <summary>Отображает место на диске и кандидатов на очистку, используя общий снимок локальных IPA.</summary>

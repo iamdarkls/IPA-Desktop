@@ -6,10 +6,15 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
-using Microsoft.Win32;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
+using Avalonia.Platform;
+using Avalonia.Platform.Storage;
+using Avalonia.Media.Imaging;
 
 namespace IpaDesktop
 {
@@ -83,9 +88,9 @@ namespace IpaDesktop
                 (lastReport.Kind == "Скачивание" ? C<Button>("RetryDownloads").IsEnabled : C<Button>("RetryInstalls").IsEnabled);
             C<Button>("ShowLastReport").IsEnabled = lastReport != null;
         }
-        internal T C<T>(string name) where T : class
+        internal T C<T>(string name) where T : Control
         {
-            return w.FindName(name) as T;
+            return w.FindControl<T>(name) ?? throw new InvalidOperationException("Missing UI control: " + name);
         }
         /// <summary>Подключает действие к кнопке и передаёт исключения в общий обработчик интерфейса.</summary>
         internal void On(string name, Action action)
@@ -101,8 +106,19 @@ namespace IpaDesktop
                 }
             };
         }
+        internal async void RunAsyncCommand(Func<Task> action)
+        {
+            try { await action(); } catch (Exception error) { Error(error); }
+        }
+        internal void OnAsync(string name, Func<Task> action)
+        {
+            C<Button>(name).Click += async delegate
+            {
+                try { await action(); } catch (Exception error) { Error(error); }
+            };
+        }
         readonly BufferedJournal journalBuffer = new BufferedJournal();
-        System.Windows.Threading.DispatcherTimer journalTimer;
+        Avalonia.Threading.DispatcherTimer journalTimer;
         readonly object privateGate = new object();
         readonly HashSet<string> reportPrivateValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Запоминает значения для удаления из диагностического отчёта с ограничением размера набора.</summary>
@@ -121,7 +137,7 @@ namespace IpaDesktop
         {
             activeReport = new OperationReport { Kind = kind, Total = total };
             noticeRetry = retry;
-            C<Border>("OperationNotice").Visibility = Visibility.Collapsed;
+            C<Border>("OperationNotice").IsVisible = false;
         }
         internal void ReportItem(string name, Exception error)
         {
@@ -132,13 +148,13 @@ namespace IpaDesktop
             if (lastReport == null) return;
             var names = String.Join(", ", lastReport.Items.Where(x => !x.Success).Take(1).Select(x => x.Name + ": " + x.ShortError));
             C<TextBlock>("NoticeText").Text = lastReport.Summary + (names.Length == 0 ? "" : " · " + names);
-            C<TextBlock>("NoticeText").ToolTip = lastReport.Details;
+            ToolTip.SetTip(C<TextBlock>("NoticeText"), lastReport.Details);
             bool errors = lastReport.Failed > 0;
             var notice = C<Border>("OperationNotice");
-            notice.Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(errors ? "#38232C" : lastReport.Canceled ? "#383122" : "#173529"));
-            notice.BorderBrush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(errors ? "#E17B8B" : lastReport.Canceled ? "#D7BC79" : "#6AB893"));
-            C<Button>("NoticeRetry").Visibility = errors && noticeRetry != null ? Visibility.Visible : Visibility.Collapsed;
-            notice.Visibility = Visibility.Visible;
+            notice.Background = new Avalonia.Media.SolidColorBrush((Avalonia.Media.Color)Avalonia.Media.Color.Parse(errors ? "#38232C" : lastReport.Canceled ? "#383122" : "#173529"));
+            notice.BorderBrush = new Avalonia.Media.SolidColorBrush((Avalonia.Media.Color)Avalonia.Media.Color.Parse(errors ? "#E17B8B" : lastReport.Canceled ? "#D7BC79" : "#6AB893"));
+            C<Button>("NoticeRetry").IsVisible = errors && noticeRetry != null;
+            notice.IsVisible = true;
             ApplyActions();
         }
 
@@ -162,7 +178,7 @@ namespace IpaDesktop
         {
             C<TextBlock>("OperationDetail").Text = queueProgress.StatusText;
             C<TextBlock>("TransferDetail").Text = queueProgress.TransferText;
-            C<TextBlock>("OperationDetail").ToolTip = queueProgress.Text;
+            ToolTip.SetTip(C<TextBlock>("OperationDetail"), queueProgress.Text);
             if (!queueProgress.Active) return;
             C<ProgressBar>("Progress").IsIndeterminate = busy && queueProgress.Indeterminate;
             C<ProgressBar>("Progress").Value = queueProgress.Value;
@@ -270,39 +286,19 @@ namespace IpaDesktop
         }
         public Desktop(Engine backend, bool checkAtStartup, string assetDirectory)
         {
-            InstallationLayout.Ensure(assetDirectory);
-            using (var stream = File.OpenRead(Path.Combine(assetDirectory, "MainWindow.xaml"))) w = (Window) XamlReader.Load(stream);
-            journalTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, w.Dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(150)
-            };
+            w = new MainWindow();
+            journalTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             JournalView.Attach(C<TextBox>("Journal"), journalBuffer);
-            journalTimer.Tick += delegate
-            {
-                FlushJournal();
-                if (busy) RenderQueue();
-            };
+            journalTimer.Tick += delegate { FlushJournal(); if (busy) RenderQueue(); };
             journalTimer.Start();
-            w.Closed += delegate
+            w.Closed += delegate { journalTimer.Stop(); };
+            w.Opened += delegate
             {
-                journalTimer.Stop();
+                var screen = w.Screens.ScreenFromWindow(w);
+                if (screen != null) w.Height = Math.Min(w.Height, Math.Max(w.MinHeight, screen.WorkingArea.Height / screen.Scaling));
             };
-            w.SourceInitialized += delegate
-            {
-                // На небольшом экране сохраняем прежний минимум; увеличенную высоту ограничиваем рабочей областью.
-                w.Height = Math.Min(w.Height, Math.Max(w.MinHeight, SystemParameters.WorkArea.Height));
-                WindowTheme.Apply(w);
-            };
-            w.Activated += delegate
-            {
-                WindowTheme.Apply(w);
-            };
-            using (var icon = File.OpenRead(Path.Combine(assetDirectory, "Assets", "App.ico")))
-            {
-                var decoder = new System.Windows.Media.Imaging.IconBitmapDecoder(icon, System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-                w.Icon = decoder.Frames[0];
-                C<Image>("BrandIcon").Source = decoder.Frames[decoder.Frames.Count - 1];
-            }
+            using (var icon = AssetLoader.Open(new Uri("avares://IPA-Desktop/Assets/App.ico"))) w.Icon = new WindowIcon(icon);
+            using (var icon = AssetLoader.Open(new Uri("avares://IPA-Desktop/Assets/App.ico"))) C<Image>("BrandIcon").Source = new Bitmap(icon);
             engine = backend ?? new Engine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop"));
             engine.Log = Log;
             engine.Progress = delegate(double value)
@@ -310,7 +306,7 @@ namespace IpaDesktop
                 long now = Stopwatch.GetTimestamp();
                 if (value < 100 && (now - lastProgress) / (double) Stopwatch.Frequency < 0.15) return;
                 lastProgress = now;
-                w.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     C < ProgressBar >("Progress").IsIndeterminate = false;
                     C < ProgressBar >("Progress").Value = value;
@@ -324,19 +320,19 @@ namespace IpaDesktop
             appSets = new AppSetsController(this, engine);
             StateView();
             RefreshFiles();
-            Action showReport = delegate
+            Func<Task> showReport = async delegate
             {
-                if (lastReport != null) AppDialogs.ShowText(w.OwnedWindows.Cast<Window>().FirstOrDefault(x => x.IsActive) ?? w, "Итог операции", lastReport.Details);
+                if (lastReport != null) await AppDialogs.ShowText(w, "Итог операции", lastReport.Details);
             };
-            On("ShowLastReport", showReport);
-            On("NoticeDetails", showReport);
-            On("DismissNotice", delegate { C<Border>("OperationNotice").Visibility = Visibility.Collapsed; });
+            OnAsync("ShowLastReport", showReport);
+            OnAsync("NoticeDetails", showReport);
+            On("DismissNotice", delegate { C<Border>("OperationNotice").IsVisible = false; });
             On("NoticeRetry", delegate { if (!busy && noticeRetry != null) noticeRetry(); });
             On("Cancel", delegate
             {
                 if (cancellation != null) cancellation.Cancel();
             });
-            On("ExportDiagnostics", delegate
+            OnAsync("ExportDiagnostics", async delegate
             {
                 JournalView.Flush(C<TextBox>("Journal"), journalBuffer, true);
                 List<string> privateValues;
@@ -346,9 +342,14 @@ namespace IpaDesktop
                 if (email.Contains("@")) privateValues.Add(email);
                 foreach (var device in C<ComboBox>("DeviceList").Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
                 var report = DiagnosticReport.Create(C<TextBox>("Journal").Text, engine.Settings.Version ?? "not installed", engine.Settings.DeviceVersion ?? "not installed", privateValues);
-                var dialog = new SaveFileDialog { Filter = "Текстовый отчёт (*.txt)|*.txt", FileName = "IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt" };
-                if (dialog.ShowDialog(w) != true) return;
-                File.WriteAllText(dialog.FileName, report, Encoding.UTF8);
+                var file = await w.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+                {
+                    Title = "Экспорт диагностики", SuggestedFileName = "IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt",
+                    FileTypeChoices = new[] { new FilePickerFileType("Текстовый отчёт") { Patterns = new[] { "*.txt" } } }
+                });
+                if (file == null) return;
+                await using (var stream = await file.OpenWriteAsync())
+                using (var writer = new StreamWriter(stream, Encoding.UTF8)) await writer.WriteAsync(report);
                 Log("Отчёт диагностики сохранён.");
             });
             On("OpenFolder", delegate
@@ -358,12 +359,12 @@ namespace IpaDesktop
                     UseShellExecute = true
                 });
             });
-            w.Closing += delegate(object sender, System.ComponentModel.CancelEventArgs e)
+            w.Closing += delegate(object sender, WindowClosingEventArgs e)
             {
                 if (busy)
                 {
                     e.Cancel = true;
-                    MessageBox.Show(w, "Сначала отмените текущую операцию и дождитесь её завершения.", "Выполняется операция");
+                    C<TextBlock>("Status").Text = "Сначала отмените текущую операцию и дождитесь её завершения.";
                 }
                 else if (!closingAfterDeviceScan && files.IsDetecting)
                 {
@@ -372,7 +373,7 @@ namespace IpaDesktop
                     w.IsEnabled = false;
                     files.StopDeviceDetection();
                     // Defer the second Close until this Closing event has returned and CLI cleanup is complete.
-                    w.Dispatcher.BeginInvoke(new Action(async delegate
+                    Dispatcher.UIThread.Post(new Action(async delegate
                     {
                         await files.PauseDeviceDetectionAsync();
                         w.Close();
@@ -380,7 +381,7 @@ namespace IpaDesktop
                 }
             };
             ApplyActions();
-            w.Loaded += delegate
+            w.Opened += delegate
             {
                 Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + engine.Downloads);
                 if (!checkAtStartup) return;
@@ -441,28 +442,5 @@ namespace IpaDesktop
                 });
             };
         }
-        /// <summary>Создаёт единственный экземпляр приложения и запускает цикл сообщений WPF.</summary>
-        [STAThread] public static void Main()
-        {
-            bool created;
-            using (var mutex = new Mutex(true, "Local\\IPA-Desktop-0.1", out created))
-            {
-                if (!created)
-                {
-                    MessageBox.Show("IPA Desktop уже запущен.");
-                    return;
-                }
-                try
-                {
-                    var app = new Application();
-                    var desktop = new Desktop();
-                    app.Run(desktop.w);
-                } catch (Exception e)
-                {
-                    MessageBox.Show(e.ToString(), "Ошибка запуска IPA Desktop");
-                }
-            }
-        }
     }
 }
-

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>IPA-Desktop</AssemblyName>
+    <RootNamespace>IpaDesktop</RootNamespace>
+    <StartupObject>IpaDesktop.Program</StartupObject>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon>Assets/App.ico</ApplicationIcon>
+    <Version>0.3.0</Version>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+    <PackageReference Include="System.Windows.Extensions" Version="10.0.0" />
+    <Compile Include="Source/**/*.cs" />
+    <AvaloniaResource Include="Assets/**" />
+    <EmbeddedResource Include="package-files.json" LogicalName="IpaDesktop.PackageFiles.json" />
+    <TrimmerRootAssembly Include="IPA-Desktop" />
+    <TrimmerRootAssembly Include="Avalonia.Base" />
+    <TrimmerRootAssembly Include="Avalonia.Controls" />
+    <TrimmerRootAssembly Include="Avalonia.Controls.DataGrid" />
+  </ItemGroup>
+</Project>

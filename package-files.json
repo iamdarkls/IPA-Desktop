@@ -1,0 +1,10 @@
+[
+  "IPA-Desktop.exe",
+  "README.md",
+  "LICENSE.txt",
+  "Docs/ARCHITECTURE.md",
+  "Scripts/Update-App.ps1",
+  "Assets/App.ico",
+  "Assets/App.svg",
+  "package-files.json"
+]
