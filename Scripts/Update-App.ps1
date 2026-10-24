@@ -1,7 +1,7 @@
 ﻿param([Parameter(Mandatory=$true)][string]$Stage,[Parameter(Mandatory=$true)][string]$Target,[int]$ParentId=0,[switch]$NoRestart)
 $ErrorActionPreference='Stop'
 $manifest=Join-Path $Stage 'package-files.json'
-$files=@(Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json)
+[string[]]$files=Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
 if($files.Count -eq 0 -or $files -notcontains 'IPA-Desktop.exe' -or $files -notcontains 'package-files.json'){throw 'Invalid package manifest'}
 $seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach($file in $files){

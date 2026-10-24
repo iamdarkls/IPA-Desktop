@@ -9,7 +9,7 @@ try {
  [IO.Directory]::CreateDirectory($legacy)|Out-Null
  [IO.Directory]::CreateDirectory($data)|Out-Null
  [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $Archive),$stage)
- $oldFiles=@(Get-Content (Join-Path $projectRoot 'Tests/Fixtures/legacy-package-files.json') -Raw|ConvertFrom-Json)
+ [string[]]$oldFiles=Get-Content (Join-Path $projectRoot 'Tests/Fixtures/legacy-package-files.json') -Raw|ConvertFrom-Json
  foreach($file in $oldFiles){
   $source=Join-Path $stage $file
   Assert ((Get-Item -LiteralPath $source).Length -gt 0 -and (Get-Item -LiteralPath $source).Length -le 32MB) "Legacy extraction limit: $file"
@@ -42,7 +42,7 @@ try {
  $nextStage=Join-Path $temp 'next-update/stage'
  [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $Archive),$nextStage)
  & (Join-Path $projectRoot 'Scripts/Update-App.ps1') -Stage $nextStage -Target $legacy -NoRestart
- $manifest=@(Get-Content (Join-Path $stage 'package-files.json') -Raw|ConvertFrom-Json)
+ [string[]]$manifest=Get-Content (Join-Path $stage 'package-files.json') -Raw|ConvertFrom-Json
  foreach($file in $manifest){Assert ((Get-FileHash (Join-Path $stage $file)).Hash -eq (Get-FileHash (Join-Path $legacy $file)).Hash) "Modern update mismatch: $file"}
  Assert ([IO.File]::ReadAllText((Join-Path $legacy 'keep.ipa')) -eq 'keep') 'Modern updater modified user data'
  Write-Host 'PASS: 0.2.12 package limits, exact legacy helper, self-contained startup without DOTNET_ROOT, preserved settings/sets/IPA, modern update manifest'
