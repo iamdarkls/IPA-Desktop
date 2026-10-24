@@ -270,6 +270,7 @@ namespace IpaDesktop
         void RefreshChosen()
         {
             C<ItemsControl>("ChosenApps").ItemsSource = chosen.Snapshot();
+            C<ScrollViewer>("SearchSelection").IsVisible=chosen.Count>0;
             C<TextBlock>("ChosenCount").Text = chosen.Count == 0 ? "Добавьте приложения из результатов поиска" : "Выбрано: " + chosen.Count + " · сохраняются при новом поиске";
             C<Button>("Download").Content = "Скачать (" + chosen.Count + ")";
             if (chosen.Count == 0 && lastDownloads.Count > 0) C<TextBlock>("SearchSetStatus").Text = "Для набора: приложения последней загрузки (" + lastDownloads.Count + ").";

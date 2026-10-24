@@ -9,6 +9,7 @@ namespace IpaDesktop
     /// <summary>Фасад инструментов iPhone. Обнаружение, команды и установка разделены и доступны для независимых проверок.</summary>
     public sealed class DeviceService
     {
+        readonly DeviceReadiness readiness;
         readonly DeviceCommandClient client; readonly DeviceDiscovery discovery; readonly DeviceInstallation installation;
         Action<string> log;
         public Action<string> Log
@@ -18,13 +19,15 @@ namespace IpaDesktop
         }
         public DeviceService(IProcessRunner runner, ToolLocator locator)
         {
-            client = new DeviceCommandClient(runner, locator); discovery = new DeviceDiscovery(client); installation = new DeviceInstallation(client); Log = delegate { };
+            client = new DeviceCommandClient(runner, locator); discovery = new DeviceDiscovery(client); readiness = new DeviceReadiness(client); installation = new DeviceInstallation(client, readiness); Log = delegate { };
         }
         public Task<List<DeviceRow>> FindAsync(CancellationToken ct) { return discovery.FindAsync(ct); }
         public Task<List<DeviceRow>> FindAsync(bool includeWifi, CancellationToken ct) { return discovery.FindAsync(includeWifi, ct); }
         public Task<List<DeviceRow>> FindAsync(bool includeWifi, CancellationToken ct, Action<string> report) { return discovery.FindAsync(includeWifi, ct, report); }
         public Task<Dictionary<string, string>> ReadDeviceAsync(DeviceRow device, CancellationToken ct) { return client.ReadDeviceAsync(device, ct); }
+        public Task<Dictionary<string,string>> EnsureReadyAsync(DeviceRow device, Action<DeviceConnectionProgress> progress, CancellationToken ct) => readiness.EnsureAsync(device,progress,ct);
         public Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct) { return installation.InstallAsync(device, file, ct); }
+        public Task InstallAsync(DeviceRow device, LocalRow file, Action<DeviceConnectionProgress> progress, CancellationToken ct) => installation.InstallAsync(device,file,ct,progress);
         public static string[] Arguments(DeviceRow device, params string[] args) { return DeviceCommandClient.Arguments(device, args); }
         public async Task<string> DetailsAsync(DeviceRow device, CancellationToken ct)
         {

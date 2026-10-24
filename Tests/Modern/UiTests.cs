@@ -24,7 +24,7 @@ public sealed class UiTests
   var engine=new Engine(root,runner??new RecordingProcessRunner(),new InstalledAppleSupportProbe());
   engine.Settings.Current="test"; engine.Settings.CheckGuiUpdates=false;engine.Settings.AutoUpdate=false;engine.Settings.AutoUpdateDeviceTools=false;engine.Settings.SoundsEnabled=false;
   var bins=Path.Combine(root,"Versions/test/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"ipatool.exe","idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  foreach(var name in new[]{"ipatool.exe","idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
   return engine;
  }
  static bool Busy(Desktop desktop)=>(bool)typeof(Desktop).GetProperty("IsBusy",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(desktop);
@@ -49,8 +49,54 @@ public sealed class UiTests
     using var frame=window.CaptureRenderedFrame();Assert.NotNull(frame);using(var output=File.Create(Path.Combine(artifacts,"tab-"+i+".png"))) frame.Save(output, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
    }
    window.Width=940;window.Height=720;tabs.SelectedIndex=1;await Task.Delay(50);
-   Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed at minimum window size");
+   using(var small=window.CaptureRenderedFrame())using(var output=File.Create(Path.Combine(artifacts,"minimum.png")))small.Save(output,Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+   Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed: " + Find<DataGrid>(window,"Files").Bounds.Height);
    Assert.NotNull(Find<TextBlock>(window,"DeviceDetectionStatus"));
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact] public async Task ConnectionFailureBlocksRetryUntilExplicitSuccessfulCheck()
+ {
+  using var fixture=new PairingFixture();var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  try
+  {
+   var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
+   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;Click(window,"AddInstall");
+   Assert.True(Find<Button>(window,"InstallFiles").IsEnabled);
+   fixture.Runner.Pairing.Enqueue(("validate","No device found"));Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));
+   Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.True(Find<Button>(window,"CheckConnection").IsEnabled);Assert.Equal(0,fixture.Runner.Installs);
+   Assert.True(Find<Border>(window,"ConnectionNotice").IsVisible);Assert.Contains("Соединение",Find<TextBlock>(window,"ConnectionTitle").Text);
+   Assert.Contains("Что сделать",Find<TextBlock>(window,"NoticeRemedy").Text);
+   Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact] public async Task TrustRequestIsVisibleAndAutomaticallyCompletesAfterConfirmation()
+ {
+  using var fixture=new PairingFixture();fixture.Runner.WaitForTrust=true;var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  try
+  {
+   var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
+   Click(window,"CheckConnection");await Wait(()=>Find<TextBlock>(window,"ConnectionTitle").Text?.Contains("Подтвердите")==true);
+   Assert.True(Busy(desktop));Assert.True(Find<Button>(window,"Cancel").IsEnabled);Assert.Contains("Доверять",Find<TextBlock>(window,"ConnectionMessage").Text);
+   window.Width=940;window.Height=720;await Task.Delay(50);
+   var artifacts=Environment.GetEnvironmentVariable("IPA_TEST_ARTIFACTS");
+   if(artifacts != null){Directory.CreateDirectory(artifacts);using var frame=window.CaptureRenderedFrame();using var output=File.Create(Path.Combine(artifacts,"trust-request.png"));frame.Save(output,Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);}
+   fixture.Runner.Trusted=true;await Wait(()=>!Busy(desktop));Assert.Contains("готов",Find<TextBlock>(window,"ConnectionTitle").Text);Assert.Equal(0,fixture.Runner.Installs);
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact] public async Task CanceledTrustWaitKeepsInstallationBlockedUntilConnectionIsChecked()
+ {
+  using var fixture=new PairingFixture();fixture.Runner.WaitForTrust=true;var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  try
+  {
+   var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
+   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;Click(window,"AddInstall");
+   Click(window,"CheckConnection");await Wait(()=>Find<TextBlock>(window,"ConnectionTitle").Text?.Contains("Подтвердите")==true);
+   Click(window,"Cancel");await Wait(()=>!Busy(desktop));Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.Contains("отменена",Find<TextBlock>(window,"ConnectionTitle").Text);
+   Assert.Equal(0,fixture.Runner.Installs);fixture.Runner.Trusted=true;
+   Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
   }
   finally{window.Close();}
  }

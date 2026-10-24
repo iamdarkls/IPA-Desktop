@@ -13,5 +13,13 @@
     <Style Selector="DataGridRow:pointerover"><Setter Property="Background" Value="#243851"/></Style>
     <Style Selector="DataGridRow:selected"><Setter Property="Background" Value="#31577E"/></Style>
     <Style Selector="ListBox"><Setter Property="Background" Value="#101A29"/><Setter Property="BorderBrush" Value="#34445C"/><Setter Property="BorderThickness" Value="1"/></Style>
+    <Style Selector="Border.card"><Setter Property="Background" Value="#182436"/><Setter Property="BorderBrush" Value="#2D4159"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/></Style>
+    <Style Selector="Button.primary"><Setter Property="Background" Value="#367CE8"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="#4C8CF0"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#478CF7"/></Style>
+    <Style Selector="Button.danger"><Setter Property="Background" Value="#422D3A"/><Setter Property="Foreground" Value="#F2BCC7"/><Setter Property="BorderBrush" Value="#704154"/></Style>
+    <Style Selector="Button.compact"><Setter Property="FontSize" Value="12"/><Setter Property="Padding" Value="10,6"/><Setter Property="MinHeight" Value="30"/><Setter Property="Margin" Value="0,0,8,6"/></Style>
+    <Style Selector="TabControl"><Setter Property="Background" Value="Transparent"/></Style>
+    <Style Selector="TabItem:selected"><Setter Property="Foreground" Value="#B7D8FF"/></Style>
+    <Style Selector="DataGrid"><Setter Property="CornerRadius" Value="8"/><Setter Property="BorderThickness" Value="1"/></Style>
   </Application.Styles>
 </Application>

@@ -15,7 +15,22 @@ namespace IpaDesktop
         public Task<Result> NameAsync(DeviceRow device, CancellationToken ct, int seconds = 5) { return Probe(locator.Find("ideviceinfo*.exe"), Arguments(device, "-u", device.ID, "-k", "DeviceName"), ct, seconds); }
         public async Task InstallAsync(DeviceRow device, InstallationPackage package, CancellationToken ct)
         {
-            ToolResponse.Ensure(await runner.Run(locator.Find("ideviceinstaller*.exe"), Arguments(device, "--udid", device.ID, "install", package.RelativePath), ct, false, true, package.WorkingDirectory));
+            Ensure(await runner.Run(locator.Find("ideviceinstaller*.exe"), Arguments(device, "--udid", device.ID, "install", package.RelativePath), ct, false, true, package.WorkingDirectory));
+        }
+        static void Ensure(Result result, bool probe = false)
+        {
+            if(result.Code == 0) return;
+            var failure=ErrorLocalizer.Describe(result.Output);
+            if(probe && !failure.Connection) failure = new(FailureCode.Transport,"iPhone не подтвердил соединение","Проверка устройства завершилась ошибкой.","Разблокируйте выбранный iPhone, проверьте USB и доверие, затем нажмите «Проверить связь». Технический ответ доступен в журнале.");
+            if(failure.Connection) throw new DeviceConnectionException(failure,new IOException(result.Output));
+            ToolResponse.Ensure(result);
+        }
+        public Task<Result> PairAsync(DeviceRow device, string command, CancellationToken ct)
+        {
+            // idevicepair on stable builds pairs iPhones through USB. Never select a different transport/device.
+            if(device.Network) throw new DeviceConnectionException(ErrorLocalizer.Describe("Pairing is not possible over this connection"));
+            if(command != "validate" && command != "pair" && command != "unpair") throw new ArgumentException("Invalid pairing command");
+            return Probe(locator.Find("idevicepair*.exe"), Arguments(device,"-u",device.ID,command),ct,15);
         }
         public static string[] Arguments(DeviceRow device, params string[] args)
         {
@@ -27,11 +42,11 @@ namespace IpaDesktop
             using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
                 timeout.CancelAfter(TimeSpan.FromSeconds(seconds));
-                try { var result = await runner.Run(exe, args, timeout.Token, false, false); ToolResponse.Ensure(result); return result; }
+                try { var result = await runner.Run(exe, args, timeout.Token, false, false); Ensure(result,true); return result; }
                 catch (OperationCanceledException)
                 {
                     ct.ThrowIfCancellationRequested();
-                    throw new IOException("iPhone не ответил за " + seconds + " секунд. Разблокируйте телефон; проверьте USB либо Wi-Fi и доверие компьютеру.");
+                    throw new DeviceConnectionException(ErrorLocalizer.Describe("iPhone не ответил за " + seconds + " секунд"));
                 }
             }
         }
@@ -45,9 +60,9 @@ namespace IpaDesktop
                 if (split > 0) values[line.Substring(0, split).Trim()] = line.Substring(split + 1).Trim();
             }
             string actual;
-            if (values.TryGetValue("UniqueDeviceID", out actual) && !String.Equals(actual, device.ID, StringComparison.OrdinalIgnoreCase)) throw new IOException("Ответил другой iPhone. Повторите поиск устройств.");
+            if (!values.TryGetValue("UniqueDeviceID", out actual) || !String.Equals(actual, device.ID, StringComparison.OrdinalIgnoreCase)) throw new DeviceConnectionException(new(FailureCode.Transport,"Не удалось подтвердить выбранный iPhone","Ответ устройства не содержит ожидаемый UDID.","Переподключите выбранный iPhone и повторите проверку связи. Установка на другое устройство не выполнялась."));
             if (device.Network && (!values.TryGetValue("ProductType", out actual) || !actual.StartsWith("iPhone", StringComparison.Ordinal)))
-                throw new IOException("Не удалось подтвердить связь с выбранным iPhone по Wi-Fi. Разблокируйте телефон и проверьте сетевую синхронизацию.");
+                throw new DeviceConnectionException(ErrorLocalizer.Describe("не удалось подтвердить связь"));
             return values;
         }
     }

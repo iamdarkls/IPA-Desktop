@@ -20,6 +20,32 @@ namespace IpaDesktop
     public sealed class FilesController : WindowController
     {
         AppleSupportReport appleSupport;
+        readonly HashSet<string> blockedConnections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static string ConnectionKey(DeviceRow device) => device.ID + "|" + device.Network;
+        void ShowConnection(DeviceConnectionProgress state)
+        {
+            var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+            if(device != null)
+            {
+                if(state.WaitingForTrust) blockedConnections.Add(ConnectionKey(device));
+                if(state.Ready) blockedConnections.Remove(ConnectionKey(device));
+            }
+            C<Border>("ConnectionNotice").IsVisible=true;
+            C<TextBlock>("ConnectionTitle").Text=state.Title;
+            C<TextBlock>("ConnectionMessage").Text=state.Message;
+            C<TextBlock>("Status").Text=state.Title;
+        }
+        internal void ConnectionCanceled()
+        {
+            if(C<Border>("ConnectionNotice").IsVisible) ShowConnection(new("Операция отменена", "Очередь сохранена. Автоматического продолжения не будет; при необходимости проверьте связь и запустите оставшиеся IPA.",false));
+        }
+        async Task EnsureConnection(DeviceRow device, CancellationToken ct)
+        {
+            try { await engine.Devices.EnsureReadyAsync(device,ShowConnection,ct); blockedConnections.Remove(ConnectionKey(device));
+                ShowConnection(new("iPhone готов к установке", "Доверие подтверждено. Устройство: " + device.DisplayLabel,false,true)); }
+            catch(OperationCanceledException) { blockedConnections.Add(ConnectionKey(device));throw; }
+            catch(DeviceConnectionException error) { blockedConnections.Add(ConnectionKey(device)); ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false));throw; }
+        }
         readonly InstallationSelection installChosen = new InstallationSelection();
         readonly InstallationSelection failedInstalls = new InstallationSelection();
         List<LocalRow> allFiles = new List<LocalRow>();
@@ -70,6 +96,7 @@ namespace IpaDesktop
             };
             C<ComboBox>("DeviceList").SelectionChanged += delegate
             {
+                if(!busy) C<Border>("ConnectionNotice").IsVisible=false;
                 ApplyActions();
             };
             On("AddInstall", delegate
@@ -139,6 +166,11 @@ namespace IpaDesktop
             };
             OnAsync("WifiHelp", async delegate { await AppDialogs.ShowText(w, "Подключение iPhone по Wi-Fi",
                 "1. Подключите iPhone по USB и подтвердите доверие компьютеру.\n2. В Apple Devices включите «Показывать это устройство при подключении к Wi-Fi» и примените настройки. В iTunes — «Синхронизировать с этим iPhone по Wi-Fi».\n3. Подключите компьютер и iPhone к одной локальной сети, затем отключите USB.\n4. Включите «USB + Wi-Fi (экспериментально)»: список обновится автоматически. Выберите строку с отметкой Wi-Fi.\n\nЕсли телефон не найден: разблокируйте его, проверьте службу Apple Mobile Device, Bonjour, разрешения Apple в брандмауэре и отсутствие изоляции устройств в гостевой сети. VPN может мешать обнаружению.\n\nПри обрыве установка не переключается автоматически на USB. Проверьте результат на телефоне перед повтором."); });
+            On("CheckConnection", delegate
+            {
+                var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+                if(device != null) Work("Проверка связи и доверия…",ct=>EnsureConnection(device,ct));
+            });
             On("InstallFiles", delegate { StartInstall(installChosen.Snapshot()); });
             On("RetryInstalls", delegate { StartInstall(failedInstalls.Snapshot()); });
             On("ForgetInstallErrors", delegate { failedInstalls.Clear(); ApplyActions(); });
@@ -279,14 +311,24 @@ namespace IpaDesktop
             {
                 view.StartReport("Установка", rows.Count, delegate { StartInstall(failedInstalls.Snapshot()); });
                 await CheckSupport(ct);
+                await EnsureConnection(device,ct);
+                try
+                {
                 var result = await BatchRunner.Run(rows,
-                    (row, token) => engine.Devices.InstallAsync(device, row, token),
+                    (row, token) => engine.Devices.InstallAsync(device, row, ShowConnection, token),
                     (row, index) => { view.BeginQueue("Установка", index, rows.Count, row.DisplayName); Log("Установка " + row.DisplayName); },
                     row => { view.ReportItem(row.DisplayName, null); installChosen.Remove(row.Path); failedInstalls.Remove(row.Path); RefreshInstallChosen(); },
                     (row, error) => { view.ReportItem(row.DisplayName, error); failedInstalls.Add(row); Log("Ошибка установки " + row.DisplayName + ": " + error.Message); },
                     null, ct);
                 view.CompleteQueue(result.Succeeded, result.Failed.Count);
                 if (result.Failed.Count > 0) throw new Exception("Не удалось установить: " + String.Join(", ", result.Failed.Select(x => x.DisplayName)) + ". Кнопка «Повторить ошибки» повторит только эти IPA.");
+                }
+                catch(DeviceConnectionException error)
+                {
+                    blockedConnections.Add(ConnectionKey(device));
+                    ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false));
+                    throw;
+                }
             });
         }
         /// <summary>В подтверждении различает одноимённые копии разных версий и аккаунтов.</summary>
@@ -312,6 +354,9 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
+            var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+            bool connectionAvailable=device != null && !blockedConnections.Contains(ConnectionKey(device));
+            C<Button>("CheckConnection").IsEnabled=!busy && device != null;
             C<ComboBox>("FileAccount").IsEnabled = !busy;
             var chosenPaths = new HashSet<string>(installChosen.Snapshot().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
             C<Button>("SelectAllFiles").IsEnabled = !busy && visibleFiles.Any(x => !chosenPaths.Contains(x.Path));
@@ -320,7 +365,7 @@ namespace IpaDesktop
             C<Button>("WifiHelp").IsEnabled = !busy;
             C<Button>("FileInfo").IsEnabled = !busy && C<DataGrid>("Files").SelectedItems.Count == 1;
             C<Button>("DeviceInfo").IsEnabled = !busy && C<ComboBox>("DeviceList").SelectedItem != null;
-            C<Button>("RetryInstalls").IsEnabled = !busy && failedInstalls.Count > 0 && C<ComboBox>("DeviceList").SelectedItem != null;
+            C<Button>("RetryInstalls").IsEnabled = !busy && failedInstalls.Count > 0 && connectionAvailable;
             C<Button>("RetryInstalls").Content = "Повторить ошибки (" + failedInstalls.Count + ")";
             ToolTip.SetTip(C<Button>("RetryInstalls"), String.Join(Environment.NewLine, failedInstalls.Snapshot().Select(x => x.DisplayName)));
             C<Button>("ForgetInstallErrors").IsEnabled = !busy && failedInstalls.Count > 0;
@@ -329,7 +374,7 @@ namespace IpaDesktop
             C<Button>("DeleteFiles").IsEnabled = !busy && installChosen.Count > 0;
             C<Button>("DeleteFiles").Content = "Удалить выбранные IPA (" + installChosen.Count + ")";
             C<Button>("ClearInstall").IsEnabled = !busy && installChosen.Count > 0;
-            C<Button>("InstallFiles").IsEnabled = !busy && installChosen.Count > 0 && C<ComboBox>("DeviceList").SelectedItem != null;
+            C<Button>("InstallFiles").IsEnabled = !busy && installChosen.Count > 0 && connectionAvailable;
             C<ComboBox>("DeviceList").IsEnabled = !busy;
         }
         void RefreshInstallChosen()
@@ -339,6 +384,7 @@ namespace IpaDesktop
             int hidden = chosen.Count(x => !LocalFileAccounts.Matches(x, AccountKey));
             C<TextBlock>("InstallCount").Text = installChosen.Count == 0 ? "Двойной клик — выбрать IPA" : "Выбрано IPA: " + installChosen.Count + (hidden == 0 ? "" : " · вне фильтра: " + hidden);
             ToolTip.SetTip(C<TextBlock>("InstallCount"), "Установка и удаление используют все IPA в нижнем списке, включая выбранные у других аккаунтов.");
+            C<ScrollViewer>("InstallSelection").IsVisible=installChosen.Count > 0;
             C<Button>("InstallFiles").Content = "Установить (" + installChosen.Count + ")";
             ApplyActions();
         }

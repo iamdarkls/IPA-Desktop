@@ -37,6 +37,8 @@ internal static class PublishedSmoke
             await Task.Delay(100);
             desktop.C<Button>("AddChosen").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             if(desktop.C<ItemsControl>("ChosenApps").ItemCount!=1)throw new Exception("Published search/selection flow failed.");
+            if(ErrorLocalizer.Describe("Invalid HostID").Code != FailureCode.Pairing)throw new Exception("Published error localization failed.");
+            if(desktop.C<Button>("CheckConnection") == null || desktop.C<Border>("ConnectionNotice").IsVisible)throw new Exception("Published connection UI failed.");
             var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
             for(int index=0;index<tabs.ItemCount;index++)
             {

@@ -32,6 +32,7 @@ namespace IpaDesktop
                 if (error == null) { succeeded(item); result.Succeeded++; }
                 else { result.Failed.Add(item); failed(item, error); }
                 if (refreshed != null) refreshed();
+                if(error is DeviceConnectionException) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw(); // A shared connection failure stops the queue, not one failure per IPA.
             }
             return result;
         }

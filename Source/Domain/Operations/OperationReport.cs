@@ -11,6 +11,7 @@ namespace IpaDesktop
         public string Kind { get; set; }
         public int Total { get; set; }
         public bool Canceled { get; set; }
+        public string StopReason { get; set; }
         public readonly List<OperationOutcome> Items = new List<OperationOutcome>();
         public int Failed { get { return Items.Count(x => !x.Success); } }
         public int Succeeded { get { return Items.Count(x => x.Success); } }
@@ -18,7 +19,7 @@ namespace IpaDesktop
         {
             get
             {
-                return Kind + (Canceled ? " отменено" : Failed > 0 ? ": есть ошибки" : ": завершено") +
+                return Kind + (Canceled ? " отменено" : !String.IsNullOrEmpty(StopReason) ? ": очередь остановлена" : Failed > 0 ? ": есть ошибки" : ": завершено") +
                     " · готово " + Succeeded + "/" + Total + (Failed > 0 ? " · ошибок " + Failed : "");
             }
         }
@@ -27,7 +28,8 @@ namespace IpaDesktop
             get
             {
                 var text = new StringBuilder(Summary);
-                if (Canceled) text.AppendLine().Append("Не запущено или прервано: ").Append(Math.Max(0, Total - Items.Count));
+                if (!String.IsNullOrEmpty(StopReason)) text.AppendLine().Append(StopReason);
+                if (Canceled || !String.IsNullOrEmpty(StopReason)) text.AppendLine().Append("Не запущено или прервано: ").Append(Math.Max(0, Total - Items.Count));
                 foreach (var item in Items)
                 {
                     text.AppendLine().AppendLine().Append(item.Success ? "ГОТОВО: " : "ОШИБКА: ").Append(item.Name);
@@ -38,9 +40,10 @@ namespace IpaDesktop
         }
         public void Add(string name, Exception error)
         {
-            string message = error == null ? null : error.Message;
+            var localized=error == null ? null : ErrorLocalizer.Describe(error);
+            string message = localized == null ? null : localized.Description + "\n\nТехнические подробности:\n" + (error.InnerException?.Message ?? error.Message);
             if (message != null && message.Length > 16000) message = message.Substring(0, 16000);
-            Items.Add(new OperationOutcome { Name = name, Success = error == null, Error = message });
+            Items.Add(new OperationOutcome { Name = name, Success = error == null, Error = message, Cause=localized?.Cause, Remedy=localized?.Remedy });
         }
     }
 
@@ -50,6 +53,8 @@ namespace IpaDesktop
         public string Name { get; set; }
         public bool Success { get; set; }
         public string Error { get; set; }
+        public string Cause { get; set; }
+        public string Remedy { get; set; }
         public string ShortError
         {
             get

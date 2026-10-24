@@ -85,10 +85,12 @@ public sealed class CoreTests
  {
   using var folder=new TempFolder();using var stop=new CancellationTokenSource(TimeSpan.FromMinutes(3));
   var engine=new Engine(folder.Path);var release=await engine.Check(stop.Token);await engine.Install(release,stop.Token);
-  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe"})
+  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})
   {
    var help=await engine.Run(engine.Binary(name),new[]{"--help"},stop.Token,false,false);
-   Assert.Equal(0,help.Code);Assert.Contains("--network",help.Output);
+   Assert.Equal(0,help.Code);
+   if(name=="idevicepair.exe"){Assert.Contains("validate",help.Output);Assert.Contains("unpair",help.Output);Assert.Contains("--udid",help.Output);}
+   else Assert.Contains("--network",help.Output);
   }
   using var process=new ConPtyLoginFactory().Start(engine.Binary("ipatool*.exe"),engine.Downloads);var protocol=new AppleLoginProtocol();bool password=false;
   while(!password)
