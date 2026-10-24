@@ -20,6 +20,14 @@ public sealed class CoreTests
   Assert.IsType<Dictionary<string,object>>(ToolResponse.Get(result,"metadata"));
   Assert.Equal(new[]{"123","456"},Engine.VersionIds(JsonCodec.Serialize(result)));
  }
+ [Fact] public void LoginParsesStructuredResultAfterTerminalOutput()
+ {
+  var protocol=new AppleLoginProtocol();
+  protocol.Append("Enter email: ");protocol.Append("Enter password: ");protocol.Append("Enter 2FA code: ");
+  protocol.Append("\rEnter 2FA code: ******\r\n{\"success\":true,\"email\":\"fixture@example.com\"}\r\n");
+  Assert.Equal("fixture@example.com",protocol.Complete(0));
+  Assert.Equal(true,ToolResponse.Get(ToolResponse.Object("diagnostic\n{\"success\":true}\n"),"success"));
+ }
  [Fact] public void CatalogRecoveryAndAtomicImportContracts()
  { using var folder = new TempFolder(); ReliabilityContract.Run(folder.Path); }
  [Fact] public void DownloadProgressAndCancellationContracts()
