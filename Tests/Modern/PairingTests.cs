@@ -55,7 +55,7 @@ public sealed class PairingFixture : IDisposable
  }
  public LocalRow Ipa(string name="one")
  {
-  var path=Path.Combine(folder.Path,name+".ipa");using var zip=ZipFile.Open(path,ZipArchiveMode.Create);
+  var path=Path.Combine(Engine.Downloads,name+".ipa");using var zip=ZipFile.Open(path,ZipArchiveMode.Create);
   using var writer=new StreamWriter(zip.CreateEntry("Payload/Test.app/Info.plist").Open());
   writer.Write("<plist><dict><key>MinimumOSVersion</key><string>16.0</string><key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array></dict></plist>");
   return new(){Path=path};
@@ -105,6 +105,13 @@ public sealed class PairingTests
   f.Runner.Pairing.Enqueue(("validate","Invalid HostID"));f.Runner.Pairing.Enqueue(("pair","Please accept the trust dialog"));
   await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>new DeviceReadiness(f.Client,(_,ct)=>{stop.Cancel();return Task.Delay(10,ct);}).EnsureAsync(f.Device,null,stop.Token));
   Assert.Equal(0,f.Runner.Installs);Assert.Equal(2,f.Runner.Calls.Count);
+ }
+ [Fact] public async Task TrustWaitHasDeadlineAndDoesNotStartInstaller()
+ {
+  using var fixture=new PairingFixture();fixture.Runner.WaitForTrust=true;
+  var readiness=new DeviceReadiness(fixture.Client,(_,ct)=>Task.Delay(1,ct),TimeSpan.FromMilliseconds(30));
+  var error=await Assert.ThrowsAsync<DeviceConnectionException>(()=>readiness.EnsureAsync(fixture.Device,null,CancellationToken.None));
+  Assert.Equal(FailureCode.TrustPending,error.Failure.Code);Assert.Equal(0,fixture.Runner.Installs);
  }
  [Fact] public async Task BrokenConnectionStopsBatchWithoutMarkingEveryIpaFailed()
  {
