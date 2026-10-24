@@ -6,13 +6,13 @@
 
 **Поиск, скачивание и установка приложений для iPhone в Windows 10/11.**
 
-Приложение на C# и WPF с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
+Приложение на C#, Avalonia и .NET 10 с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
 
 **[Скачать для Windows](https://github.com/iamdarkls/IPA-Desktop/releases/latest)** · [История изменений](https://github.com/iamdarkls/IPA-Desktop/releases) · [Сообщить об ошибке](https://github.com/iamdarkls/IPA-Desktop/issues)
 
 ## Быстрый старт
 
-**Требуется:** Windows 10 **1809+** или Windows 11, x64, .NET Framework **4.6+**, интернет и Apple Account. Для установки на iPhone нужны **Apple Mobile Device Support / Apple Mobile Device Service** и доверие телефона к компьютеру.
+**Требуется:** Windows 10 **1809+** или Windows 11, x64, интернет и Apple Account. **.NET 10 включён в архив: устанавливать runtime отдельно не нужно.** Для установки на iPhone нужны **Apple Mobile Device Support / Apple Mobile Device Service** и доверие телефона к компьютеру.
 
 1. Скачайте **IPA-Desktop-<версия>-Windows.zip** из Assets [последнего релиза](https://github.com/iamdarkls/IPA-Desktop/releases/latest).
 2. Полностью распакуйте архив в папку с доступом на запись и запустите **IPA-Desktop.exe**. Установка программы и запуск от администратора не требуются.
@@ -80,19 +80,24 @@
 | Каталог | Назначение |
 |---|---|
 | [Source](Source) | Domain, Infrastructure, Services и Presentation; внутри — каталоги по функциям |
-| [Generated](Generated) | Переносимые снимки исходников для компиляции |
+| [MainWindow.axaml](MainWindow.axaml), [App.axaml](App.axaml) | Интерфейс Avalonia и общая тема |
 | [Assets](Assets), [Tests](Tests), [Scripts](Scripts) | Иконки, проверки и сценарии сборки/обновления |
 | [Tools/DeviceTools](Tools/DeviceTools) | Независимая сборка инструментов: модули, сценарии и тесты |
 | [Docs](Docs), [changelogs](changelogs) | Архитектура и история выпусков |
 
-Сборка в Windows штатным компилятором .NET Framework, без Visual Studio и NuGet:
+Для разработки нужен **.NET 10 SDK**. Целевая платформа этого выпуска — **Windows x64**; перенос на macOS/Linux будет отдельным этапом.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/Sync-Sources.ps1
+dotnet restore Tests/Modern/IPA-Desktop.Tests.csproj
+dotnet build Tests/Modern/IPA-Desktop.Tests.csproj -c Release
+dotnet Tests/Modern/bin/Release/net10.0-windows/IPA-Desktop.Tests.dll
 .\Build.cmd
+python Scripts/package.py artifacts/publish
 ```
 
-`Build.cmd` автоматически синхронизирует Source с Generated перед компиляцией. В переносимом пакете без Source используются готовые снимки. Перед коммитом проверяйте синхронизацию командой `Scripts/Sync-Sources.ps1 -Check`. [Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
+Исходники компилируются напрямую из Source; Generated и ручная синхронизация больше не нужны. Выпуск содержит автономный EXE с runtime и ресурсами интерфейса. Форматы `state.json`, `AppSets.json` и папка IPA сохранены. Пакет проверяется на совместимость с обновляющим механизмом 0.2.12.
+
+[Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
 
 GitHub Actions проверяет Windows-сборку и пакеты обновления перед публикацией. Вход с личным аккаунтом и установку на физический iPhone проверяют отдельно.
 

@@ -6,9 +6,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 using Microsoft.Win32;
 
 namespace IpaDesktop
@@ -25,8 +28,9 @@ namespace IpaDesktop
         {
             C<ComboBox>("VersionList").Items.Add("Последняя версия");
             C<ComboBox>("VersionList").SelectedIndex = 0;
-            C<TextBox>("Query").TextChanged += delegate
+            C<TextBox>("Query").PropertyChanged += delegate(object sender, AvaloniaPropertyChangedEventArgs change)
             {
+                if (change.Property != TextBox.TextProperty) return;
                 searchSession.Change(C<TextBox>("Query").Text);
                 if (String.IsNullOrWhiteSpace(C<TextBox>("Query").Text))
                 {
@@ -36,7 +40,7 @@ namespace IpaDesktop
             };
             On("Search", delegate
             {
-                string query = C<TextBox>("Query").Text.Trim();
+                string query = (C<TextBox>("Query").Text ?? "").Trim();
                 if (query.Length == 0) return;
                 int request = searchSession.Revision;
                 Work("Поиск приложений…", async delegate(CancellationToken ct)
@@ -78,9 +82,9 @@ namespace IpaDesktop
                     if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").SelectedIndex = 0;
                 });
             });
-            C<TextBox>("Query").KeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e)
+            C<TextBox>("Query").KeyDown += delegate(object sender, Avalonia.Input.KeyEventArgs e)
             {
-                if (e.Key == System.Windows.Input.Key.Enter && C<Button>("Search").IsEnabled) C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                if (e.Key == Avalonia.Input.Key.Enter && C<Button>("Search").IsEnabled) C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             };
             C<DataGrid>("Apps").SelectionChanged += delegate
             {
@@ -132,7 +136,7 @@ namespace IpaDesktop
                     ct.ThrowIfCancellationRequested();
                     using (var dialog = new AppVersionWindow(w, app.Name, app.ID, rows, engine.AppVersions, ct))
                     {
-                        if (dialog.Window.ShowDialog() == true)
+                        if (await dialog.Window.ShowDialog<bool>(w))
                         {
                             foreach (var id in dialog.SelectedIDs) chosen.AddVariant(app, id);
                             RefreshChosen();
@@ -168,7 +172,7 @@ namespace IpaDesktop
                     }, ct, false);
                     Engine.Ensure(r);
                     var data = Engine.Object(r.Output);
-                    AppDialogs.ShowText(w, "Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
+                    await AppDialogs.ShowText(w, "Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
                         ToolResponse.VersionMetadataText(data) + Environment.NewLine + "ID версии: " + version + Environment.NewLine + "App Store ID: " + row.ID);
                 });
             });
@@ -251,9 +255,10 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
+            C<TextBlock>("SearchEmpty").IsVisible = C<DataGrid>("Apps").ItemsSource == null || !C<DataGrid>("Apps").ItemsSource.Cast<object>().Any();
             C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0;
             C<Button>("RetryDownloads").Content = "Повторить ошибки (" + failedDownloads.Count + ")";
-            C<Button>("RetryDownloads").ToolTip = String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label));
+            ToolTip.SetTip(C<Button>("RetryDownloads"), String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label)));
             C<Button>("ForgetDownloadErrors").IsEnabled = !busy && failedDownloads.Count > 0;
             C<Button>("AddChosen").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count > 0;
             C<Button>("ClearChosen").IsEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);

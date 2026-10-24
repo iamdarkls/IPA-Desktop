@@ -6,10 +6,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
-using Microsoft.Win32;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 
 namespace IpaDesktop
 {
@@ -22,7 +25,7 @@ namespace IpaDesktop
         List<LocalRow> allFiles = new List<LocalRow>();
         List<LocalRow> visibleFiles = new List<LocalRow>();
         bool updatingAccounts;
-        readonly System.Windows.Threading.DispatcherTimer deviceTimer = new System.Windows.Threading.DispatcherTimer();
+        readonly Avalonia.Threading.DispatcherTimer deviceTimer = new Avalonia.Threading.DispatcherTimer();
         CancellationTokenSource deviceScanCancellation;
         Task deviceScan = Task.FromResult(true);
         bool deviceMonitoring, deviceClosed;
@@ -85,10 +88,10 @@ namespace IpaDesktop
                 installChosen.Remove(path);
                 RefreshInstallChosen();
             });
-            On("FileInfo", delegate
+            OnAsync("FileInfo", async delegate
             {
                 var row = C<DataGrid>("Files").SelectedItem as LocalRow;
-                if (row != null) AppDialogs.Ipa(w, row).ShowDialog();
+                if (row != null) await AppDialogs.Ipa(w, row).ShowDialog(w);
             });
             On("DeviceInfo", delegate
             {
@@ -98,19 +101,20 @@ namespace IpaDesktop
                 {
                     var details = await engine.Devices.DetailsAsync(device, ct);
                     ct.ThrowIfCancellationRequested();
-                    AppDialogs.ShowText(w, "Об iPhone", details);
+                    await AppDialogs.ShowText(w, "Об iPhone", details);
                 });
             });
             On("RefreshFiles", RefreshFiles);
             On("DeleteFiles", delegate { DeleteRows(installChosen.Snapshot()); });
-            On("ImportFile", delegate
+            OnAsync("ImportFile", async delegate
             {
-                var dialog = new OpenFileDialog
+                var selected = await w.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
                 {
-                    Filter = "IPA files (*.ipa)|*.ipa", Multiselect = true
-                };
-                if (dialog.ShowDialog(w) != true) return;
-                var paths = dialog.FileNames;
+                    Title = "Добавить IPA", AllowMultiple = true,
+                    FileTypeFilter = new[] { new FilePickerFileType("IPA") { Patterns = new[] { "*.ipa" } } }
+                });
+                var paths = selected.Select(x => x.TryGetLocalPath()).Where(x => x != null).ToArray();
+                if (paths.Length == 0) return;
                 Work("Добавление IPA…", ct => engine.LocalFiles.ImportAsync(paths, ct));
             });
             On("CheckAppleSupport", delegate
@@ -133,7 +137,7 @@ namespace IpaDesktop
                 await PauseDeviceDetectionAsync();
                 await RefreshDevicesAsync();
             };
-            On("WifiHelp", delegate { AppDialogs.ShowText(w, "Подключение iPhone по Wi-Fi",
+            OnAsync("WifiHelp", async delegate { await AppDialogs.ShowText(w, "Подключение iPhone по Wi-Fi",
                 "1. Подключите iPhone по USB и подтвердите доверие компьютеру.\n2. В Apple Devices включите «Показывать это устройство при подключении к Wi-Fi» и примените настройки. В iTunes — «Синхронизировать с этим iPhone по Wi-Fi».\n3. Подключите компьютер и iPhone к одной локальной сети, затем отключите USB.\n4. Включите «USB + Wi-Fi (экспериментально)»: список обновится автоматически. Выберите строку с отметкой Wi-Fi.\n\nЕсли телефон не найден: разблокируйте его, проверьте службу Apple Mobile Device, Bonjour, разрешения Apple в брандмауэре и отсутствие изоляции устройств в гостевой сети. VPN может мешать обнаружению.\n\nПри обрыве установка не переключается автоматически на USB. Проверьте результат на телефоне перед повтором."); });
             On("InstallFiles", delegate { StartInstall(installChosen.Snapshot()); });
             On("RetryInstalls", delegate { StartInstall(failedInstalls.Snapshot()); });
@@ -213,7 +217,7 @@ namespace IpaDesktop
         }
         void ShowDeviceWarning(string warning)
         {
-            C<TextBlock>("DeviceDetectionStatus").ToolTip = warning.Length == 0 ? "Список проверяется автоматически каждые 3 секунды в отсутствие других операций." : warning;
+            ToolTip.SetTip(C<TextBlock>("DeviceDetectionStatus"), warning.Length == 0 ? "Список проверяется автоматически каждые 3 секунды в отсутствие других операций." : warning);
             if (warning.Length > 0) C<TextBlock>("DeviceDetectionStatus").Text = "Проверьте подключение iPhone — подробности в подсказке";
             if (warning != deviceWarning && warning.Length > 0) Log("Автоопределение iPhone: " + warning);
             deviceWarning = warning;
@@ -238,12 +242,13 @@ namespace IpaDesktop
             ApplyActions();
         }
         /// <summary>После подтверждения перемещает IPA в корзину, продолжая обработку при ошибке отдельного файла.</summary>
-        internal void DeleteRows(List<LocalRow> rows)
+        internal void DeleteRows(List<LocalRow> rows) { view.RunAsyncCommand(() => DeleteRowsCore(rows)); }
+        async Task DeleteRowsCore(List<LocalRow> rows)
         {
             if (busy || rows.Count == 0) return;
             var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
-            if (MessageBox.Show(w, "Переместить в корзину выбранные IPA (" + rows.Count + ")?" + Environment.NewLine + Environment.NewLine + summary + Environment.NewLine + Environment.NewLine + "Приложения на iPhone останутся установленными.", "Удаление IPA", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            if (!await AppDialogs.Confirm(w, "Удаление IPA", "Переместить в корзину выбранные IPA (" + rows.Count + ")?\n\n" + summary + "\n\nПриложения на iPhone останутся установленными.")) return;
             Work("Перемещение IPA в корзину…", async delegate(CancellationToken ct)
             {
                 var failures = new List<string>(); int removed = 0;
@@ -262,13 +267,14 @@ namespace IpaDesktop
             });
         }
         /// <summary>Подтверждает выбранное устройство и запускает последовательную установку снимка очереди.</summary>
-        void StartInstall(List<LocalRow> rows)
+        void StartInstall(List<LocalRow> rows) { view.RunAsyncCommand(() => StartInstallCore(rows)); }
+        async Task StartInstallCore(List<LocalRow> rows)
         {
             var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             if (device == null || rows.Count == 0) throw new Exception("Выберите устройство и IPA для установки.");
             var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
-            if (MessageBox.Show(w, "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?" + Environment.NewLine + Environment.NewLine + summary, "Установка", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            if (!await AppDialogs.Confirm(w, "Установка", "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?\n\n" + summary)) return;
             Work("Установка IPA…", async delegate(CancellationToken ct)
             {
                 view.StartReport("Установка", rows.Count, delegate { StartInstall(failedInstalls.Snapshot()); });
@@ -295,11 +301,11 @@ namespace IpaDesktop
             appleSupport = await engine.AppleSupport.CheckAsync(cancellation);
             var label = C<TextBlock>("AppleSupportStatus");
             label.Text = appleSupport.Message;
-            label.ToolTip = appleSupport.Details;
+            ToolTip.SetTip(label, appleSupport.Details);
             string color = appleSupport.Status == AppleSupportStatus.Running ? "#81D4AD" :
                 appleSupport.Status == AppleSupportStatus.NotDetected ? "#F2A0A0" : "#E8C382";
-            label.Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
+            label.Foreground = new Avalonia.Media.SolidColorBrush(
+                (Avalonia.Media.Color)Avalonia.Media.Color.Parse(color));
             Log(appleSupport.Message + ". " + appleSupport.Details);
         }
 
@@ -316,7 +322,7 @@ namespace IpaDesktop
             C<Button>("DeviceInfo").IsEnabled = !busy && C<ComboBox>("DeviceList").SelectedItem != null;
             C<Button>("RetryInstalls").IsEnabled = !busy && failedInstalls.Count > 0 && C<ComboBox>("DeviceList").SelectedItem != null;
             C<Button>("RetryInstalls").Content = "Повторить ошибки (" + failedInstalls.Count + ")";
-            C<Button>("RetryInstalls").ToolTip = String.Join(Environment.NewLine, failedInstalls.Snapshot().Select(x => x.DisplayName));
+            ToolTip.SetTip(C<Button>("RetryInstalls"), String.Join(Environment.NewLine, failedInstalls.Snapshot().Select(x => x.DisplayName)));
             C<Button>("ForgetInstallErrors").IsEnabled = !busy && failedInstalls.Count > 0;
             C<ItemsControl>("ChosenFiles").IsEnabled = !busy;
             C<Button>("AddInstall").IsEnabled = !busy && C<DataGrid>("Files").SelectedItems.Count > 0;
@@ -332,7 +338,7 @@ namespace IpaDesktop
             C<ItemsControl>("ChosenFiles").ItemsSource = chosen;
             int hidden = chosen.Count(x => !LocalFileAccounts.Matches(x, AccountKey));
             C<TextBlock>("InstallCount").Text = installChosen.Count == 0 ? "Двойной клик — выбрать IPA" : "Выбрано IPA: " + installChosen.Count + (hidden == 0 ? "" : " · вне фильтра: " + hidden);
-            C<TextBlock>("InstallCount").ToolTip = "Установка и удаление используют все IPA в нижнем списке, включая выбранные у других аккаунтов.";
+            ToolTip.SetTip(C<TextBlock>("InstallCount"), "Установка и удаление используют все IPA в нижнем списке, включая выбранные у других аккаунтов.");
             C<Button>("InstallFiles").Content = "Установить (" + installChosen.Count + ")";
             ApplyActions();
         }
@@ -345,7 +351,7 @@ namespace IpaDesktop
             grid.ItemsSource = visibleFiles;
             foreach (var row in visibleFiles) if (selected.Contains(row.Path)) grid.SelectedItems.Add(row);
             C<TextBlock>("FilesSummary").Text = "Показано: " + visibleFiles.Count + " из " + allFiles.Count + " · " + StorageAnalysis.Bytes(visibleFiles.Sum(x => x.Bytes));
-            C<TextBlock>("FilesEmpty").Visibility = visibleFiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            C<TextBlock>("FilesEmpty").IsVisible = visibleFiles.Count == 0;
             RefreshInstallChosen();
         }
         int filesGeneration;

@@ -6,9 +6,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 using Microsoft.Win32;
 
 namespace IpaDesktop
@@ -44,7 +47,7 @@ namespace IpaDesktop
             this.view = view;
             this.engine = engine;
         }
-        protected T C<T>(string name) where T : class
+        protected T C<T>(string name) where T : Control
         {
             return view.C<T>(name);
         }
@@ -53,6 +56,7 @@ namespace IpaDesktop
         {
             view.On(name, action);
         }
+        protected void OnAsync(string name, Func<Task> action) { view.OnAsync(name, action); }
         /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
         protected void Work(string title, Func<CancellationToken, Task> action)
         {

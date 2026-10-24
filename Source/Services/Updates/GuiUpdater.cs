@@ -17,34 +17,7 @@ namespace IpaDesktop
     public static class GuiUpdater
     {
         public const string CurrentVersion = AppInfo.Version;
-        public static readonly string[] PackageFiles =
-        {
-            "IPA-Desktop.exe",
-            "IPA-Desktop.exe.config",
-            "MainWindow.xaml",
-            "Build.cmd",
-            "Start.cmd",
-            "README.md",
-            "LICENSE.txt",
-            "Docs/ARCHITECTURE.md",
-            "Assets/App.ico",
-            "Assets/App.svg",
-            "Scripts/Update-App.ps1",
-            "Scripts/Sync-Sources.ps1",
-            "Scripts/Resources.rsp",
-            "Generated/Core.cs",
-            "Generated/App.cs",
-            "Generated/IpaMetadata.cs",
-            "Generated/WindowTheme.cs",
-            "Generated/GuiUpdater.cs",
-            "Tests/Verify.ps1",
-            "Tests/Verify-IpaMetadata.ps1",
-            "Tests/Verify-Updater.ps1",
-            "Tests/Verify-Design.ps1",
-            "Tests/Verify-Services.ps1", "Tests/Verify-AppleLogin.ps1", "Tests/Verify-Engine.ps1", "Tests/Verify-WorkflowFeatures.ps1",
-            "Tests/Verify-Layout.ps1",
-            "Tests/Fixtures/Legacy-Update-App.ps1"
-        };
+        public static readonly string[] PackageFiles = PackageManifest.Files;
         /// <summary>Разбирает числовой тег версии для корректного сравнения обновлений.</summary>
         public static Version ParseVersion(string tag)
         {
@@ -54,7 +27,6 @@ namespace IpaDesktop
         }
         static HttpClient Client()
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             var h = new HttpClient
             {
                 Timeout = TimeSpan.FromMinutes(5)
@@ -83,7 +55,7 @@ namespace IpaDesktop
             if (matches.Length != 1) throw new InvalidDataException("В релизе нет единственного ZIP для Windows.");
             var asset = matches[0];
             string expected = AppInfo.ReleasesUrl + "/download/" + release.tag_name + "/" + asset.name;
-            if (asset.browser_download_url != expected || asset.size <= 0 || asset.size > 64 * 1024 * 1024 || asset.digest == null || !System.Text.RegularExpressions.Regex.IsMatch(asset.digest, "^sha256:[0-9a-fA-F]{64}$")) throw new InvalidDataException("Не удалось проверить источник, размер или SHA-256 обновления.");
+            if (asset.browser_download_url != expected || asset.size <= 0 || asset.size > 128 * 1024 * 1024 || asset.digest == null || !System.Text.RegularExpressions.Regex.IsMatch(asset.digest, "^sha256:[0-9a-fA-F]{64}$")) throw new InvalidDataException("Не удалось проверить источник, размер или SHA-256 обновления.");
             return asset;
         }
         /// <summary>Извлекает только проверенные файлы манифеста с ограничением размера и проверкой структуры.</summary>
@@ -96,10 +68,10 @@ namespace IpaDesktop
                 foreach (var name in PackageFiles)
                 {
                     var entries = archive.Entries.Where(e => e.FullName.Replace('\\', '/') == name).ToArray();
-                    if (entries.Length != 1 || entries[0].Length == 0 || entries[0].Length > 32 * 1024 * 1024) throw new InvalidDataException("Неполный пакет обновления: " + name);
+                    if (entries.Length != 1 || entries[0].Length == 0 || entries[0].Length > 128 * 1024 * 1024) throw new InvalidDataException("Неполный пакет обновления: " + name);
                     selected.Add(name, entries[0]);
                     total += entries[0].Length;
-                    if (total > 128 * 1024 * 1024) throw new InvalidDataException("Пакет слишком велик.");
+                    if (total > 256 * 1024 * 1024) throw new InvalidDataException("Пакет слишком велик.");
                 }
                 Directory.CreateDirectory(stage);
                 foreach (var name in PackageFiles)

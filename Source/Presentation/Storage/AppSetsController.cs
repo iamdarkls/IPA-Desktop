@@ -3,7 +3,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Controls;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 namespace IpaDesktop
 {
     /// <summary>Управляет наборами в обеих вкладках: сохранением, выбором, предпросмотром и добавлением в очередь.</summary>
@@ -12,7 +13,7 @@ namespace IpaDesktop
         public AppSetsController(Desktop view, Engine engine) : base(view, engine)
         {
             C<ListBox>("AppSets").SelectionChanged += delegate { Preview(); ApplyActions(); };
-            On("AddToSet", delegate { Save(C<ComboBox>("SearchSet").Text, "SearchSetStatus"); });
+            On("AddToSet", delegate { Save(C<AutoCompleteBox>("SearchSet").Text, "SearchSetStatus"); });
             On("SaveSet", delegate { Save(C<TextBox>("SetName").Text, "SetStatus"); });
             On("EditSet", delegate
             {
@@ -25,7 +26,7 @@ namespace IpaDesktop
                     ct.ThrowIfCancellationRequested();
                     var editor = AppSetEditor.Create(w, original.Name, apps,
                         delegate(string name, IEnumerable<AppRow> rows) { engine.AppSets.Update(original.Name, name, rows); });
-                    if (editor.ShowDialog() == true) RefreshSets();
+                    if (await editor.ShowDialog<bool>(w)) RefreshSets();
                 });
             });
             On("DeleteSet", DeleteSelected);
@@ -43,7 +44,7 @@ namespace IpaDesktop
                 if (rows.Count == 0) throw new InvalidOperationException("Добавьте приложения в выбранное в поиске.");
                 engine.AppSets.AddApps(name, rows.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
                 RefreshSets();
-                C<ComboBox>("SearchSet").Text = name;
+                C<AutoCompleteBox>("SearchSet").Text = name;
                 C<TextBlock>(status).Text = "Набор «" + name + "» сохранён. Повторы по ID исключены.";
                 view.RegisterPrivate(name);
             }
@@ -54,7 +55,7 @@ namespace IpaDesktop
         {
             var list = C<ListBox>("AppSets");
             var selected = new HashSet<string>(Selected().Select(x => x.Name), StringComparer.OrdinalIgnoreCase);
-            var picker = C<ComboBox>("SearchSet");
+            var picker = C<AutoCompleteBox>("SearchSet");
             var name = picker.Text;
             try
             {
@@ -112,7 +113,7 @@ namespace IpaDesktop
             C<Button>("UseSet").IsEnabled = C<Button>("DeleteSet").IsEnabled = !busy && count > 0;
             C<Button>("UseSet").Content = "В очередь скачивания (" + count + ")";
             C<Button>("DeleteSet").Content = "Удалить наборы (" + count + ")";
-            C<ComboBox>("SearchSet").IsEnabled = C<ListBox>("AppSets").IsEnabled = C<TextBox>("SetName").IsEnabled = !busy;
+            C<AutoCompleteBox>("SearchSet").IsEnabled = C<ListBox>("AppSets").IsEnabled = C<TextBox>("SetName").IsEnabled = !busy;
         }
     }
 }

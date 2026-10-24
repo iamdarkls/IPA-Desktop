@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -10,7 +11,6 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.IO.Compression;
-using System.Web.Script.Serialization;
 
 namespace IpaDesktop
 {
@@ -30,7 +30,7 @@ namespace IpaDesktop
                 {
                     var d = JsonCodec.DeserializeObject(line.Trim()) as Dictionary<string, object>;
                     if (d != null) return d;
-                } catch (ArgumentException)
+                } catch (Exception error) when (error is ArgumentException || error is JsonException)
                 {
                 }
             }

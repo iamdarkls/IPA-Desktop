@@ -3,10 +3,13 @@ using System.Security;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Input;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Media;
+using Avalonia.Input;
 
 namespace IpaDesktop
 {
@@ -15,8 +18,8 @@ namespace IpaDesktop
     {
         public Window Window { get; private set; }
         public TextBox EmailBox { get; private set; }
-        public PasswordBox PasswordBox { get; private set; }
-        public PasswordBox CodeBox { get; private set; }
+        public TextBox PasswordBox { get; private set; }
+        public TextBox CodeBox { get; private set; }
         public Button SubmitButton { get; private set; }
         public Button CancelButton { get; private set; }
         public TextBlock Status { get; private set; }
@@ -36,7 +39,7 @@ namespace IpaDesktop
             layout.RowDefinitions.Add(new RowDefinition());
             layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var body = new StackPanel();
-            body.Children.Add(new TextBlock { Text = "Apple Account", FontSize = 25, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+            body.Children.Add(new TextBlock { Text = "Apple Account", FontSize = 25, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
             body.Children.Add(Note("Войдите под аккаунтом, для которого будете скачивать приложения. При запросе Apple подготовьте доверенное устройство.", 0));
             credentials = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
             credentials.Children.Add(Note("Apple Account — почта или номер телефона", 0));
@@ -44,7 +47,7 @@ namespace IpaDesktop
             credentials.Children.Add(EmailBox);
             credentials.Children.Add(Note("Пароль аккаунта", 0));
             PasswordBox = SecretBox(1024); credentials.Children.Add(PasswordBox); body.Children.Add(credentials);
-            codePanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 16, 0, 0) };
+            codePanel = new StackPanel { IsVisible = false, Margin = new Thickness(0, 16, 0, 0) };
             codePanel.Children.Add(Note("Подтвердите вход на доверенном устройстве Apple и введите шестизначный код.", 0));
             CodeBox = SecretBox(6); codePanel.Children.Add(CodeBox); body.Children.Add(codePanel);
             Status = new TextBlock { Text = "Введите данные для входа.", TextWrapping = TextWrapping.Wrap, MinHeight = 46, Margin = new Thickness(0, 14, 0, 8), Foreground = Brush("#AFC6E7") };
@@ -59,30 +62,24 @@ namespace IpaDesktop
             CancelButton.Click += delegate { RequestClose(); };
             actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);
             Window.Content = layout;
-            NameScope.SetNameScope(Window, new NameScope());
-            Window.RegisterName("AppleLoginEmail", EmailBox); Window.RegisterName("AppleLoginPassword", PasswordBox);
-            Window.RegisterName("AppleLoginCode", CodeBox); Window.RegisterName("AppleLoginSubmit", SubmitButton);
-            Window.RegisterName("AppleLoginCancel", CancelButton); Window.RegisterName("AppleLoginStatus", Status);
-            Window.Loaded += delegate { EmailBox.Focus(); };
-            Window.PreviewKeyDown += delegate(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; RequestClose(); } };
-            Window.Closing += delegate(object sender, System.ComponentModel.CancelEventArgs e)
+            var names = new NameScope(); NameScope.SetNameScope(Window,names);
+            names.Register("AppleLoginEmail",EmailBox); names.Register("AppleLoginPassword",PasswordBox);
+            names.Register("AppleLoginCode",CodeBox); names.Register("AppleLoginSubmit",SubmitButton);
+            names.Register("AppleLoginCancel",CancelButton); names.Register("AppleLoginStatus",Status);
+            Window.Opened += delegate { EmailBox.Focus(); };
+            Window.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; RequestClose(); } };
+            Window.Closing += delegate(object sender, WindowClosingEventArgs e)
             {
                 if (loading) { e.Cancel = true; RequestClose(); }
             };
         }
-        static SolidColorBrush Brush(string color) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); }
+        static SolidColorBrush Brush(string color) { return new SolidColorBrush((Color)Color.Parse(color)); }
         static TextBlock Note(string text, double top) { return new TextBlock { Text = text, FontSize = 12, Foreground = Brush("#9BACBF"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) }; }
-        static PasswordBox SecretBox(int limit)
+        static TextBox SecretBox(int limit)
         {
-            var box = new PasswordBox { MaxLength = limit, MinHeight = 38, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 6, 0, 0),
-                Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C"), CaretBrush = Brush("#EDF1F8") };
-            // Штатная светлая тема Windows не должна менять фон скрытых полей при блокировке ввода.
-            box.Template = (ControlTemplate)System.Windows.Markup.XamlReader.Parse(
-                "<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='PasswordBox'>" +
-                "<Border x:Name='Surface' Background='{TemplateBinding Background}' BorderBrush='{TemplateBinding BorderBrush}' BorderThickness='1' CornerRadius='8' Padding='{TemplateBinding Padding}'>" +
-                "<ScrollViewer x:Name='PART_ContentHost' Focusable='False' HorizontalScrollBarVisibility='Hidden' VerticalScrollBarVisibility='Hidden'/></Border>" +
-                "<ControlTemplate.Triggers><Trigger Property='IsKeyboardFocusWithin' Value='True'><Setter TargetName='Surface' Property='BorderBrush' Value='#8CB9FF'/></Trigger>" +
-                "<Trigger Property='IsEnabled' Value='False'><Setter TargetName='Surface' Property='Opacity' Value='0.5'/></Trigger></ControlTemplate.Triggers></ControlTemplate>");
+            var box = new TextBox { MaxLength = limit, PasswordChar = '●', MinHeight = 38,
+                Padding = new Thickness(10,6), Margin = new Thickness(0,6,0,0),
+                Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C") };
             return box;
         }
         async void Submit(object sender, RoutedEventArgs e)
@@ -90,18 +87,18 @@ namespace IpaDesktop
             if (loading)
             {
                 if (codeSource == null || codeSource.Task.IsCompleted) return;
-                var code = CodeBox.SecurePassword;
+                var code = Secret(CodeBox);
                 if (!ValidCode(code)) { code.Dispose(); Status.Text = "Введите шесть цифр без пробелов."; CodeBox.Focus(); return; }
-                CodeBox.Clear(); CodeBox.IsEnabled = false; SubmitButton.IsEnabled = false;
+                CodeBox.Text = ""; CodeBox.IsEnabled = false; SubmitButton.IsEnabled = false;
                 Status.Text = "Проверяем код…";
                 if (!codeSource.TrySetResult(code)) code.Dispose();
                 return;
             }
-            using (var password = PasswordBox.SecurePassword)
+            using (var password = Secret(PasswordBox))
             {
                 if (String.IsNullOrWhiteSpace(EmailBox.Text) || password.Length == 0)
                 { Status.Text = "Введите Apple Account и пароль."; return; }
-                PasswordBox.Clear(); loading = true;
+                PasswordBox.Text = ""; loading = true;
                 operation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                 credentials.IsEnabled = false; SubmitButton.IsEnabled = false;
                 Status.Text = "Связываемся с Apple…";
@@ -118,11 +115,11 @@ namespace IpaDesktop
                 {
                     loading = false; operation.Dispose(); operation = null;
                     if (codeSource != null) codeSource.TrySetCanceled(); codeSource = null;
-                    CodeBox.Clear(); PasswordBox.Clear(); codePanel.Visibility = Visibility.Collapsed;
-                    credentials.Visibility = Visibility.Visible; credentials.IsEnabled = true;
+                    CodeBox.Text = ""; PasswordBox.Text = ""; codePanel.IsVisible = false;
+                    credentials.IsVisible = true; credentials.IsEnabled = true;
                     SubmitButton.IsEnabled = true; SubmitButton.Content = "Войти"; PasswordBox.Focus();
                 }
-                if (success) Window.DialogResult = true;
+                if (success) Window.Close(true);
                 else if (closing || lifetime.IsCancellationRequested) Window.Close();
             }
         }
@@ -131,15 +128,21 @@ namespace IpaDesktop
             var pending = new TaskCompletionSource<SecureString>();
             using (ct.Register(delegate { pending.TrySetCanceled(); }))
             {
-                Window.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (ct.IsCancellationRequested) return;
-                    codeSource = pending; credentials.Visibility = Visibility.Collapsed; codePanel.Visibility = Visibility.Visible;
-                    CodeBox.Clear(); CodeBox.IsEnabled = true; SubmitButton.Content = "Подтвердить"; SubmitButton.IsEnabled = true;
+                    codeSource = pending; credentials.IsVisible = false; codePanel.IsVisible = true;
+                    CodeBox.Text = ""; CodeBox.IsEnabled = true; SubmitButton.Content = "Подтвердить"; SubmitButton.IsEnabled = true;
                     Status.Text = "Apple запросила код подтверждения."; CodeBox.Focus();
                 }));
                 return await pending.Task.ConfigureAwait(false);
             }
+        }
+        static SecureString Secret(TextBox box)
+        {
+            var value = new SecureString();
+            foreach (char character in box.Text ?? "") value.AppendChar(character);
+            value.MakeReadOnly(); return value;
         }
         static bool ValidCode(SecureString code)
         {
@@ -155,7 +158,7 @@ namespace IpaDesktop
         }
         public void Dispose()
         {
-            lifetime.Cancel(); lifetime.Dispose(); PasswordBox.Clear(); CodeBox.Clear();
+            lifetime.Cancel(); lifetime.Dispose(); PasswordBox.Text = ""; CodeBox.Text = "";
         }
     }
 }

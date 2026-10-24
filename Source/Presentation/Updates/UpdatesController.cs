@@ -6,9 +6,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Markup;
+using Avalonia;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 using Microsoft.Win32;
 
 namespace IpaDesktop
@@ -47,15 +50,15 @@ namespace IpaDesktop
             {
                 Work("Проверка версии IPA Desktop…", CheckGui);
             });
-            On("InstallGuiUpdate", delegate
+            OnAsync("InstallGuiUpdate", async delegate
             {
                 if (guiRelease == null) return;
-                if (MessageBox.Show(w, "Скачать и установить IPA Desktop " + guiRelease.tag_name + "? Программа закроется и запустится снова. Скачанные IPA и настройки сохранятся.", "Обновление программы", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+                if (!await AppDialogs.Confirm(w, "Обновление программы", "Скачать и установить IPA Desktop " + guiRelease.tag_name + "? Программа перезапустится. IPA и настройки сохранятся.")) return;
                 Work("Скачивание обновления IPA Desktop…", async delegate(CancellationToken ct)
                 {
                     string stage = await GuiUpdater.Prepare(guiRelease, ct, delegate(double value)
                     {
-                        w.Dispatcher.BeginInvoke(new Action(delegate
+                        Dispatcher.UIThread.Post(new Action(delegate
                         {
                             C<ProgressBar>("Progress").IsIndeterminate = false;
                             C<ProgressBar>("Progress").Value = value;
@@ -89,9 +92,9 @@ namespace IpaDesktop
             {
                 Work("Проверка инструментов для iPhone…", ct => UpdateDevices(ct, false));
             });
-            On("RollbackDevices", delegate
+            OnAsync("RollbackDevices", async delegate
             {
-                if (MessageBox.Show(w, "Вернуть предыдущий комплект для iPhone и отключить его автообновление?", "Откат инструментов", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+                if (!await AppDialogs.Confirm(w, "Откат инструментов", "Вернуть предыдущий комплект для iPhone и отключить его автообновление?")) return;
                 try { engine.RollbackDeviceTools(); StateView(); ApplyActions(); }
                 catch (Exception e) { Error(e); }
             });
@@ -103,41 +106,19 @@ namespace IpaDesktop
             {
                 Work("Проверка обновлений…", ct => Update(ct, false));
             });
-            On("Rollback", delegate
+            OnAsync("Rollback", async delegate
             {
-                if (MessageBox.Show(w, "Вернуть предыдущий движок и отключить автообновление?", "Откат", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                if (await AppDialogs.Confirm(w, "Откат", "Вернуть предыдущий движок и отключить автообновление?"))
                 {
                     engine.Rollback();
                     StateView();
                 }
             });
-            C<CheckBox>("AutoUpdate").Checked += delegate
+            C<CheckBox>("AutoUpdate").IsCheckedChanged += delegate
             {
-                if (!setting)
-                {
-                    engine.Settings.AutoUpdate = true;
-                    try
-                    {
-                        engine.Save();
-                    } catch (Exception e)
-                    {
-                        Error(e);
-                    }
-                }
-            };
-            C<CheckBox>("AutoUpdate").Unchecked += delegate
-            {
-                if (!setting)
-                {
-                    engine.Settings.AutoUpdate = false;
-                    try
-                    {
-                        engine.Save();
-                    } catch (Exception e)
-                    {
-                        Error(e);
-                    }
-                }
+                if (setting) return;
+                engine.Settings.AutoUpdate = C<CheckBox>("AutoUpdate").IsChecked == true;
+                try { engine.Save(); } catch (Exception error) { Error(error); }
             };
         }
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
@@ -154,7 +135,7 @@ namespace IpaDesktop
                 Log("Установлен актуальный релиз " + release.tag_name);
                 return;
             }
-            if (!startup && MessageBox.Show(w, "Установить официальный релиз " + release.tag_name + "?\nТекущая версия будет сохранена для отката.", "Обновление движка", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (!startup && !await AppDialogs.Confirm(w, "Обновление движка", "Установить официальный релиз " + release.tag_name + "? Текущая версия будет сохранена для отката.")) return;
             await engine.Install(release, ct);
             if (startup) Log("Автоматическое обновление завершено.");
         }
@@ -166,7 +147,7 @@ namespace IpaDesktop
                 Log("Наш комплект для iPhone актуален: " + release.tag_name);
                 return;
             }
-            if (!startup && MessageBox.Show(w, "Обновить наш комплект инструментов для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.", "Обновление инструментов", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (!startup && !await AppDialogs.Confirm(w, "Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.")) return;
             await engine.InstallDeviceTools(release, ct);
         }
         public async Task CheckGui(CancellationToken ct)
@@ -176,7 +157,7 @@ namespace IpaDesktop
             C<TextBlock>("GuiVersionStatus").Text = text;
             C<Button>("InstallGuiUpdate").Content = guiRelease == null ? "Установить обновление" : "Обновить до " + guiRelease.tag_name;
             C<TextBlock>("UpdateNotice").Text = guiRelease == null ? "" : text + " — вкладка «Настройки»";
-            C<TextBlock>("UpdateNotice").Visibility = guiRelease == null ? Visibility.Collapsed : Visibility.Visible;
+            C<TextBlock>("UpdateNotice").IsVisible = guiRelease != null;
             Log(text);
         }
     }
