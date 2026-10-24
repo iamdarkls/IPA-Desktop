@@ -1,25 +1,47 @@
 <Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="IpaDesktop.App" RequestedThemeVariant="Dark">
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#5798EB" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
-    <Style Selector="Window"><Setter Property="Background" Value="#10151F"/><Setter Property="Foreground" Value="#EDF1F8"/><Setter Property="FontSize" Value="14"/><Setter Property="FontFamily" Value="Segoe UI"/></Style>
-    <Style Selector="Button"><Setter Property="Background" Value="#243247"/><Setter Property="Foreground" Value="#EDF1F8"/><Setter Property="Padding" Value="14,8"/><Setter Property="Margin" Value="0,0,8,8"/><Setter Property="CornerRadius" Value="8"/><Setter Property="BorderBrush" Value="#35465D"/><Setter Property="BorderThickness" Value="1"/></Style>
-    <Style Selector="TextBox"><Setter Property="Background" Value="#192333"/><Setter Property="Foreground" Value="#EDF1F8"/><Setter Property="Padding" Value="12,8"/><Setter Property="BorderBrush" Value="#34445C"/><Setter Property="CornerRadius" Value="6"/></Style>
-    <Style Selector="ComboBox"><Setter Property="MinHeight" Value="36"/><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Background" Value="#1C293B"/></Style>
+    <Style Selector="Window"><Setter Property="Background" Value="#151A22"/><Setter Property="Foreground" Value="#E4EAF2"/><Setter Property="FontSize" Value="14"/><Setter Property="FontFamily" Value="Segoe UI"/></Style>
+    <Style Selector="Button"><Setter Property="Background" Value="#232D3B"/><Setter Property="Foreground" Value="#E4EAF2"/><Setter Property="Padding" Value="14,9"/><Setter Property="Margin" Value="0,0,10,10"/><Setter Property="CornerRadius" Value="8"/><Setter Property="BorderBrush" Value="#344050"/><Setter Property="BorderThickness" Value="0"/></Style>
+    <Style Selector="TextBox"><Setter Property="Background" Value="#1B2430"/><Setter Property="Foreground" Value="#E4EAF2"/><Setter Property="Padding" Value="12,8"/><Setter Property="BorderBrush" Value="#303C4D"/><Setter Property="CornerRadius" Value="6"/></Style>
+    <Style Selector="ComboBox"><Setter Property="MinHeight" Value="36"/><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Background" Value="#1E2835"/></Style>
     <Style Selector="TabItem"><Setter Property="Padding" Value="16,12"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="Medium"/></Style>
-    <Style Selector="DataGrid"><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/><Setter Property="SelectionMode" Value="Extended"/><Setter Property="GridLinesVisibility" Value="None"/><Setter Property="RowHeight" Value="40"/><Setter Property="Background" Value="#16202F"/><Setter Property="BorderBrush" Value="#34445C"/></Style>
-    <Style Selector="DataGridColumnHeader"><Setter Property="Background" Value="#223047"/><Setter Property="Foreground" Value="#BDCEDE"/><Setter Property="FontSize" Value="12"/></Style>
-    <Style Selector="DataGridRow:pointerover"><Setter Property="Background" Value="#243851"/></Style>
-    <Style Selector="DataGridRow:selected"><Setter Property="Background" Value="#31577E"/></Style>
-    <Style Selector="ListBox"><Setter Property="Background" Value="#101A29"/><Setter Property="BorderBrush" Value="#34445C"/><Setter Property="BorderThickness" Value="1"/></Style>
-    <Style Selector="Border.card"><Setter Property="Background" Value="#182436"/><Setter Property="BorderBrush" Value="#2D4159"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/></Style>
-    <Style Selector="Button.primary"><Setter Property="Background" Value="#367CE8"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="#4C8CF0"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#478CF7"/></Style>
-    <Style Selector="Button.danger"><Setter Property="Background" Value="#422D3A"/><Setter Property="Foreground" Value="#F2BCC7"/><Setter Property="BorderBrush" Value="#704154"/></Style>
+    <Style Selector="DataGrid"><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/><Setter Property="SelectionMode" Value="Extended"/><Setter Property="GridLinesVisibility" Value="None"/><Setter Property="RowHeight" Value="44"/><Setter Property="Background" Value="#19212C"/><Setter Property="BorderBrush" Value="#303C4D"/></Style>
+    <Style Selector="DataGridColumnHeader"><Setter Property="MinHeight" Value="38"/><Setter Property="Background" Value="#202B39"/><Setter Property="Foreground" Value="#AABACD"/><Setter Property="FontSize" Value="12"/></Style>
+    <Style Selector="ListBox"><Setter Property="Background" Value="#19212C"/><Setter Property="BorderBrush" Value="#303C4D"/><Setter Property="BorderThickness" Value="1"/></Style>
+    <Style Selector="Border.card"><Setter Property="Background" Value="#1C2531"/><Setter Property="BorderBrush" Value="#303C4B"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/></Style>
+    <Style Selector="Button.primary"><Setter Property="Background" Value="#3C82DC"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="#5596EC"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#5094EE"/></Style>
+    <Style Selector="Button.danger"><Setter Property="Background" Value="#302730"/><Setter Property="Foreground" Value="#F2BCC7"/><Setter Property="BorderBrush" Value="#55404A"/></Style>
     <Style Selector="Button.compact"><Setter Property="FontSize" Value="12"/><Setter Property="Padding" Value="10,6"/><Setter Property="MinHeight" Value="30"/><Setter Property="Margin" Value="0,0,8,6"/></Style>
     <Style Selector="TabControl"><Setter Property="Background" Value="Transparent"/></Style>
     <Style Selector="TabItem:selected"><Setter Property="Foreground" Value="#B7D8FF"/></Style>
-    <Style Selector="DataGrid"><Setter Property="CornerRadius" Value="8"/><Setter Property="BorderThickness" Value="1"/></Style>
+    <Style Selector="DataGrid"><Setter Property="CornerRadius" Value="8"/><Setter Property="BorderThickness" Value="1"/><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="DataGrid /template/ Border#DataGridBorder"><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="DataGrid /template/ DataGridRowsPresenter#PART_RowsPresenter"><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="DataGridRow /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="Transparent"/><Setter Property="Opacity" Value="1"/></Style>
+    <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="#243142"/></Style>
+    <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="#2B4563"/><Setter Property="Opacity" Value="1"/></Style>
+    <Style Selector="DataGridRow:selected:focus /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="#2B4563"/><Setter Property="Opacity" Value="1"/></Style>
+    <Style Selector="DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="#324F70"/><Setter Property="Opacity" Value="1"/></Style>
+    <Style Selector="DataGridRow:selected:pointerover:focus /template/ Rectangle#BackgroundRectangle"><Setter Property="Fill" Value="#324F70"/><Setter Property="Opacity" Value="1"/></Style>
+    <Style Selector="DataGridColumnHeader /template/ Grid"><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="Border.table-frame"><Setter Property="Background" Value="#19212C"/><Setter Property="BorderBrush" Value="#303C4D"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="1"/><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="Border.table-frame > DataGrid"><Setter Property="BorderThickness" Value="0"/></Style>
+    <Style Selector="ListBox"><Setter Property="ClipToBounds" Value="True"/></Style>
+    <Style Selector="DataGridCell"><Setter Property="ClipToBounds" Value="True"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="Normal"/></Style>
+    <Style Selector="DataGridCell /template/ Grid#FocusVisual"><Setter Property="Opacity" Value="0.65"/></Style>
+    <Style Selector="DataGridCell /template/ Grid#FocusVisual Rectangle"><Setter Property="Stroke" Value="#7895B5"/><Setter Property="StrokeThickness" Value="1"/></Style>
+    <Style Selector="Expander"><Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="Transparent"/></Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="Foreground" Value="#A5B5C8"/><Setter Property="FontWeight" Value="Normal"/></Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ Border#ToggleButtonBackground"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
+    <Style Selector="DataGridCell TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
+    <Style Selector="DataGridColumnHeader"><Setter Property="ClipToBounds" Value="True"/></Style>
   </Application.Styles>
 </Application>
