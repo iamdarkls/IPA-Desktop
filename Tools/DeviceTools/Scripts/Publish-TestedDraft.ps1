@@ -27,6 +27,18 @@ foreach($run in @($runs.workflow_runs|Where-Object { $_.head_sha -eq $target -an
   $compiled=@($job.steps|Where-Object { $_.name -eq 'Build pinned sources and package Windows binaries' -and $_.conclusion -eq 'success' })
   $checked=@($job.steps|Where-Object { $_.name -eq 'Verify standalone Windows command line tools' -and $_.conclusion -eq 'success' })
   if($compiled.Count -eq 1 -and $checked.Count -eq 1){$tested=$true}
+  # GitHub can retain an incomplete step snapshot after a rerun. The immutable
+  # job log must then prove each actual standalone invocation, not the echoed script.
+  if(!$tested -and $job.status -eq 'completed'){
+   $lines=gh api "repos/$repo/actions/jobs/$($job.id)/logs"
+   if($LASTEXITCODE -ne 0){throw 'Could not read native verification log'}
+   $log=$lines -join "`n"
+   $verified=$true
+   foreach($tool in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')){
+    if($log -notmatch ('(?m)^\S+Z '+[regex]::Escape($tool)+' : '+[regex]::Escape($tool)+' [0-9]')){$verified=$false}
+   }
+   if($verified){$tested=$true}
+  }
  }
 }
 if(!$tested){throw 'No successful compile and native validation for draft target'}
