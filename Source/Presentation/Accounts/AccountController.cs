@@ -57,7 +57,9 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
-            C<Button>("Login").IsEnabled = !busy && !signedIn;
+            bool needsLogin = engine.AccountRequests.RequiresLogin;
+            C<Button>("Login").IsEnabled = !busy && (!signedIn || needsLogin);
+            if (needsLogin) C<TextBlock>("AccountLabel").Text = "Загрузки остановлены — проверьте аккаунт и войдите заново";
             C<Button>("Logout").IsEnabled = !busy && signedIn;
         }
         /// <summary>Запрашивает актуальный auth info и обновляет состояние входа только по успешному ответу.</summary>

@@ -109,7 +109,8 @@ namespace IpaDesktop
                     success = true;
                 }
                 catch (OperationCanceledException) { Status.Text = "Вход отменён."; }
-                catch (AppleLoginException error) { Status.Text = error.Message; }
+                catch (AppleLoginException error) { Status.Text = error.Message + "\nПеред новой попыткой действует защитная пауза."; }
+                catch (AppleAccountException error) { Status.Text = error.Message; }
                 catch (Exception) { Status.Text = "Не удалось выполнить вход. Повторите попытку; детали авторизации не записываются в журнал."; }
                 finally
                 {

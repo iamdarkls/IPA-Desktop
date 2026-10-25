@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 namespace IpaDesktop;
 
-public enum FailureCode { Unknown, Pairing, TrustPending, TrustDenied, Locked, Disconnected, Transport, Verification, Signature, Storage, Incompatible, PasswordChanged, EmptyCatalog, Network, MissingTool, Credentials, Terms, AccountRestricted, Purchase }
+public enum FailureCode { Unknown, Pairing, TrustPending, TrustDenied, Locked, Disconnected, Transport, Verification, Signature, Storage, Incompatible, PasswordChanged, EmptyCatalog, Network, MissingTool, Credentials, Terms, AccountRestricted, Purchase, RateLimited }
 public sealed record UserError(FailureCode Code, string Title, string Cause, string Remedy)
 {
     public bool Connection => Code is FailureCode.Pairing or FailureCode.TrustPending or FailureCode.TrustDenied or FailureCode.Locked or FailureCode.Disconnected or FailureCode.Transport;
@@ -12,7 +12,7 @@ public sealed record UserError(FailureCode Code, string Title, string Cause, str
 }
 public static class ErrorLocalizer
 {
-    public static UserError Describe(Exception error) => error is DeviceConnectionException connection ? connection.Failure : Describe(error.Message, error);
+    public static UserError Describe(Exception error) => error is AppleAccountException account ? account.Failure : error is DeviceConnectionException connection ? connection.Failure : Describe(error.Message, error);
     public static UserError Describe(string text, Exception error = null)
     {
         var s=(text ?? "").ToLowerInvariant();
@@ -30,16 +30,18 @@ public static class ErrorLocalizer
             return new(FailureCode.Disconnected,"Соединение с iPhone потеряно","Выбранное устройство недоступно по USB или Wi-Fi.","Проверьте кабель и USB-порт либо общую сеть Wi-Fi, разблокируйте iPhone и восстановите соединение. Очередь остановлена; уже установленные IPA повторяться не будут.");
         if(Has("lockdownd","start_service","could not connect to lockdown","receive timeout","connection reset","broken pipe","ssl error","не ответил за","не удалось подтвердить связь","pairing is not possible"))
             return new(FailureCode.Transport,"Не удалось установить защищённое соединение с iPhone","Служба устройства не отвечает, соединение прервано или сопряжение недоступно через Wi-Fi.","Подключите iPhone по USB, разблокируйте его и подтвердите доверие. Проверьте службу Apple Mobile Device и повторите проверку связи.");
+        if(Has("too many requests", "too many attempts", "rate limit", "http 429", "status code 429", "temporarily throttled"))
+            return new(FailureCode.RateLimited,"Apple ограничила частоту запросов","Сервер просит уменьшить количество обращений.","Очередь остановлена. Подождите перед ручным повтором; программа не отправляет запросы автоматически.");
         if(Has("your password has changed","password has been changed","password changed"))
-            return new(FailureCode.PasswordChanged,"Сессия Apple Account устарела после смены пароля","Apple больше не принимает сохранённую авторизацию.","Выйдите из аккаунта в программе и войдите заново с новым паролем и кодом 2FA. Затем повторите только неудавшиеся загрузки.");
+            return new(FailureCode.PasswordChanged,"Сессия Apple Account устарела после смены пароля","Apple больше не принимает сохранённую авторизацию.","Нажмите «Войти» и подтвердите вход с новым паролем и кодом 2FA. Очередь остановлена; после входа продолжите оставшиеся загрузки.");
         if(Has("empty songlist","empty song list"))
             return new(FailureCode.EmptyCatalog,"Apple не вернула данные приложения","Магазин вернул пустой список. Приложение может быть недоступно для региона или аккаунта; также возможен временный сбой.","Проверьте ID и доступность приложения в App Store для этого аккаунта. Проверьте вход; после смены пароля войдите заново. Затем повторите запрос.");
-        if(Has("incorrect password","invalid credentials","invalid username","authentication failed","failed to authenticate"))
+        if(Has("account is locked","account has been locked","account has been disabled","account is disabled","account is not active","account is inactive","apple id has been disabled","apple id is locked","apple id has been locked","apple id is not active","account has been deactivated","media & purchases account has been disabled","account has been locked for security"))
+            return new(FailureCode.AccountRestricted,"Apple ограничила доступ к аккаунту","Магазин отклонил авторизацию из-за состояния аккаунта.","Проверьте аккаунт на устройстве и восстановите доступ через Apple. После этого войдите в программу заново.");
+        if(Has("incorrect password","password is incorrect","invalid credentials","invalid username","authentication failed","failed to authenticate"))
             return new(FailureCode.Credentials,"Apple не подтвердила вход","Логин, пароль или сохранённая сессия не приняты.","Проверьте Apple Account и обычный пароль, войдите заново с кодом 2FA. Пароль приложения для этого входа не подходит.");
         if(Has("terms and conditions","terms have changed","agreement required"))
             return new(FailureCode.Terms,"Нужно принять условия Apple","Аккаунт требует завершить настройку или принять обновлённые условия магазина.","Откройте App Store на iPhone под этим аккаунтом, завершите запросы Apple и затем войдите в программу заново.");
-        if(Has("account is locked","account has been disabled","account is disabled"))
-            return new(FailureCode.AccountRestricted,"Apple ограничила доступ к аккаунту","Магазин отклонил авторизацию из-за состояния аккаунта.","Проверьте аккаунт на устройстве и восстановите доступ через Apple. После этого войдите в программу заново.");
         if(Has("purchase error","not purchased","license not found","not available in your country"))
             return new(FailureCode.Purchase,"Apple не выдала право на загрузку","Приложение недоступно этому аккаунту/региону или магазин отклонил получение лицензии.","Проверьте приложение в App Store под тем же аккаунтом, получите его штатным способом и повторите загрузку. Сверьте регион аккаунта.");
         if(Has("applicationverificationfailed","0xe8008001"))

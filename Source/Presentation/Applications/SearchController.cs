@@ -256,13 +256,13 @@ namespace IpaDesktop
         public override void RefreshActions()
         {
             C<TextBlock>("SearchEmpty").IsVisible = C<DataGrid>("Apps").ItemsSource == null || !C<DataGrid>("Apps").ItemsSource.Cast<object>().Any();
-            C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0;
+            C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0 && !engine.AccountRequests.RequiresLogin;
             C<Button>("RetryDownloads").Content = "Повторить ошибки (" + failedDownloads.Count + ")";
             ToolTip.SetTip(C<Button>("RetryDownloads"), String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label)));
             C<Button>("ForgetDownloadErrors").IsEnabled = !busy && failedDownloads.Count > 0;
             C<Button>("AddChosen").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count > 0;
             C<Button>("ClearChosen").IsEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
-            C<Button>("Download").IsEnabled = !busy && chosen.Count > 0;
+            C<Button>("Download").IsEnabled = !busy && chosen.Count > 0 && !engine.AccountRequests.RequiresLogin;
             C<ItemsControl>("ChosenApps").IsEnabled = !busy;
             C<Button>("VersionTable").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
             C<Button>("VersionInfo").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;

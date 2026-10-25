@@ -36,6 +36,7 @@ namespace IpaDesktop
         }
         public AppVersions AppVersions { get; private set; }
         public IAppleLoginService AppleLogin { get; set; }
+        public AccountRequestGuard AccountRequests { get; private set; }
         public State Settings
         {
             get
@@ -110,8 +111,12 @@ namespace IpaDesktop
             Directory.CreateDirectory(Downloads);
             runner = processRunner ?? new ProcessRunner(Downloads);
             locator = new ToolLocator(settings);
-            tools = new AppToolClient(runner, locator);
-            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, tools);
+            var rawTools = new AppToolClient(runner, locator);
+            AccountRequests = new AccountRequestGuard(processRunner == null
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "AccountProtection")
+                : Path.Combine(root, "AccountProtection"));
+            tools = new ProtectedAppToolClient(rawTools, AccountRequests);
+            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests);
             AppVersions = new AppVersions(tools);
             catalog = new AppCatalog(settings, locator);
             updater = new EngineUpdater(settings, runner);
