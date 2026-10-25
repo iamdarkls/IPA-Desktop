@@ -87,7 +87,7 @@ public sealed class AccountRequestGuard
         if(state.WindowStarted == 0 || now-state.WindowStarted >= TimeSpan.FromHours(24).TotalMilliseconds)
         { state.WindowStarted=now; state.CredentialFailures=0; }
         state.CredentialFailures=Math.Min(100,state.CredentialFailures+1);
-        if(state.CredentialFailures>=3) state.GlobalAfter=Math.Max(state.GlobalAfter,clock().AddMinutes(30).ToUnixTimeMilliseconds());
+        if(state.CredentialFailures>=3) state.GlobalAfter=Math.Max(state.GlobalAfter,clock().AddMinutes(10).ToUnixTimeMilliseconds());
     }
     public static bool IsAccountFailure(FailureCode code) => code is FailureCode.PasswordChanged or FailureCode.Credentials or FailureCode.Terms or FailureCode.AccountRestricted;
     static UserError Blocked(FailureCode code) => new(code, "Загрузки приостановлены: нужен вход в Apple Account",
@@ -137,10 +137,15 @@ public sealed class AccountRequestGuard
     {
         var state = Read();
         state.LoginFailures = Math.Max(1, state.LoginFailures);
-        int seconds = error.Code == FailureCode.AccountRestricted ? 900 : Math.Min(900, 60 * (1 << (state.LoginFailures - 1)));
-        state.LoginAfter = clock().AddSeconds(seconds).ToUnixTimeMilliseconds();
         if (IsAccountFailure(error.Code)) state.Blocked = error.Code;
         RecordAccountFailure(state,error);
+        int seconds = error.Code switch
+        {
+            FailureCode.Credentials => state.CredentialFailures switch { 1 => 30, 2 => 120, _ => 600 },
+            FailureCode.AccountRestricted => 900,
+            _ => Math.Min(900, 60 * (1 << (state.LoginFailures - 1)))
+        };
+        state.LoginAfter = clock().AddSeconds(seconds).ToUnixTimeMilliseconds();
         Save(state);
     }
     public void RequestFailed(UserError error, TimeSpan? serverDelay = null)

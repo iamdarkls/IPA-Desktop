@@ -16,7 +16,9 @@ public sealed class AccountProtectionTests
         Assert.True(new AccountRequestGuard(folder.Path).RequiresLogin);
         Assert.Throws<AppleAccountException>(()=>guard.Enter(true,TestContext.Current.CancellationToken));
         using(guard.Enter(false,TestContext.Current.CancellationToken,true)) { } // Inspection/logout remains available.
-        now=now.AddSeconds(61);
+        now=now.AddSeconds(29);
+        Assert.Throws<AppleAccountException>(()=>guard.Enter(true,TestContext.Current.CancellationToken));
+        now=now.AddSeconds(1);
         using(guard.Enter(true,TestContext.Current.CancellationToken)) { guard.LoginStarted(); guard.LoginSucceeded(); }
         Assert.False(guard.RequiresLogin);
         using(guard.Enter(false,TestContext.Current.CancellationToken)) { }
@@ -82,11 +84,18 @@ public sealed class AccountProtectionTests
         await Assert.ThrowsAsync<AppleLoginException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<AppleAccountException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
         Assert.Equal(1,factory.Calls);Assert.Equal(0,tools.Calls);Assert.True(guard.RequiresLogin);
-        now=now.AddSeconds(61);
+        now=now.AddSeconds(30);
         await Assert.ThrowsAsync<AppleLoginException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
-        now=now.AddSeconds(61); // The second failed attempt requires 120 seconds.
+        now=now.AddSeconds(119); // The second failed attempt requires exactly 120 seconds.
         await Assert.ThrowsAsync<AppleAccountException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
         Assert.Equal(2,factory.Calls);
+        now=now.AddSeconds(1);
+        await Assert.ThrowsAsync<AppleLoginException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
+        now=now.AddSeconds(599);
+        await Assert.ThrowsAsync<AppleAccountException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
+        now=now.AddSeconds(1);
+        await Assert.ThrowsAsync<AppleLoginException>(()=>service.LoginAsync("fixture@example.com",password,_=>throw new Exception("Unexpected code request"),TestContext.Current.CancellationToken));
+        Assert.Equal(4,factory.Calls);
     }
     [Theory]
     [InlineData(false)]
@@ -127,15 +136,15 @@ public sealed class AccountProtectionTests
         {
             using(guard.Enter(true,TestContext.Current.CancellationToken))
             { guard.LoginStarted();guard.LoginFailed(ErrorLocalizer.Describe("incorrect password")); }
-            now=now.AddMinutes(16);
+            now=now.AddMinutes(index<2?16:9);
             if(index<2) using(guard.Enter(true,TestContext.Current.CancellationToken)) guard.LoginSucceeded();
         }
-        // A third refusal creates a 30-minute pause; 16 minutes is insufficient, even on a new instance/account.
+        // A third refusal creates a 10-minute pause; 9 minutes is insufficient, even on a new instance/account.
         var restarted=new AccountRequestGuard(folder.Path,()=>now);
         Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));
         restarted.AcknowledgeRecovery(TestContext.Current.CancellationToken); // Review must not reset the timer/counter.
         Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));
-        now=now.AddMinutes(15);
+        now=now.AddMinutes(1);
         using(restarted.Enter(true,TestContext.Current.CancellationToken)) restarted.LoginSucceeded();
         Assert.False(restarted.RequiresLogin);
     }
