@@ -22,6 +22,15 @@ namespace IpaDesktop
         bool signedIn;
         public AccountController(Desktop view, Engine engine) : base(view, engine)
         {
+            OnAsync("AccountSafetyReview", async delegate
+            {
+                string detail=engine.AccountRequests.SafetyStatus;
+                if(!engine.AccountRequests.SafetyStopped) { await AppDialogs.Confirm(w,"Ограничения входа",String.IsNullOrEmpty(detail)?"Активной защитной паузы нет. Это не проверка состояния аккаунта у Apple.":detail); return; }
+                if(!await AppDialogs.Confirm(w,"Возобновление после блокировки",
+                    "Вы восстановили доступ через Apple на доверенном устройстве и разобрали причину блокировки?\n\nПродолжение снимает только ручной запрет IPA Desktop. Паузы и общий счётчик ошибок сохранятся. Это не подтверждает снятие ограничений Apple или сети.")) return;
+                engine.AccountRequests.AcknowledgeRecovery(CancellationToken.None);
+                ApplyActions();
+            });
             On("Login", delegate
             {
                 Work("Вход в Apple Account…", async delegate(CancellationToken ct)
@@ -58,6 +67,11 @@ namespace IpaDesktop
         public override void RefreshActions()
         {
             bool needsLogin = engine.AccountRequests.RequiresLogin;
+            C<Button>("AccountSafetyReview").IsEnabled=!busy;
+            var safety=engine.AccountRequests.SafetyStatus;
+            C<Button>("AccountSafetyReview").IsVisible=!String.IsNullOrEmpty(safety) || engine.AccountRequests.SafetyStopped;
+            C<TextBlock>("AccountSafetyStatus").Text=safety;
+            C<TextBlock>("AccountSafetyStatus").IsVisible=!String.IsNullOrEmpty(safety);
             C<Button>("Login").IsEnabled = !busy && (!signedIn || needsLogin);
             if (needsLogin) C<TextBlock>("AccountLabel").Text = "Загрузки остановлены — проверьте аккаунт и войдите заново";
             C<Button>("Logout").IsEnabled = !busy && signedIn;

@@ -32,13 +32,13 @@ public static class ErrorLocalizer
             return new(FailureCode.Transport,"Не удалось установить защищённое соединение с iPhone","Служба устройства не отвечает, соединение прервано или сопряжение недоступно через Wi-Fi.","Подключите iPhone по USB, разблокируйте его и подтвердите доверие. Проверьте службу Apple Mobile Device и повторите проверку связи.");
         if(Has("too many requests", "too many attempts", "rate limit", "http 429", "status code 429", "temporarily throttled"))
             return new(FailureCode.RateLimited,"Apple ограничила частоту запросов","Сервер просит уменьшить количество обращений.","Очередь остановлена. Подождите перед ручным повтором; программа не отправляет запросы автоматически.");
-        if(Has("your password has changed","password has been changed","password changed"))
-            return new(FailureCode.PasswordChanged,"Сессия Apple Account устарела после смены пароля","Apple больше не принимает сохранённую авторизацию.","Нажмите «Войти» и подтвердите вход с новым паролем и кодом 2FA. Очередь остановлена; после входа продолжите оставшиеся загрузки.");
+        if(Has("your password has changed","password has been changed","password changed","password token is expired","session expired"))
+            return new(FailureCode.PasswordChanged,"Требуется новый вход в Apple Account","Сохранённая сессия истекла или больше не принимается Apple, например после смены пароля.","Нажмите «Войти» и подтвердите вход с новым паролем и кодом 2FA. Очередь остановлена; после входа продолжите оставшиеся загрузки.");
         if(Has("empty songlist","empty song list"))
             return new(FailureCode.EmptyCatalog,"Apple не вернула данные приложения","Магазин вернул пустой список. Приложение может быть недоступно для региона или аккаунта; также возможен временный сбой.","Проверьте ID и доступность приложения в App Store для этого аккаунта. Проверьте вход; после смены пароля войдите заново. Затем повторите запрос.");
         if(Has("account is locked","account has been locked","account has been disabled","account is disabled","account is not active","account is inactive","apple id has been disabled","apple id is locked","apple id has been locked","apple id is not active","account has been deactivated","media & purchases account has been disabled","account has been locked for security"))
             return new(FailureCode.AccountRestricted,"Apple ограничила доступ к аккаунту","Магазин отклонил авторизацию из-за состояния аккаунта.","Проверьте аккаунт на устройстве и восстановите доступ через Apple. После этого войдите в программу заново.");
-        if(Has("incorrect password","password is incorrect","invalid credentials","invalid username","authentication failed","failed to authenticate"))
+        if(Has("incorrect password","password is incorrect","invalid credentials","invalid password","incorrect account or password","invalid username","authentication failed","failed to authenticate"))
             return new(FailureCode.Credentials,"Apple не подтвердила вход","Логин, пароль или сохранённая сессия не приняты.","Проверьте Apple Account и обычный пароль, войдите заново с кодом 2FA. Пароль приложения для этого входа не подходит.");
         if(Has("terms and conditions","terms have changed","agreement required"))
             return new(FailureCode.Terms,"Нужно принять условия Apple","Аккаунт требует завершить настройку или принять обновлённые условия магазина.","Откройте App Store на iPhone под этим аккаунтом, завершите запросы Apple и затем войдите в программу заново.");
@@ -54,7 +54,7 @@ public static class ErrorLocalizer
             return new(FailureCode.Incompatible,"Приложение несовместимо с устройством","Версия iOS, архитектура или платформа не подходит IPA.","Выберите более старую совместимую версию приложения либо обновите iOS, если это возможно.");
         if(Has("zip_open","invalid archive","central directory","не существует"))
             return new(FailureCode.Storage,"Не удалось прочитать IPA-файл","Файл удалён, повреждён или недоступен.","Проверьте файл в папке IPA, повторно скачайте его и добавьте в очередь.");
-        if(error is HttpRequestException || Has("could not resolve","name resolution","network is unreachable","timed out","tls handshake"))
+        if(error is HttpRequestException || Has("could not resolve","name resolution","network is unreachable","timed out","tls handshake","context deadline exceeded","client.timeout exceeded","authentication service unavailable"))
             return new(FailureCode.Network,"Нет ответа от сервера","Не удалось связаться с Apple или сервером обновлений.","Проверьте интернет, дату и время Windows, VPN и брандмауэр. Повторите запрос позже.");
         if(Has("однозначная windows-утилита","сначала установите инструменты","idevicepair отсутствует"))
             return new(FailureCode.MissingTool,"Нужны обновлённые инструменты iPhone","В выбранном комплекте отсутствует необходимая утилита.","Откройте «Настройки» → «Инструменты iPhone» и установите актуальный комплект. Для проверки доверия нужен idevicepair.");

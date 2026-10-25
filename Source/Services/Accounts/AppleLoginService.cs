@@ -23,6 +23,8 @@ namespace IpaDesktop
     {
         string buffer = "";
         bool identifierSent, passwordSent, codeSent;
+        string httpStatus="", failureCode="";
+        public string Diagnostics => String.IsNullOrEmpty(httpStatus) ? "" : "Ответ Apple: HTTP " + httpStatus + (String.IsNullOrEmpty(failureCode)?"":"; код отказа " + failureCode) + ".";
         static readonly Regex[] prompts =
         {
             new Regex(@"\bEnter[ \t]+(?:e-?mail|Apple[ \t]+(?:ID|Account))[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
@@ -34,6 +36,10 @@ namespace IpaDesktop
             if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
             buffer += chunk;
             string text = Text();
+            var status=Regex.Matches(text,@"IPA_AUTH_STATUS http=([1-5][0-9]{2})\b");
+            if(status.Count>0) httpStatus=status[status.Count-1].Groups[1].Value;
+            var failure=Regex.Matches(text,@"IPA_AUTH_FAILURE code=(-?[0-9]{1,15})\b");
+            if(failure.Count>0) failureCode=failure[failure.Count-1].Groups[1].Value;
             // ConPTY может повторно прислать всю строку при перерисовке, включая старые запросы.
             // Реагируем только на следующий этап; пароль/код повторно не отправляем.
             var identifier = prompts[0].Match(text);
@@ -91,8 +97,8 @@ namespace IpaDesktop
                 if (AccountRequestGuard.IsAccountFailure(failure.Code) || failure.Code == FailureCode.RateLimited) throw new AppleLoginException(failure);
                 if (lower.Contains("resolve") || lower.Contains("connect") || lower.Contains("timeout") || lower.Contains("ssl") || lower.Contains("tls"))
                     throw new AppleLoginException("Не удалось связаться с Apple. Проверьте подключение, дату Windows и повторите вход позже.");
-                if (lower.Contains("terms") || lower.Contains("agreement")) throw new AppleLoginException("Apple требует принять условия аккаунта. Откройте App Store на устройстве и завершите настройку аккаунта.");
-                throw new AppleLoginException(new UserError(FailureCode.Credentials, "Apple не подтвердила вход", codeSent ? "Пароль или код подтверждения не приняты." : "Данные для входа не приняты.", "Проверьте данные на устройстве Apple. Сделайте паузу перед следующей попыткой; автоматического повтора нет."));
+                if (lower.Contains("terms") || lower.Contains("agreement")) throw new AppleLoginException(ErrorLocalizer.Describe("agreement required"));
+                throw new AppleLoginException(new UserError(FailureCode.Unknown, "Apple не подтвердила вход", "Ответ не содержит однозначной причины отказа. Это не подтверждение неверного пароля или блокировки по IP.", "Остановите попытки и проверьте состояние аккаунта на доверенном устройстве Apple. Автоматического повтора нет."));
             }
             finally { Clear(); }
         }
@@ -106,8 +112,9 @@ namespace IpaDesktop
         readonly string directory;
         readonly IAppToolClient tools;
         readonly AccountRequestGuard guard;
-        public AppleLoginService(ILoginProcessFactory factory, Func<string> executable, string directory, IAppToolClient tools, AccountRequestGuard guard = null)
-        { this.factory = factory; this.executable = executable; this.directory = directory; this.tools = tools; this.guard = guard; }
+        readonly Func<CancellationToken,Task> validateEngine;
+        public AppleLoginService(ILoginProcessFactory factory, Func<string> executable, string directory, IAppToolClient tools, AccountRequestGuard guard = null, Func<CancellationToken,Task> validateEngine = null)
+        { this.factory = factory; this.executable = executable; this.directory = directory; this.tools = tools; this.guard = guard; this.validateEngine=validateEngine; }
         public Task<string> LoginAsync(string identifier, SecureString password, Func<CancellationToken, Task<SecureString>> requestCode, CancellationToken ct)
         {
             return Task.Run(async delegate
@@ -123,6 +130,7 @@ namespace IpaDesktop
                     try
                     {
                         token.ThrowIfCancellationRequested();
+                        if(validateEngine!=null) await validateEngine(token).ConfigureAwait(false);
                         guard?.LoginStarted();
                         using (var session = factory.Start(executable(), directory))
                         {
@@ -164,7 +172,14 @@ namespace IpaDesktop
                         if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
                         throw new AppleLoginException("Время входа истекло. Повторите попытку и подготовьте доверенное устройство для получения кода.");
                     }
-                    catch (AppleLoginException error) { guard?.LoginFailed(error.Failure ?? new UserError(FailureCode.Network, "Вход не завершён", "Ответ не подтверждён.", "Повторите позже.")); throw; }
+                    catch (AppleAccountException) { throw; }
+                    catch (AppleLoginException error)
+                    {
+                        guard?.LoginFailed(error.Failure ?? new UserError(FailureCode.Network,"Вход не завершён","Ответ не подтверждён.","Повторите позже."));
+                        if(error.Failure!=null && !String.IsNullOrEmpty(protocol.Diagnostics))
+                            throw new AppleLoginException(error.Failure with { Cause=error.Failure.Cause + " " + protocol.Diagnostics });
+                        throw;
+                    }
                     catch (NotSupportedException) { throw new AppleLoginException("Вход в окне требует Windows 10 версии 1809 или новее."); }
                     catch (Exception) { throw new AppleLoginException("Не удалось завершить вход. Проверьте установку ipatool и повторите попытку. Подробности авторизации не записываются в журнал."); }
                     finally { protocol.Clear(); }

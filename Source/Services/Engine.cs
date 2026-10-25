@@ -111,12 +111,13 @@ namespace IpaDesktop
             Directory.CreateDirectory(Downloads);
             runner = processRunner ?? new ProcessRunner(Downloads);
             locator = new ToolLocator(settings);
-            var rawTools = new AppToolClient(runner, locator);
+            var policy=processRunner==null ? new GuardedEnginePolicy(runner,()=>locator.Find("ipatool*.exe")) : null;
+            var rawTools = new AppToolClient(runner, locator, policy);
             AccountRequests = new AccountRequestGuard(processRunner == null
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "AccountProtection")
                 : Path.Combine(root, "AccountProtection"));
             tools = new ProtectedAppToolClient(rawTools, AccountRequests);
-            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests);
+            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
             AppVersions = new AppVersions(tools);
             catalog = new AppCatalog(settings, locator);
             updater = new EngineUpdater(settings, runner);

@@ -237,7 +237,7 @@ namespace IpaDesktop
             cancellation = new CancellationTokenSource();
             string[] buttons =
             {
-                "CheckConnection", "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
+                "CheckConnection", "AccountSafetyReview", "Login", "AccountInfo", "Logout", "Search", "Versions", "VersionInfo", "Download", "RefreshFiles", "ImportFile", "DeleteFiles", "InstallFiles", "CheckUpdate", "Rollback", "CheckGuiUpdate", "InstallGuiUpdate", "AddChosen", "ClearChosen", "AddInstall", "ClearInstall", "CheckAppleSupport", "CheckDeviceUpdate", "RollbackDevices", "RetryDownloads", "ForgetDownloadErrors", "RetryInstalls", "ForgetInstallErrors", "SaveSet", "AddToSet", "UseSet", "DeleteSet", "EditSet", "FileInfo", "DeviceInfo", "SelectOld", "DeleteStorage", "RefreshStorage"
             };
             foreach (var name in buttons) C<Button>(name).IsEnabled = false;
             C<ItemsControl>("ChosenFiles").IsEnabled = false;

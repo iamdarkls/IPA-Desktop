@@ -23,7 +23,9 @@ public sealed class AccountRequestGuard
     {
         public FailureCode Blocked;
         public long LoginAfter, RequestAfter;
-        public int LoginFailures, RequestFailures;
+        public int LoginFailures, RequestFailures, CredentialFailures;
+        public long WindowStarted, GlobalAfter;
+        public bool SafetyStop;
     }
     State Read()
     {
@@ -32,20 +34,61 @@ public sealed class AccountRequestGuard
         using var reader = new StreamReader(stream);
         var parts = reader.ReadToEnd().TrimEnd('\r', '\n').Split('\n');
         for (int index=0; index<parts.Length; index++) parts[index]=parts[index].Trim();
-        if (parts.Length != 5 || !Enum.TryParse<FailureCode>(parts[0], out var blocked) || !Enum.IsDefined(blocked) ||
+        if ((parts.Length != 5 && parts.Length != 9) || !Enum.TryParse<FailureCode>(parts[0], out var blocked) || !Enum.IsDefined(blocked) ||
             !long.TryParse(parts[1], out var login) || !long.TryParse(parts[2], out var request) ||
             !int.TryParse(parts[3], out var lf) || !int.TryParse(parts[4], out var rf) || lf < 0 || rf < 0)
             throw new IOException("Не удалось прочитать состояние защиты Apple Account. Проверьте доступ к профилю приложения.");
-        return new State { Blocked=blocked, LoginAfter=login, RequestAfter=request, LoginFailures=lf, RequestFailures=rf };
+        var state = new State { Blocked=blocked, LoginAfter=login, RequestAfter=request, LoginFailures=lf, RequestFailures=rf,
+            SafetyStop=blocked == FailureCode.AccountRestricted };
+        if(parts.Length == 9)
+        {
+            if(!long.TryParse(parts[5], out state.WindowStarted) || !int.TryParse(parts[6], out state.CredentialFailures) ||
+                !long.TryParse(parts[7], out state.GlobalAfter) || !bool.TryParse(parts[8], out state.SafetyStop) || state.CredentialFailures < 0)
+                throw new IOException("Не удалось прочитать общие ограничения входа Apple Account.");
+        }
+        return state;
     }
     void Save(State state)
     {
         string temporary = StatePath + ".new";
         File.WriteAllLines(temporary, new[] { state.Blocked.ToString(), state.LoginAfter.ToString(CultureInfo.InvariantCulture),
-            state.RequestAfter.ToString(CultureInfo.InvariantCulture), state.LoginFailures.ToString(CultureInfo.InvariantCulture), state.RequestFailures.ToString(CultureInfo.InvariantCulture) });
+            state.RequestAfter.ToString(CultureInfo.InvariantCulture), state.LoginFailures.ToString(CultureInfo.InvariantCulture), state.RequestFailures.ToString(CultureInfo.InvariantCulture),
+            state.WindowStarted.ToString(CultureInfo.InvariantCulture), state.CredentialFailures.ToString(CultureInfo.InvariantCulture),
+            state.GlobalAfter.ToString(CultureInfo.InvariantCulture), state.SafetyStop.ToString(CultureInfo.InvariantCulture) });
         File.Move(temporary, StatePath, true);
     }
-    public bool RequiresLogin => Read().Blocked != FailureCode.Unknown;
+    public bool RequiresLogin { get { var state=Read(); return state.Blocked != FailureCode.Unknown || state.SafetyStop; } }
+    public bool SafetyStopped => Read().SafetyStop;
+    public string SafetyStatus
+    {
+        get
+        {
+            var state=Read();
+            if(state.SafetyStop) return "Входы остановлены после блокировки аккаунта Apple. Восстановите доступ через Apple и откройте «Ограничения входа».";
+            var after=Math.Max(state.GlobalAfter,Math.Max(state.LoginAfter,state.RequestAfter));
+            long seconds=(long)Math.Ceiling((after-clock().ToUnixTimeMilliseconds())/1000d);
+            return seconds>0 ? "Защитная пауза: ещё " + seconds + " сек. Смена аккаунта и перезапуск её не снимают." : "";
+        }
+    }
+    // Explicit local review only: never claims that Apple's restriction has expired, never resets timers/counters.
+    public void AcknowledgeRecovery(CancellationToken ct)
+    {
+        using(Enter(false,ct,true)) { var state=Read(); state.SafetyStop=false; Save(state); }
+    }
+    void RecordAccountFailure(State state, UserError error)
+    {
+        if(error.Code == FailureCode.AccountRestricted)
+        {
+            state.SafetyStop=true;
+            state.GlobalAfter=Math.Max(state.GlobalAfter,clock().AddMinutes(15).ToUnixTimeMilliseconds());
+        }
+        if(error.Code != FailureCode.Credentials) return;
+        var now=clock().ToUnixTimeMilliseconds();
+        if(state.WindowStarted == 0 || now-state.WindowStarted >= TimeSpan.FromHours(24).TotalMilliseconds)
+        { state.WindowStarted=now; state.CredentialFailures=0; }
+        state.CredentialFailures=Math.Min(100,state.CredentialFailures+1);
+        if(state.CredentialFailures>=3) state.GlobalAfter=Math.Max(state.GlobalAfter,clock().AddMinutes(30).ToUnixTimeMilliseconds());
+    }
     public static bool IsAccountFailure(FailureCode code) => code is FailureCode.PasswordChanged or FailureCode.Credentials or FailureCode.Terms or FailureCode.AccountRestricted;
     static UserError Blocked(FailureCode code) => new(code, "Загрузки приостановлены: нужен вход в Apple Account",
         "Предыдущий запрос отклонён из-за пароля, состояния аккаунта или условий Apple.",
@@ -66,6 +109,10 @@ public sealed class AccountRequestGuard
         try
         {
             var state = Read();
+            if(!recovery && state.SafetyStop) throw new AppleAccountException(new(FailureCode.AccountRestricted,
+                "Новые входы остановлены на этом компьютере", "Apple сообщила о блокировке аккаунта. Следующий аккаунт для проверки не используется.",
+                "Восстановите доступ через Apple на доверенном устройстве. После разбора причины откройте «Ограничения входа». Программа не определяет срок ограничения Apple."));
+            if(!recovery) CheckTime(state.GlobalAfter);
             if (!recovery && !login && state.Blocked != FailureCode.Unknown) throw new AppleAccountException(Blocked(state.Blocked));
             if (!recovery) CheckTime(login ? Math.Max(state.LoginAfter, state.RequestAfter) : state.RequestAfter);
             return lease;
@@ -73,7 +120,12 @@ public sealed class AccountRequestGuard
         catch { lease.Dispose(); throw; }
     }
     // Called while holding the lease. Failed auth info must never clear a blocked session.
-    public void LoginSucceeded() => Save(new State());
+    public void LoginSucceeded()
+    {
+        var previous=Read();
+        Save(new State { WindowStarted=previous.WindowStarted, CredentialFailures=previous.CredentialFailures,
+            GlobalAfter=previous.GlobalAfter, SafetyStop=previous.SafetyStop });
+    }
     public void LoginStarted()
     {
         var state = Read();
@@ -88,12 +140,14 @@ public sealed class AccountRequestGuard
         int seconds = error.Code == FailureCode.AccountRestricted ? 900 : Math.Min(900, 60 * (1 << (state.LoginFailures - 1)));
         state.LoginAfter = clock().AddSeconds(seconds).ToUnixTimeMilliseconds();
         if (IsAccountFailure(error.Code)) state.Blocked = error.Code;
+        RecordAccountFailure(state,error);
         Save(state);
     }
     public void RequestFailed(UserError error, TimeSpan? serverDelay = null)
     {
         var state = Read();
         if (IsAccountFailure(error.Code)) state.Blocked = error.Code;
+        RecordAccountFailure(state,error);
         if (error.Code is FailureCode.Network or FailureCode.RateLimited)
         {
             state.RequestFailures = Math.Min(5, state.RequestFailures + 1);

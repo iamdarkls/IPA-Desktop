@@ -78,7 +78,7 @@ namespace IpaDesktop
             });
             On("OpenRelease", delegate
             {
-                Process.Start(new ProcessStartInfo("https://github.com/Sorvigolova/ipatool/releases")
+                Process.Start(new ProcessStartInfo("https://github.com/iamdarkls/IPA-Desktop/releases/tag/ipatool-guard-v1.2.0.1")
                 {
                     UseShellExecute = true
                 });

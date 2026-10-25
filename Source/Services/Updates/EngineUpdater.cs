@@ -16,17 +16,21 @@ namespace IpaDesktop
     /// <summary>Проверяет, устанавливает и откатывает ipatool и отдельный комплект libimobiledevice.</summary>
     public sealed class EngineUpdater
     {
-        public const string SourceRepository = "Sorvigolova/ipatool";
+        public const string SourceRepository = AppInfo.Repository;
+        public const string GuardedEngineTag = "ipatool-guard-v1.2.0.1";
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";
-        public const string WindowsAssetName = "windows_amd64_ipatool-cpp.zip";
+        public const string WindowsAssetName = "IPA-AuthTools-1.2.0.1-Windows-x64.zip";
         static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
         /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
         public static Asset SelectAsset(Release release)
         {
+            if(release.tag_name != GuardedEngineTag) throw new IOException("Нужен проверенный релиз ipatool-guard.");
             var matches = (release.assets ?? new Asset[0]).Where(a => a.name == WindowsAssetName).ToArray();
             if (matches.Length != 1) throw new IOException("В релизе ipatool ожидается один Windows x64 ZIP: " + WindowsAssetName);
             ValidateAsset(matches[0], SourceRepository);
+            if(matches[0].browser_download_url != "https://github.com/"+SourceRepository+"/releases/download/"+GuardedEngineTag+"/"+WindowsAssetName ||
+                !System.Text.RegularExpressions.Regex.IsMatch(matches[0].digest ?? "", @"^sha256:[0-9a-fA-F]{64}$")) throw new IOException("Нужен архив защищённого движка с SHA-256 от GitHub.");
             return matches[0];
         }
         /// <summary>Проверяет допустимый репозиторий и параметры архива перед загрузкой.</summary>
@@ -115,7 +119,7 @@ namespace IpaDesktop
         }
         public async Task<Release> Check(CancellationToken ct)
         {
-            using (var response = await Http.GetAsync("https://api.github.com/repos/Sorvigolova/ipatool/releases/latest", ct))
+            using (var response = await Http.GetAsync("https://api.github.com/repos/"+SourceRepository+"/releases/tags/"+GuardedEngineTag, ct))
             {
                 response.EnsureSuccessStatusCode();
                 return JsonCodec.Deserialize<Release> (await response.Content.ReadAsStringAsync());
@@ -191,6 +195,8 @@ namespace IpaDesktop
                     timeout.CancelAfter(TimeSpan.FromSeconds(20));
                     var test = await runner.Run(bins[0], new string[0], timeout.Token, false, false);
                     ToolResponse.Ensure(test);
+                    var safety = await runner.Run(bins[0],new[]{"account-safety-info"},timeout.Token,false,false);
+                    if(safety.Code!=0 || safety.Output.Trim()!=GuardedEnginePolicy.Profile) throw new IOException("Движок не подтвердил защиту авторизации.");
                     foreach (var command in new[]
                     {
                         "auth", "search", "download", "list-versions", "get-version-metadata", "--format", "--external-version-id"

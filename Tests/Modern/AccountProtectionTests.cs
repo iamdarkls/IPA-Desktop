@@ -119,6 +119,79 @@ public sealed class AccountProtectionTests
         }
     }
 
+    [Fact] public void PasswordFailuresAcrossAccountsAndSuccessfulLoginsTriggerGlobalPause()
+    {
+        using var folder=new TempFolder();var now=DateTimeOffset.UtcNow;
+        var guard=new AccountRequestGuard(folder.Path,()=>now);
+        for(int index=0;index<3;index++)
+        {
+            using(guard.Enter(true,TestContext.Current.CancellationToken))
+            { guard.LoginStarted();guard.LoginFailed(ErrorLocalizer.Describe("incorrect password")); }
+            now=now.AddMinutes(16);
+            if(index<2) using(guard.Enter(true,TestContext.Current.CancellationToken)) guard.LoginSucceeded();
+        }
+        // A third refusal creates a 30-minute pause; 16 minutes is insufficient, even on a new instance/account.
+        var restarted=new AccountRequestGuard(folder.Path,()=>now);
+        Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));
+        restarted.AcknowledgeRecovery(TestContext.Current.CancellationToken); // Review must not reset the timer/counter.
+        Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));
+        now=now.AddMinutes(15);
+        using(restarted.Enter(true,TestContext.Current.CancellationToken)) restarted.LoginSucceeded();
+        Assert.False(restarted.RequiresLogin);
+    }
+    [Fact] public void ExplicitAccountLockStopsEveryAccountUntilReviewedAndPauseExpires()
+    {
+        using var folder=new TempFolder();var now=DateTimeOffset.UtcNow;var guard=new AccountRequestGuard(folder.Path,()=>now);
+        using(guard.Enter(true,TestContext.Current.CancellationToken))
+        { guard.LoginStarted();guard.LoginFailed(ErrorLocalizer.Describe("account is locked")); }
+        now=now.AddDays(2);
+        var restarted=new AccountRequestGuard(folder.Path,()=>now);
+        Assert.True(restarted.SafetyStopped);
+        Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));
+        using(restarted.Enter(false,TestContext.Current.CancellationToken,true)) { }
+        restarted.AcknowledgeRecovery(TestContext.Current.CancellationToken);
+        Assert.False(restarted.SafetyStopped);
+        Assert.True(restarted.RequiresLogin); // Old session is still blocked until a verified new login.
+        using(restarted.Enter(true,TestContext.Current.CancellationToken)) restarted.LoginSucceeded();
+        Assert.False(restarted.RequiresLogin);
+    }
+    [Fact] public void OldGuardStateMigratesAndUnknownAuthResponseIsNotIncorrectPassword()
+    {
+        using var folder=new TempFolder();
+        File.WriteAllLines(Path.Combine(folder.Path,"account-requests.txt"),new[]{"AccountRestricted","0","0","1","0"});
+        var guard=new AccountRequestGuard(folder.Path);
+        Assert.True(guard.SafetyStopped);
+        var protocol=new AppleLoginProtocol();protocol.Append("Enter email:");protocol.Append("Enter password:");
+        protocol.Append("IPA_AUTH_STATUS http=403\nIPA_AUTH_FAILURE code=5005\nsomething went wrong");
+        var error=Assert.Throws<AppleLoginException>(()=>protocol.Complete(1));
+        Assert.Equal(FailureCode.Unknown,error.Failure.Code);
+        Assert.Equal("Ответ Apple: HTTP 403; код отказа 5005.",protocol.Diagnostics);
+    }
+    [Fact] public async Task OldOrReplacedEngineCannotReceiveAccountCommands()
+    {
+        using var folder=new TempFolder();var exe=Path.Combine(folder.Path,"ipatool.exe");File.WriteAllText(exe,"old");
+        var runner=new ProfileRunner();var policy=new GuardedEnginePolicy(runner,()=>exe);
+        await Assert.ThrowsAsync<AppleAccountException>(()=>policy.RequireAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(new[]{"account-safety-info"},runner.Commands);
+        runner.Valid=true;
+        await policy.RequireAsync(TestContext.Current.CancellationToken);
+        await policy.RequireAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2,runner.Commands.Count);
+        File.WriteAllText(exe,"rolled back");runner.Valid=false;
+        await Assert.ThrowsAsync<AppleAccountException>(()=>policy.RequireAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(3,runner.Commands.Count);
+    }
+    sealed class ProfileRunner : IProcessRunner
+    {
+        public bool Valid; public List<string> Commands=new();
+        public Action<string> Log{get;set;} public System.Diagnostics.Process Active=>null;
+        public Task<Result> Run(string executable,string[] arguments,CancellationToken ct,bool visible,bool publish,string workingDirectory=null)
+        {
+            ct.ThrowIfCancellationRequested();Assert.False(publish);Commands.Add(String.Join(" ",arguments));
+            return Task.FromResult(new Result{Code=Valid?0:1,Output=Valid?GuardedEnginePolicy.Profile:"unknown command"});
+        }
+    }
+
     sealed class FakeTools : IAppToolClient
     {
         public int Calls; public Result Response;

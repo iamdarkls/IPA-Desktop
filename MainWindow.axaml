@@ -33,9 +33,11 @@
         <Button x:Name="Login" Content="Войти в Apple Account" Classes="primary" />
         <Button x:Name="AccountInfo" Content="Проверить аккаунт" />
         <Button x:Name="Logout" Content="Выйти" />
+        <Button x:Name="AccountSafetyReview" IsVisible="False" Content="Ограничения входа" />
         <Button x:Name="OpenFolder" Content="Папка IPA" />
         <Button x:Name="ShowLastReport" Content="Итог операции" IsEnabled="False" />
       </WrapPanel>
+      <TextBlock x:Name="AccountSafetyStatus" IsVisible="False" TextWrapping="Wrap" Foreground="#EAC58C" Margin="0,6,0,8" />
       <Border x:Name="ConnectionNotice" Classes="connection-card" IsVisible="False" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10">
         <StackPanel Spacing="5">
           <TextBlock x:Name="ConnectionTitle" FontWeight="SemiBold" Foreground="#B8DCFF" />
