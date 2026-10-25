@@ -33,6 +33,8 @@ public sealed class UiTests
   try
   {
    Assert.IsType<MainWindow>(window);
+   Assert.Equal("IPA Desktop · "+AppInfo.Version,window.Title);
+   Assert.Equal(AppInfo.Version,Find<TextBlock>(window,"GuiVersionBadge").Text);
    Find<TextBox>(window,"Query").Text="123";Click(window,"Search");await Wait(()=>!Busy(desktop));Click(window,"AddChosen");
    Find<TextBox>(window,"Query").Text="456";Click(window,"Search");await Wait(()=>!Busy(desktop));Click(window,"AddChosen");
    Assert.Equal(2,Find<ItemsControl>(window,"ChosenApps").ItemCount);

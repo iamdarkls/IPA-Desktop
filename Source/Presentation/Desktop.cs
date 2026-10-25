@@ -296,6 +296,9 @@ namespace IpaDesktop
         public Desktop(Engine backend, bool checkAtStartup, string assetDirectory)
         {
             w = new MainWindow();
+            w.Title = "IPA Desktop · " + AppInfo.Version;
+            C<TextBlock>("GuiVersionBadge").Text = AppInfo.Version;
+            C<TextBlock>("GuiVersionStatus").Text = "Установлена версия " + AppInfo.Version;
             journalTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             JournalView.Attach(C<TextBox>("Journal"), journalBuffer);
             journalTimer.Tick += delegate { FlushJournal(); if (busy) RenderQueue(); };
