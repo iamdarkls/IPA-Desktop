@@ -223,6 +223,20 @@ namespace IpaDesktop
                 if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                 ApplyDevices(devices);
                 ShowDeviceWarning(String.Join(Environment.NewLine, warnings));
+                var selected=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+                if(selected != null && blockedConnections.Contains(ConnectionKey(selected)))
+                {
+                    try
+                    {
+                        await engine.Devices.ReadDeviceAsync(selected,stop.Token);
+                        if(deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
+                        blockedConnections.Remove(ConnectionKey(selected));
+                        ShowConnection(new("Связь с iPhone восстановлена", "Очередь сохранена. Можно запустить оставшиеся IPA или повторить ошибки; успешные установки не повторяются.",false,true));
+                        ApplyActions();
+                    }
+                    catch(OperationCanceledException) { throw; }
+                    catch(Exception) { /* Keep the queue blocked until this same device answers a real handshake. */ }
+                }
             }
             catch (OperationCanceledException)
             {
@@ -357,6 +371,8 @@ namespace IpaDesktop
             var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             bool connectionAvailable=device != null && !blockedConnections.Contains(ConnectionKey(device));
             C<Button>("CheckConnection").IsEnabled=!busy && device != null;
+            C<Button>("CheckConnection").Content=device != null && !connectionAvailable ? "Восстановить связь" : "Проверить связь";
+            if(!busy && device != null && !connectionAvailable) C<TextBlock>("DeviceDetectionStatus").Text="Связь не подтверждена. Подключите iPhone или нажмите «Восстановить связь».";
             C<ComboBox>("FileAccount").IsEnabled = !busy;
             var chosenPaths = new HashSet<string>(installChosen.Snapshot().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
             C<Button>("SelectAllFiles").IsEnabled = !busy && visibleFiles.Any(x => !chosenPaths.Contains(x.Path));

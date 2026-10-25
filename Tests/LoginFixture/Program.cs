@@ -7,6 +7,11 @@ public static class FakeAppleLogin {
  [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
  public static int Main(string[] args) {
+  if(args.Length==2 && args[0]=="--process-fixture"){
+   if(args[1]=="ok"){Console.WriteLine("done");return 0;}
+   if(args[1]=="disconnect"){Console.WriteLine("ERROR: No device found");Console.Out.Flush();}
+   while(true){if(args[1]=="repeat"){Console.WriteLine("PROGRESS: 10");Console.Out.Flush();}Thread.Sleep(40);}
+  }
   File.WriteAllText("pid.txt",System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
   File.WriteAllText("stage.txt","redirected="+Console.IsInputRedirected+" visible="+IsWindowVisible(GetConsoleWindow())+" argc="+args.Length);
   if(Console.IsInputRedirected || IsWindowVisible(GetConsoleWindow()))return 41;

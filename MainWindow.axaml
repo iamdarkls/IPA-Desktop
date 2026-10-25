@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop · 0.3.2" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="#151A22" Foreground="#E4EAF2" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow">
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop · 0.3.3" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="#151A22" Foreground="#E4EAF2" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow">
   <Grid Margin="24,20,24,18">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -16,7 +16,7 @@
           <Image x:Name="BrandIcon" Width="40" Height="40" Margin="0,0,12,0" />
           <TextBlock Text="IPA Desktop" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center" />
           <Border Background="#23354E" CornerRadius="6" Padding="8,4" Margin="12,0,0,0" VerticalAlignment="Center">
-            <TextBlock Text="0.3.2" Foreground="#AFCDF7" FontSize="12" />
+            <TextBlock Text="0.3.3" Foreground="#AFCDF7" FontSize="12" />
           </Border>
         </StackPanel>
         <TextBlock Text="Поиск, загрузка и установка приложений для iPhone" Foreground="#9BACBF" Margin="0,4,0,12">
@@ -87,9 +87,9 @@
                 <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
               <DockPanel>
-                <Button x:Name="RetryDownloads" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <Button x:Name="ForgetDownloadErrors" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" />
-                <Button x:Name="ClearChosen" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
+                <Button x:Name="RetryDownloads" Classes="toolbar" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
+                <Button x:Name="ForgetDownloadErrors" Classes="toolbar" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" />
+                <Button x:Name="ClearChosen" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
                 <TextBlock x:Name="ChosenCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — добавить в выбранное" VerticalAlignment="Center" Foreground="#AFC6E7" FontSize="12" />
               </DockPanel>
               <ScrollViewer x:Name="SearchSelection" IsVisible="False" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48">
@@ -104,7 +104,7 @@
                       <Border Background="#29394D" CornerRadius="6" Margin="0,0,8,2" Padding="9,4">
                         <StackPanel Orientation="Horizontal">
                           <TextBlock Text="{Binding Label}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding ID}" />
-                          <Button Content="×" Tag="{Binding Key}" Padding="6,0" Margin="8,0,0,0" Background="#29394D" ToolTip.Tip="Убрать из выбранного" />
+                          <Button Content="×" Classes="remove-chip" Tag="{Binding Key}" Background="#29394D" ToolTip.Tip="Убрать из выбранного" />
                         </StackPanel>
                       </Border>
                     </DataTemplate>
@@ -143,7 +143,7 @@
                 </StackPanel>
                 <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" />
                 <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="1" Grid.Column="1" Text="Подключите и разблокируйте iPhone — он появится автоматически" TextWrapping="Wrap" Foreground="#AFC6E7" FontSize="12" VerticalAlignment="Center" />
-                <Button x:Name="CheckConnection" Grid.Row="1" Grid.Column="2" Classes="compact" Content="Проверить связь" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />
+                <Button x:Name="CheckConnection" Height="36" Grid.Row="1" Grid.Column="2" Classes="compact" Content="Проверить связь" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />
               </Grid>
             </Border>
             <Expander Header="Драйверы и помощь с подключением" FontSize="12" Margin="0,0,0,8" HorizontalAlignment="Stretch">
@@ -155,7 +155,7 @@
               <TextBlock x:Name="AppleSupportStatus" Text="Компоненты Apple: проверка при запуске" Foreground="#9BACBF" VerticalAlignment="Center" FontSize="12" Margin="0,0,0,6" />
             </WrapPanel>
             </Expander>
-            <DockPanel Margin="0,0,0,6" LastChildFill="True">
+            <DockPanel Classes="control-row" Margin="0,0,0,6" LastChildFill="True">
               <Button x:Name="RefreshFiles" Classes="compact" Content="Обновить" DockPanel.Dock="Right" Margin="8,0,0,0" />
               <Button x:Name="ImportFile" Classes="compact" Content="Добавить IPA…" DockPanel.Dock="Right" Margin="8,0,0,0" />
               <Button x:Name="SelectAllFiles" Content="Выбрать все (0)" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip.Tip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся." />
@@ -185,12 +185,12 @@
                 <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
               <DockPanel>
-                <Button x:Name="RetryInstalls" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <Button x:Name="ForgetInstallErrors" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" />
-                <Button x:Name="ClearInstall" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
+                <Button x:Name="RetryInstalls" Classes="toolbar" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
+                <Button x:Name="ForgetInstallErrors" Classes="toolbar" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" />
+                <Button x:Name="ClearInstall" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
                 <TextBlock x:Name="InstallCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — выбрать IPA" VerticalAlignment="Center" Foreground="#AFC6E7" FontSize="12" />
               </DockPanel>
-              <ScrollViewer x:Name="InstallSelection" IsVisible="False" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="38">
+              <ScrollViewer x:Name="InstallSelection" IsVisible="False" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48">
                 <ItemsControl x:Name="ChosenFiles">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -202,7 +202,7 @@
                       <Border Background="#29394D" CornerRadius="6" Margin="0,0,8,2" Padding="9,4">
                         <StackPanel Orientation="Horizontal">
                           <TextBlock Text="{Binding DisplayName}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding FileDetails}" />
-                          <Button Content="×" Tag="{Binding Path}" Padding="6,0" Margin="8,0,0,0" Background="#29394D" ToolTip.Tip="Убрать из выбранного" />
+                          <Button Content="×" Classes="remove-chip" Tag="{Binding Path}" Background="#29394D" ToolTip.Tip="Убрать из выбранного" />
                         </StackPanel>
                       </Border>
                     </DataTemplate>
@@ -233,7 +233,7 @@
             <Border Background="#1E2835" Classes="card" Padding="20" Margin="0,0,0,24">
               <StackPanel>
                 <TextBlock Text="IPA Desktop" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock x:Name="GuiVersionStatus" Text="Установлена версия 0.3.2" Foreground="#8CBAFF" Margin="0,8,0,14" />
+                <TextBlock x:Name="GuiVersionStatus" Text="Установлена версия 0.3.3" Foreground="#8CBAFF" Margin="0,8,0,14" />
                 <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="#E4EAF2" Margin="0,0,0,16" />
                 <WrapPanel>
                   <Button x:Name="CheckGuiUpdate" Content="Проверить версию" />
@@ -346,9 +346,9 @@
     <StackPanel Grid.Row="3">
       <Border x:Name="OperationNotice" Background="#38232C" BorderBrush="#D36B7B" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="False">
         <DockPanel>
-          <Button x:Name="DismissNotice" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" />
-          <Button x:Name="NoticeDetails" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
-          <Button x:Name="NoticeRetry" Content="Повторить ошибки" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
+          <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" />
+          <Button x:Name="NoticeDetails" Classes="toolbar" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
+          <Button x:Name="NoticeRetry" Classes="toolbar" Content="Повторить ошибки" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
           <StackPanel Spacing="4">
             <TextBlock x:Name="NoticeText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="13" />
             <TextBlock x:Name="NoticeCause" FontSize="12" TextWrapping="Wrap" Foreground="#C7CFDC" />

@@ -9,13 +9,39 @@ namespace IpaDesktop
     /// <summary>Единая обвязка CLI: транспорт, ожидание ответа, идентификация устройства и запуск без скрытых повторов.</summary>
     public sealed class DeviceCommandClient
     {
-        readonly IProcessRunner runner; readonly ToolLocator locator;
-        public DeviceCommandClient(IProcessRunner runner, ToolLocator locator) { this.runner = runner; this.locator = locator; }
+        readonly IProcessRunner runner, presenceRunner; readonly ToolLocator locator;
+        public DeviceCommandClient(IProcessRunner runner, ToolLocator locator, IProcessRunner presenceRunner = null)
+        { this.runner = runner; this.locator = locator; this.presenceRunner=presenceRunner ?? (runner as ProcessRunner)?.CreateIsolated(); }
         public Task<Result> ListAsync(bool network, CancellationToken ct) { return Probe(locator.Find("idevice_id*.exe"), new[] { network ? "-n" : "-l" }, ct); }
         public Task<Result> NameAsync(DeviceRow device, CancellationToken ct, int seconds = 5) { return Probe(locator.Find("ideviceinfo*.exe"), Arguments(device, "-u", device.ID, "-k", "DeviceName"), ct, seconds); }
         public async Task InstallAsync(DeviceRow device, InstallationPackage package, CancellationToken ct)
         {
-            Ensure(await runner.Run(locator.Find("ideviceinstaller*.exe"), Arguments(device, "--udid", device.ID, "install", package.RelativePath), ct, false, true, package.WorkingDirectory));
+            var exe=locator.Find("ideviceinstaller*.exe");
+            var args=Arguments(device,"--udid",device.ID,"install",package.RelativePath);
+            var policy=new ProcessRunPolicy(TimeSpan.FromMinutes(3),FailureFromOutput,()=>new DeviceConnectionException(new(FailureCode.Transport,
+                "Установщик перестал отвечать", "Три минуты нет нового вывода или прогресса. Утилита остановлена, очередь сохранена.",
+                "Проверьте результат на iPhone, восстановите связь и повторите только оставшиеся IPA.")));
+            Task<Result> Install(CancellationToken token) => runner is ProcessRunner process
+                ? process.RunMonitored(exe,args,token,false,true,package.WorkingDirectory,policy)
+                : runner.Run(exe,args,token,false,true,package.WorkingDirectory);
+            Ensure(await DeviceInstallWatchdog.Run(Install,presenceRunner == null ? null : token=>IsPresent(device,token),ct));
+        }
+        public static Exception FailureFromOutput(string line)
+        {
+            var text=(line ?? "").ToLowerInvariant();
+            if(!text.Contains("error") && !text.Contains("failed") && !text.Contains("could not") && !text.Contains("invalid host") && !text.Contains("invalidhostid") && !text.Contains("no device") && !text.Contains("connection lost")) return null;
+            var failure=ErrorLocalizer.Describe(line);
+            return failure.Connection ? new DeviceConnectionException(failure,new IOException(line)) : null;
+        }
+        async Task<bool> IsPresent(DeviceRow device,CancellationToken ct)
+        {
+            if(device.Network)
+            {
+                var result=await presenceRunner.Run(locator.Find("ideviceinfo*.exe"),Arguments(device,"-u",device.ID,"-k","UniqueDeviceID"),ct,false,false);
+                return result.Code == 0 && String.Equals(result.Output.Trim(),device.ID,StringComparison.OrdinalIgnoreCase);
+            }
+            var listed=await presenceRunner.Run(locator.Find("idevice_id*.exe"),new[]{"-l"},ct,false,false);
+            return listed.Code == 0 && listed.Output.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries).Any(id=>String.Equals(id.Trim(),device.ID,StringComparison.OrdinalIgnoreCase));
         }
         static void Ensure(Result result, bool probe = false)
         {

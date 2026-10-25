@@ -62,7 +62,10 @@ namespace IpaDesktop
             return b.Append('"').ToString();
         }
         /// <summary>Запускает процесс в фоне; отмена завершает дочерний процесс, а ожидание и чтение вывода ограничены.</summary>
+        public ProcessRunner CreateIsolated() => new ProcessRunner(Downloads);
         public Task<Result> Run(string exe, string[] args, CancellationToken token, bool visible, bool publish, string workingDirectory = null)
+            => RunMonitored(exe,args,token,visible,publish,workingDirectory,null);
+        public Task<Result> RunMonitored(string exe, string[] args, CancellationToken token, bool visible, bool publish, string workingDirectory, ProcessRunPolicy policy)
         {
             return Task.Run(delegate
             {
@@ -89,7 +92,8 @@ namespace IpaDesktop
                     object gate = new object();
                     bool stdoutDone = visible, stderrDone = visible;
                     long lastOutput = Stopwatch.GetTimestamp();
-                    string lastProgressMessage = null;
+                    string lastProgressMessage = null, lastActivityMessage = null;
+                    Exception reportedFailure = null;
                     DataReceivedEventHandler stdout = delegate(object sender, DataReceivedEventArgs e)
                     {
                         lock (gate)
@@ -99,12 +103,14 @@ namespace IpaDesktop
                                 stdoutDone = true;
                                 return;
                             }
-                            lastOutput = Stopwatch.GetTimestamp();
                             if (e.Data.StartsWith("PROGRESS:", StringComparison.Ordinal))
                             {
                                 if (e.Data == lastProgressMessage) return;
                                 lastProgressMessage = e.Data;
                             }
+                            if(e.Data != lastActivityMessage) lastOutput = Stopwatch.GetTimestamp();
+                            lastActivityMessage=e.Data;
+                            reportedFailure ??= policy?.ReadFailure?.Invoke(e.Data);
                             int count = Math.Min(e.Data.Length, 15000000 - output.Length);
                             if (count > 0)
                             {
@@ -147,15 +153,14 @@ namespace IpaDesktop
                         {
                             if (token.IsCancellationRequested)
                             {
-                                try
-                                {
-                                    p.Kill();
-                                } catch (InvalidOperationException)
-                                {
-                                }
-                                if (!p.WaitForExit(5000)) throw new IOException("Не удалось остановить процесс. Завершите его через Диспетчер задач.");
+                                StopProcess(p);
                                 token.ThrowIfCancellationRequested();
                             }
+                            Exception failure; long activity;
+                            lock(gate) { failure=reportedFailure; activity=lastOutput; }
+                            if(failure != null) { StopProcess(p); throw failure; }
+                            if(policy != null && (Stopwatch.GetTimestamp()-activity)/(double)Stopwatch.Frequency >= policy.IdleTimeout.TotalSeconds)
+                            { StopProcess(p); throw policy.IdleFailure(); }
                             if (publish && elapsed.Elapsed.TotalSeconds>= nextNotice)
                             {
                                 long last;
@@ -183,6 +188,7 @@ namespace IpaDesktop
                         lock (gate)
                         {
                             if (!stdoutDone || !stderrDone) Log("Процесс завершился, но поток вывода не закрылся. Ожидание потока прекращено.");
+                            if(reportedFailure != null) throw reportedFailure;
                             return new Result
                             {
                                 Code = p.ExitCode, Output = output.ToString()
@@ -191,9 +197,18 @@ namespace IpaDesktop
                     } finally
                     {
                         Active = null;
+                        // Exceptions must not leave the native installer holding the device session.
+                        try { if(!p.HasExited) StopProcess(p); } catch(InvalidOperationException) { }
                     }
                 }
             }, token);
+        }
+        static void StopProcess(Process process)
+        {
+            try { process.Kill(true); }
+            catch(InvalidOperationException) { return; }
+            catch(System.ComponentModel.Win32Exception) { if(!process.HasExited) process.Kill(); }
+            if(!process.WaitForExit(5000)) throw new IOException("Не удалось остановить утилиту. Завершите её через Диспетчер задач и повторите проверку связи.");
         }
     }
 }

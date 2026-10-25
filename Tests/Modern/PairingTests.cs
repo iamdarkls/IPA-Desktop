@@ -23,6 +23,7 @@ public sealed class PairingRunner : IProcessRunner
    if(WaitForTrust && !Trusted){output=command=="validate"?"Invalid HostID":"Please accept the trust dialog";code=1;return Task.FromResult(new Result{Code=code,Output=output});}
    if(Pairing.Count>0){var step=Pairing.Dequeue();Assert.Equal(step.Command,command);output=step.Reply;code=output=="OK"?0:1;}
   }
+  else if(name=="idevice_id.exe"){output=ID;}
   else if(name=="ideviceinfo.exe")
   {
    code=NetworkBroken?1:0;
@@ -49,7 +50,7 @@ public sealed class PairingFixture : IDisposable
  {
   var store=new SettingsStore(folder.Path);store.Settings.Current="fixture";store.Save();
   var bins=Path.Combine(folder.Path,"Versions/fixture/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"idevicepair.exe","ideviceinfo.exe","ideviceinstaller.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  foreach(var name in new[]{"idevicepair.exe","ideviceinfo.exe","ideviceinstaller.exe","idevice_id.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
   Client=new DeviceCommandClient(Runner,new ToolLocator(store));Engine=new Engine(folder.Path,Runner,new InstalledAppleSupportProbe());
   Engine.Settings.SoundsEnabled=false;Engine.Settings.CheckGuiUpdates=false;
  }

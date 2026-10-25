@@ -40,6 +40,14 @@ public sealed class UiTests
    Assert.Equal(2,backend.AppSets.Load().Single().Apps.Length);
    Click(window,"ClearChosen");Click(window,"UseSet");await Wait(()=>!Busy(desktop));
    Assert.Equal(2,Find<ItemsControl>(window,"ChosenApps").ItemCount);
+   await Task.Delay(50);
+   var toolbar=Find<ComboBox>(window,"VersionList");
+   foreach(var name in new[]{"Versions","VersionTable","VersionInfo","AddChosen","Download"})
+   {
+    var button=Find<Button>(window,name);
+    Assert.Equal(toolbar.Bounds.Height,button.Bounds.Height);
+    Assert.Equal(toolbar.Bounds.Y,button.Bounds.Y);
+   }
    var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
    window.Width=940;window.Height=720;tabs.SelectedIndex=1;await Task.Delay(50);
    Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed: " + Find<DataGrid>(window,"Files").Bounds.Height);
@@ -47,7 +55,7 @@ public sealed class UiTests
   }
   finally{window.Close();}
  }
- [AvaloniaFact] public async Task ConnectionFailureBlocksRetryUntilExplicitSuccessfulCheck()
+ [AvaloniaFact] public async Task ConnectionFailureBlocksRetryUntilSelectedPhoneAnswersAgain()
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   try
@@ -59,6 +67,9 @@ public sealed class UiTests
    Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.True(Find<Button>(window,"CheckConnection").IsEnabled);Assert.Equal(0,fixture.Runner.Installs);
    Assert.True(Find<Border>(window,"ConnectionNotice").IsVisible);Assert.Contains("Соединение",Find<TextBlock>(window,"ConnectionTitle").Text);
    Assert.Contains("Что сделать",Find<TextBlock>(window,"NoticeRemedy").Text);
+   await DesktopContract.ScanDevices(desktop);
+   Assert.True(Find<Button>(window,"InstallFiles").IsEnabled);
+   Assert.Contains("восстановлена",Find<TextBlock>(window,"ConnectionTitle").Text);
    Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
   }
   finally{window.Close();}
