@@ -2,7 +2,7 @@ name: Windows release
 on:
   push:
     branches: [main]
-    paths: ['IPA-Desktop.csproj', '.github/workflows/release.yml']
+    paths: ['IPA-Desktop.csproj', '.github/workflows/release.yml', 'Tools/AccountSafety/**']
   workflow_dispatch:
 permissions:
   contents: write

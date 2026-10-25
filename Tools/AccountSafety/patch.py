@@ -36,7 +36,7 @@ def patch(root):
     main = replace_once(main, 'j["password"]            = acc.password.get();', 'j["password"]            = ""; // Session tokens only; never persist the Apple password.')
     main = replace_once(main, 'acc.password.set(     j.value("password", ""));', 'acc.password.set(""); // Ignore passwords left by older engines.')
     main = replace_once(main, 'int main(int argc, char** argv) {', 'int main(int argc, char** argv) {\n    if (argc == 2 && std::string(argv[1]) == "account-safety-info") {\n        std::cout << "' + PROFILE + '\\n"; return 0;\n    }')
-    store = '#include "account_safety.h"\n' + store
+    store = '#include "account_safety.h"\n#include <iostream>\n' + store
     store = replace_once(store, 'acc.password.set(       password);', 'acc.password.set(""); // Never retain the Apple password in the saved session.')
     first = store.index('        // Transport retry: up to 3 attempts')
     last = store.index('        lastData = decode_plist(lastRes.body);',first)
