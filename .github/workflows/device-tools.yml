@@ -20,7 +20,7 @@ jobs:
       build: ${{ steps.prepare.outputs.build }}
       update: ${{ steps.prepare.outputs.update }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Test stable release discovery
         env:
           PYTHONPATH: Tools/DeviceTools
@@ -31,7 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 Tools/DeviceTools/Scripts/check_updates.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: steps.prepare.outputs.build == 'true' && steps.prepare.outputs.update == 'true'
         with:
           name: device-tools-candidate
@@ -47,7 +47,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Recover previously tested native draft
         if: needs.prepare.outputs.update != 'true'
         id: recover
@@ -56,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: ./Tools/DeviceTools/Scripts/Publish-TestedDraft.ps1
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         if: needs.prepare.outputs.update == 'true'
         with:
           name: device-tools-candidate

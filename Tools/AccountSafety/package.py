@@ -23,7 +23,8 @@ for name in re.findall(r'DLL Name: (\S+)',imports):
 pins=json.loads(Path('Tools/AccountSafety/pins.json').read_text())
 (stage/'sources.json').write_text(json.dumps({**pins,'profile':output,'sha256':hashlib.sha256(exe.read_bytes()).hexdigest()},indent=2)+'\n')
 Path('artifacts').mkdir(exist_ok=True)
-for folder,name in [(stage,'IPA-AuthTools-1.2.0.1-Windows-x64.zip'),(sources,'IPA-AuthTools-1.2.0.1-Sources.zip')]:
+version=pins['version']
+for folder,name in [(stage,f'IPA-AuthTools-{version}-Windows-x64.zip'),(sources,f'IPA-AuthTools-{version}-Sources.zip')]:
     with zipfile.ZipFile(Path('artifacts')/name,'w',zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(folder.rglob('*')):
             if path.is_file() and "__pycache__" not in path.parts: archive.write(path,path.relative_to(folder).as_posix())

@@ -10,7 +10,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/App.ico</ApplicationIcon>
-    <Version>0.3.7</Version>
+    <Version>0.3.8</Version>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
@@ -22,8 +22,9 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
-    <PackageReference Include="System.Windows.Extensions" Version="10.0.0" />
+    <PackageReference Include="HarfBuzzSharp" Version="8.3.1.5" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
+    <PackageReference Include="System.Windows.Extensions" Version="10.0.14" />
     <Compile Include="Source/**/*.cs" />
     <AvaloniaResource Include="Assets/**" />
     <EmbeddedResource Include="package-files.json" LogicalName="IpaDesktop.PackageFiles.json" />

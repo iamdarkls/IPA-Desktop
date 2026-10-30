@@ -17,6 +17,7 @@ cmake -S "$source_root" -B "$build_root" -G Ninja -DCMAKE_BUILD_TYPE=Release -DS
 cmake --build "$build_root" --parallel 2
 cp "$build_root/ipatool.exe" "$stage/ipatool.exe"
 cp "$source_root/LICENSE" "$stage/LICENSES/ipatool-MIT.txt"
+pacman -Q > "$stage/msys2-packages.txt"
 cp -r /mingw64/share/licenses "$stage/LICENSES/msys2"
 find "$build_root" -type f \( -name LICENSE -o -name COPYING -o -name LICENSE.txt -o -name LICENSE.md \) -print0 | while IFS= read -r -d '' file; do
   relative="${file#"$build_root"/}"

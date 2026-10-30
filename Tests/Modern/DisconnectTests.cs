@@ -3,6 +3,9 @@ using Xunit;
 namespace IpaDesktop.Tests;
 public sealed class DisconnectTests
 {
+ static string DotnetHost => Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ??
+  (Path.GetFileNameWithoutExtension(Environment.ProcessPath)=="dotnet" ? Environment.ProcessPath : "dotnet");
+
  [Fact] public async Task MissingPhoneCancelsHungInstallerAndDoesNotWaitForNativeExit()
  {
   bool stopped=false;int probes=0;
@@ -33,13 +36,13 @@ public sealed class DisconnectTests
   var fixture=Path.Combine(root,"Tests/LoginFixture/bin",config,"net10.0-windows/LoginFixture.dll");Assert.True(File.Exists(fixture));
   var idle=new DeviceConnectionException(new(FailureCode.Transport,"Нет прогресса","Установщик завис","Проверьте связь"));
   var policy=new ProcessRunPolicy(TimeSpan.FromSeconds(2),DeviceCommandClient.FailureFromOutput,()=>idle);
-  var task=runner.RunMonitored(Environment.ProcessPath,new[]{fixture,"--process-fixture",mode},TestContext.Current.CancellationToken,false,false,null,policy);
+  var task=runner.RunMonitored(DotnetHost,new[]{fixture,"--process-fixture",mode},TestContext.Current.CancellationToken,false,false,null,policy);
   var limit=Stopwatch.StartNew();while(runner.Active==null&&!task.IsCompleted){Assert.True(limit.Elapsed.TotalSeconds<5);await Task.Delay(10,TestContext.Current.CancellationToken);}
   var pid=runner.Active?.Id;
   var error=await Assert.ThrowsAsync<DeviceConnectionException>(()=>task.WaitAsync(TimeSpan.FromSeconds(8),TestContext.Current.CancellationToken));
   Assert.Equal(mode=="disconnect"?FailureCode.Disconnected:FailureCode.Transport,error.Failure.Code);Assert.Null(runner.Active);
   if(pid.HasValue){try{using var process=Process.GetProcessById(pid.Value);Assert.True(process.HasExited);}catch(ArgumentException){}}
-  var again=await runner.Run(Environment.ProcessPath,new[]{fixture,"--process-fixture","ok"},TestContext.Current.CancellationToken,false,false);
+  var again=await runner.Run(DotnetHost,new[]{fixture,"--process-fixture","ok"},TestContext.Current.CancellationToken,false,false);
   Assert.Equal(0,again.Code);Assert.Contains("done",again.Output);
  }
  [Fact] public void InformationalConnectionLogDoesNotStopInstaller()

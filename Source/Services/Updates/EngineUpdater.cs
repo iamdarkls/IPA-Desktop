@@ -17,10 +17,10 @@ namespace IpaDesktop
     public sealed class EngineUpdater
     {
         public const string SourceRepository = AppInfo.Repository;
-        public const string GuardedEngineTag = "ipatool-guard-v1.2.0.1";
+        public const string GuardedEngineTag = "ipatool-guard-v1.2.0.2";
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";
-        public const string WindowsAssetName = "IPA-AuthTools-1.2.0.1-Windows-x64.zip";
+        public const string WindowsAssetName = "IPA-AuthTools-1.2.0.2-Windows-x64.zip";
         static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
         /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
         public static Asset SelectAsset(Release release)
