@@ -20,6 +20,7 @@ namespace IpaDesktop
     public sealed class FilesController : WindowController
     {
         AppleSupportReport appleSupport;
+        readonly HashSet<string> verifiedConnections = new(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> blockedConnections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static string ConnectionKey(DeviceRow device) => device.ID + "|" + device.Network;
         void ShowConnection(DeviceConnectionProgress state)
@@ -28,23 +29,25 @@ namespace IpaDesktop
             if(device != null)
             {
                 if(state.WaitingForTrust) blockedConnections.Add(ConnectionKey(device));
-                if(state.Ready) blockedConnections.Remove(ConnectionKey(device));
+                if(state.Ready) { blockedConnections.Remove(ConnectionKey(device)); verifiedConnections.Add(ConnectionKey(device)); }
             }
+            view.Model.Device.SetState(state.Ready ? PhoneStatus.Ready : state.WaitingForTrust ? PhoneStatus.WaitingForTrust : PhoneStatus.Checking, state.Message);
             C<Border>("ConnectionNotice").IsVisible=true;
             C<TextBlock>("ConnectionTitle").Text=state.Title;
             C<TextBlock>("ConnectionMessage").Text=state.Message;
-            C<TextBlock>("Status").Text=state.Title;
+            view.Model.Status=state.Title;
         }
         internal void ConnectionCanceled()
         {
             if(C<Border>("ConnectionNotice").IsVisible) ShowConnection(new("Операция отменена", "Очередь сохранена. Автоматического продолжения не будет; при необходимости проверьте связь и запустите оставшиеся IPA.",false));
+            if(view.Model.Device.Status is PhoneStatus.Checking or PhoneStatus.WaitingForTrust) view.Model.Device.SetState(PhoneStatus.Lost, "Проверка отменена. Восстановите связь перед продолжением очереди.");
         }
         async Task EnsureConnection(DeviceRow device, CancellationToken ct)
         {
             try { await engine.Devices.EnsureReadyAsync(device,ShowConnection,ct); blockedConnections.Remove(ConnectionKey(device));
                 ShowConnection(new("iPhone готов к установке", "Доверие подтверждено. Устройство: " + device.DisplayLabel,false,true)); }
             catch(OperationCanceledException) { blockedConnections.Add(ConnectionKey(device));throw; }
-            catch(DeviceConnectionException error) { blockedConnections.Add(ConnectionKey(device)); ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false));throw; }
+            catch(DeviceConnectionException error) { blockedConnections.Add(ConnectionKey(device)); ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false)); view.Model.Device.SetState(PhoneStatus.Lost,error.Failure.Remedy); throw; }
         }
         readonly InstallationSelection installChosen = new InstallationSelection();
         readonly InstallationSelection failedInstalls = new InstallationSelection();
@@ -97,6 +100,8 @@ namespace IpaDesktop
             C<ComboBox>("DeviceList").SelectionChanged += delegate
             {
                 if(!busy) C<Border>("ConnectionNotice").IsVisible=false;
+                var selected = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+                view.Model.Device.Select(selected == null ? null : ConnectionKey(selected), selected != null && blockedConnections.Contains(ConnectionKey(selected)), selected != null && verifiedConnections.Contains(ConnectionKey(selected)));
                 ApplyActions();
             };
             On("AddInstall", delegate
@@ -158,7 +163,7 @@ namespace IpaDesktop
                 deviceGeneration++;
                 C<ComboBox>("DeviceList").ItemsSource = null;
                 deviceSignature = "";
-                C<TextBlock>("DeviceDetectionStatus").Text = "Определение iPhone…";
+                view.Model.Device.SetState(PhoneStatus.Disconnected, "Определение iPhone…");
                 C<TextBlock>("WifiStatus").Text = "";
                 ApplyActions();
                 await PauseDeviceDetectionAsync();
@@ -166,11 +171,11 @@ namespace IpaDesktop
             };
             OnAsync("WifiHelp", async delegate { await AppDialogs.ShowText(w, "Подключение iPhone по Wi-Fi",
                 "1. Подключите iPhone по USB и подтвердите доверие компьютеру.\n2. В Apple Devices включите «Показывать это устройство при подключении к Wi-Fi» и примените настройки. В iTunes — «Синхронизировать с этим iPhone по Wi-Fi».\n3. Подключите компьютер и iPhone к одной локальной сети, затем отключите USB.\n4. Включите «USB + Wi-Fi (экспериментально)»: список обновится автоматически. Выберите строку с отметкой Wi-Fi.\n\nЕсли телефон не найден: разблокируйте его, проверьте службу Apple Mobile Device, Bonjour, разрешения Apple в брандмауэре и отсутствие изоляции устройств в гостевой сети. VPN может мешать обнаружению.\n\nПри обрыве установка не переключается автоматически на USB. Проверьте результат на телефоне перед повтором."); });
-            On("CheckConnection", delegate
+            view.Model.Device.CheckRequested = () =>
             {
                 var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
                 if(device != null) Work("Проверка связи и доверия…",ct=>EnsureConnection(device,ct));
-            });
+            };
             On("InstallFiles", delegate { StartInstall(installChosen.Snapshot()); });
             On("RetryInstalls", delegate { StartInstall(failedInstalls.Snapshot()); });
             On("ForgetInstallErrors", delegate { failedInstalls.Clear(); ApplyActions(); });
@@ -205,7 +210,7 @@ namespace IpaDesktop
             if (String.IsNullOrEmpty(engine.Settings.DeviceCurrent ?? engine.Settings.Current))
             {
                 ApplyDevices(new List<DeviceRow>());
-                C<TextBlock>("DeviceDetectionStatus").Text = "Установите инструменты iPhone в настройках";
+                view.Model.Device.SetState(PhoneStatus.Disconnected, "Установите инструменты iPhone в настройках.");
                 return Task.FromResult(true);
             }
             var stop = new CancellationTokenSource();
@@ -224,11 +229,29 @@ namespace IpaDesktop
                 ApplyDevices(devices);
                 ShowDeviceWarning(String.Join(Environment.NewLine, warnings));
                 var selected=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
-                if(selected != null && blockedConnections.Contains(ConnectionKey(selected)))
+                if(selected != null && !verifiedConnections.Contains(ConnectionKey(selected)) && !blockedConnections.Contains(ConnectionKey(selected)))
                 {
                     try
                     {
-                        await engine.Devices.ReadDeviceAsync(selected,stop.Token);
+                        await engine.Devices.ValidateReadyAsync(selected,stop.Token);
+                        if(deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
+                        verifiedConnections.Add(ConnectionKey(selected));
+                        view.Model.Device.SetState(PhoneStatus.Ready,"Доверие и связь с выбранным iPhone проверены.");
+                    }
+                    catch(OperationCanceledException) { throw; }
+                    catch(DeviceConnectionException error)
+                    {
+                        blockedConnections.Add(ConnectionKey(selected));
+                        view.Model.Device.SetState(error.Failure.Code is FailureCode.Pairing or FailureCode.TrustPending or FailureCode.Locked
+                            ? PhoneStatus.WaitingForTrust : PhoneStatus.Lost, error.Failure.Remedy + " Нажмите «Проверить связь».");
+                    }
+                    ApplyActions();
+                }
+                else if(selected != null && blockedConnections.Contains(ConnectionKey(selected)))
+                {
+                    try
+                    {
+                        await engine.Devices.ValidateReadyAsync(selected,stop.Token);
                         if(deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                         blockedConnections.Remove(ConnectionKey(selected));
                         ShowConnection(new("Связь с iPhone восстановлена", "Очередь сохранена. Можно запустить оставшиеся IPA или повторить ошибки; успешные установки не повторяются.",false,true));
@@ -264,7 +287,7 @@ namespace IpaDesktop
         void ShowDeviceWarning(string warning)
         {
             ToolTip.SetTip(C<TextBlock>("DeviceDetectionStatus"), warning.Length == 0 ? "Список проверяется автоматически каждые 3 секунды в отсутствие других операций." : warning);
-            if (warning.Length > 0) C<TextBlock>("DeviceDetectionStatus").Text = "Проверьте подключение iPhone — подробности в подсказке";
+            if (warning.Length > 0) view.Model.Device.SetState(view.Model.Device.Status, "Проверьте подключение iPhone — подробности в подсказке.");
             if (warning != deviceWarning && warning.Length > 0) Log("Автоопределение iPhone: " + warning);
             deviceWarning = warning;
         }
@@ -272,6 +295,10 @@ namespace IpaDesktop
         {
             var combo = C<ComboBox>("DeviceList");
             var previous = combo.SelectedItem as DeviceRow;
+            if (previous != null && !devices.Any(x => ConnectionKey(x).Equals(ConnectionKey(previous), StringComparison.OrdinalIgnoreCase)))
+            {
+                verifiedConnections.Remove(ConnectionKey(previous)); blockedConnections.Add(ConnectionKey(previous));
+            }
             var signature = String.Join("\n", devices.Select(x => x.ID.ToUpperInvariant() + "|" + x.Network + "|" + x.Name).OrderBy(x => x, StringComparer.Ordinal));
             if (signature != deviceSignature)
             {
@@ -282,9 +309,13 @@ namespace IpaDesktop
                 Log(devices.Count == 0 ? "iPhone отключён." : "Обнаружены iPhone: " + String.Join(", ", devices.Select(x => x.DisplayLabel)));
                 deviceSignature = signature;
             }
+            var selected = combo.SelectedItem as DeviceRow;
+            view.Model.Device.Select(selected == null ? null : ConnectionKey(selected),
+                previous != null && selected == null || selected != null && blockedConnections.Contains(ConnectionKey(selected)),
+                selected != null && verifiedConnections.Contains(ConnectionKey(selected)));
+            if (selected == null && previous != null) view.Model.Device.SetState(PhoneStatus.Lost, "iPhone отключён. Подключите тот же телефон и проверьте связь; очередь сохранена.");
             C<TextBlock>("WifiStatus").Text = "USB: " + devices.Count(x => !x.Network) + " · Wi-Fi: " + devices.Count(x => x.Network);
-            C<TextBlock>("DeviceDetectionStatus").Text = devices.Count == 0 ? "Подключите и разблокируйте iPhone — он появится автоматически" :
-                combo.SelectedItem == null ? "Выберите iPhone для установки" : "iPhone подключён · автоопределение включено";
+            if (devices.Count > 1 && selected == null) view.Model.Device.SetState(PhoneStatus.Disconnected, "Выберите iPhone для установки.");
             ApplyActions();
         }
         /// <summary>После подтверждения перемещает IPA в корзину, продолжая обработку при ошибке отдельного файла.</summary>
@@ -313,17 +344,22 @@ namespace IpaDesktop
             });
         }
         /// <summary>Подтверждает выбранное устройство и запускает последовательную установку снимка очереди.</summary>
-        void StartInstall(List<LocalRow> rows) { view.RunAsyncCommand(() => StartInstallCore(rows)); }
-        async Task StartInstallCore(List<LocalRow> rows)
+        void StartInstall(List<LocalRow> rows, QueueBatchViewModel resumeBatch = null) { view.RunAsyncCommand(() => StartInstallCore(rows, resumeBatch)); }
+        async Task StartInstallCore(List<LocalRow> rows, QueueBatchViewModel resumeBatch)
         {
             var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             if (device == null || rows.Count == 0) throw new Exception("Выберите устройство и IPA для установки.");
+            if (busy) return;
+            if (resumeBatch != null && !CanResume(resumeBatch.TargetKey)) throw new Exception("Для продолжения восстановите связь с тем же iPhone.");
             var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
             if (!await AppDialogs.Confirm(w, "Установка", "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?\n\n" + summary)) return;
             Work("Установка IPA…", async delegate(CancellationToken ct)
             {
                 view.StartReport("Установка", rows.Count, delegate { StartInstall(failedInstalls.Snapshot()); });
+                QueueBatchViewModel batch = null;
+                batch = view.Model.Queue.Start("Установка", rows.Select(row => new QueueSeed(row.Path, row.DisplayName, row.Version)), ConnectionKey(device), device.DisplayLabel,
+                    keys => StartInstall(rows.Where(row => keys.Contains(row.Path)).ToList(), batch), resumeBatch);
                 await CheckSupport(ct);
                 await EnsureConnection(device,ct);
                 try
@@ -341,6 +377,8 @@ namespace IpaDesktop
                 {
                     blockedConnections.Add(ConnectionKey(device));
                     ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false));
+                    verifiedConnections.Remove(ConnectionKey(device));
+                    view.Model.Device.SetState(PhoneStatus.Lost,error.Failure.Remedy);
                     throw;
                 }
             });
@@ -366,13 +404,18 @@ namespace IpaDesktop
         }
 
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
+        internal bool CanResume(string key)
+        {
+            var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+            return !busy && device != null && String.Equals(ConnectionKey(device), key, StringComparison.OrdinalIgnoreCase) &&
+                !blockedConnections.Contains(key) && verifiedConnections.Contains(key);
+        }
         public override void RefreshActions()
         {
             var device=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             bool connectionAvailable=device != null && !blockedConnections.Contains(ConnectionKey(device));
-            C<Button>("CheckConnection").IsEnabled=!busy && device != null;
-            C<Button>("CheckConnection").Content=device != null && !connectionAvailable ? "Восстановить связь" : "Проверить связь";
-            if(!busy && device != null && !connectionAvailable) C<TextBlock>("DeviceDetectionStatus").Text="Связь не подтверждена. Подключите iPhone или нажмите «Восстановить связь».";
+
+
             C<ComboBox>("FileAccount").IsEnabled = !busy;
             var chosenPaths = new HashSet<string>(installChosen.Snapshot().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
             C<Button>("SelectAllFiles").IsEnabled = !busy && visibleFiles.Any(x => !chosenPaths.Contains(x.Path));

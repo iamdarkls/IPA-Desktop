@@ -25,6 +25,7 @@ namespace IpaDesktop
         public Task<List<DeviceRow>> FindAsync(bool includeWifi, CancellationToken ct) { return discovery.FindAsync(includeWifi, ct); }
         public Task<List<DeviceRow>> FindAsync(bool includeWifi, CancellationToken ct, Action<string> report) { return discovery.FindAsync(includeWifi, ct, report); }
         public Task<Dictionary<string, string>> ReadDeviceAsync(DeviceRow device, CancellationToken ct) { return client.ReadDeviceAsync(device, ct); }
+        public Task<Dictionary<string,string>> ValidateReadyAsync(DeviceRow device, CancellationToken ct) => readiness.ValidateAsync(device,ct);
         public Task<Dictionary<string,string>> EnsureReadyAsync(DeviceRow device, Action<DeviceConnectionProgress> progress, CancellationToken ct) => readiness.EnsureAsync(device,progress,ct);
         public Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct) { return installation.InstallAsync(device, file, ct); }
         public Task InstallAsync(DeviceRow device, LocalRow file, Action<DeviceConnectionProgress> progress, CancellationToken ct) => installation.InstallAsync(device,file,ct,progress);

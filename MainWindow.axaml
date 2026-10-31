@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="using:IpaDesktop" Title="IPA Desktop" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow">
+<Window xmlns="https://github.com/avaloniaui" xmlns:ui="using:IpaDesktop" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow" x:DataType="ui:DesktopViewModel">
   <Grid Margin="28,20,28,18">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -31,11 +31,21 @@
       <TextBlock x:Name="UpdateNotice" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,0,8" IsVisible="False" />
       <WrapPanel x:Name="AccountActions">
         <Button x:Name="Login" ui:ActionIcon.Kind="User" Content="Войти в Apple Account" Classes="primary" />
-        <Button x:Name="AccountInfo" ui:ActionIcon.Kind="Shield" Content="Проверить аккаунт" />
-        <Button x:Name="Logout" ui:ActionIcon.Kind="Logout" Content="Выйти" />
-        <Button x:Name="AccountSafetyReview" ui:ActionIcon.Kind="Shield" IsVisible="False" Content="Ограничения входа" />
         <Button x:Name="OpenFolder" ui:ActionIcon.Kind="Folder" Content="Папка IPA" />
-        <Button x:Name="ShowLastReport" ui:ActionIcon.Kind="Report" Content="Итог операции" IsEnabled="False" />
+        <Button x:Name="ShowJournal" Content="Журнал" ui:ActionIcon.Kind="Journal" Command="{CompiledBinding ShowJournalCommand}" />
+        <Button x:Name="MoreAccount" Content="Ещё" ui:ActionIcon.Kind="List">
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedRight">
+              <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                <Button x:Name="AccountInfo" ui:ActionIcon.Kind="Shield" Content="Проверить аккаунт" Classes="menu-action" />
+                <Button x:Name="Logout" ui:ActionIcon.Kind="Logout" Content="Выйти" Classes="menu-action" />
+                <Button x:Name="ShowLastReport" ui:ActionIcon.Kind="Report" Content="Итог операции" IsEnabled="False" Classes="menu-action" />
+                <Button x:Name="ExportDiagnostics" ui:ActionIcon.Kind="Export" Content="Экспорт диагностики…" Classes="menu-action" />
+              </StackPanel>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+        <Button x:Name="AccountSafetyReview" ui:ActionIcon.Kind="Shield" IsVisible="False" Content="Ограничения входа" />
       </WrapPanel>
       <TextBlock x:Name="AccountSafetyStatus" IsVisible="False" TextWrapping="Wrap" Foreground="#EAC58C" Margin="0,6,0,8" />
       <Border x:Name="ConnectionNotice" Classes="connection-card" IsVisible="False" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10">
@@ -46,7 +56,6 @@
       </Border>
     </StackPanel>
     <TabControl Grid.Row="2" Margin="0,8,0,8">
-      
       <TabItem x:Name="SearchTab" Header="Поиск" ui:ActionIcon.Kind="Search">
         <Grid Margin="16,12">
           <Grid.RowDefinitions>
@@ -64,21 +73,29 @@
             <Button x:Name="Search" ui:ActionIcon.Kind="Search" Content="Найти" Classes="primary" Grid.Column="1" Margin="10,0,0,0" />
           </Grid>
           <Border x:Name="AppsFrame" Classes="table-frame" Grid.Row="1" Margin="0,2,0,4">
-          <DataGrid x:Name="Apps" SelectionMode="Extended">
-            <DataGrid.Columns>
-              <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />
-              <DataGridTextColumn Header="App Store ID" Binding="{Binding ID}" Width="180" />
-            </DataGrid.Columns>
-          </DataGrid>
+            <DataGrid x:Name="Apps" SelectionMode="Extended">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />
+                <DataGridTextColumn Header="App Store ID" Binding="{Binding ID}" Width="180" />
+              </DataGrid.Columns>
+            </DataGrid>
           </Border>
           <TextBlock x:Name="SearchEmpty" Grid.Row="1" Margin="20,32,20,4" Text="Найдите приложение по названию или App Store ID" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
             </TextBlock>
           <WrapPanel Grid.Row="2" Margin="0,8,0,0">
             <Button x:Name="Versions" ui:ActionIcon.Kind="History" Content="Версии" />
             <ComboBox x:Name="VersionList" Width="170" Margin="0,0,8,8" />
-            <Button x:Name="VersionTable" ui:ActionIcon.Kind="List" Content="Все версии…" />
-            <Button x:Name="VersionInfo" ui:ActionIcon.Kind="Info" Content="Сведения" />
             <Button x:Name="AddChosen" ui:ActionIcon.Kind="Plus" Content="Добавить" ToolTip.Tip="Добавить выделенные строки и выбранную версию. Можно также добавлять двойным кликом по строке." />
+            <Button x:Name="MoreSearch" Content="Ещё" ui:ActionIcon.Kind="List">
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                  <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                    <Button x:Name="VersionTable" ui:ActionIcon.Kind="List" Content="Все версии…" Classes="menu-action" />
+                    <Button x:Name="VersionInfo" ui:ActionIcon.Kind="Info" Content="Сведения" Classes="menu-action" />
+                  </StackPanel>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
             <Button x:Name="Download" ui:ActionIcon.Kind="Download" Content="Скачать (0)" Classes="primary" />
           </WrapPanel>
           <Border Grid.Row="3" Classes="selection-card">
@@ -89,8 +106,16 @@
                 <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
               <DockPanel>
-                <Button x:Name="RetryDownloads" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <Button x:Name="ForgetDownloadErrors" ui:ActionIcon.Kind="Close" Classes="toolbar" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" />
+                <Button x:Name="MoreDownloads" Content="Ещё" ui:ActionIcon.Kind="List" DockPanel.Dock="Right" Classes="toolbar" Margin="8,0,0,0" FontSize="12">
+                  <Button.Flyout>
+                    <Flyout Placement="BottomEdgeAlignedRight">
+                      <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                        <Button x:Name="RetryDownloads" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Content="Повторить ошибки (0)" Padding="8,3" FontSize="12" />
+                        <Button x:Name="ForgetDownloadErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" />
+                      </StackPanel>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
                 <Button x:Name="ClearChosen" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
                 <TextBlock x:Name="ChosenCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — добавить в выбранное" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
               </DockPanel>
@@ -123,7 +148,6 @@
           </Border>
         </Grid>
       </TabItem>
-      
       <TabItem x:Name="FilesTab" Header="iPhone и IPA" ui:ActionIcon.Kind="Phone">
         <Grid Margin="16,12">
           <Grid.RowDefinitions>
@@ -137,29 +161,30 @@
               <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="260,*,Auto" ColumnSpacing="12" RowSpacing="8">
                 <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="10">
                   <ui:AppIcon Kind="Phone" Width="20" Height="20" Foreground="{DynamicResource AccentTextBrush}" />
-                  <TextBlock Text="Подключение iPhone" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <TextBlock Text="{CompiledBinding Device.Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
                   <TextBlock x:Name="WifiStatus" Text="USB" Foreground="#8BADD0" FontSize="12" VerticalAlignment="Center" />
                   <CheckBox x:Name="SearchWifi" Content="Искать по Wi-Fi" FontSize="12" Margin="6,0,0,0" ToolTip.Tip="Искать по USB и Wi-Fi; установка использует выбранное подключение" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                  <Button x:Name="DeviceInfo" ui:ActionIcon.Kind="Info" Classes="compact" Content="Об устройстве" Margin="0" />
+                  <Button x:Name="MoreDevice" Content="Ещё" ui:ActionIcon.Kind="List">
+                    <Button.Flyout>
+                      <Flyout Placement="BottomEdgeAlignedRight">
+                        <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                          <Button x:Name="DeviceInfo" ui:ActionIcon.Kind="Info" Classes="compact menu-action" Content="Об устройстве" />
+                          <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact menu-action" Content="Как подключить по Wi-Fi" />
+                          <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact menu-action" Content="Проверить драйвер" />
+                          <Button x:Name="OpenAppleSupportHelp" ui:ActionIcon.Kind="Help" Classes="compact menu-action" Content="Помощь Apple" />
+                        </StackPanel>
+                      </Flyout>
+                    </Button.Flyout>
+                  </Button>
                 </StackPanel>
                 <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" />
-                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="1" Grid.Column="1" Text="Подключите и разблокируйте iPhone — он появится автоматически" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" />
-                <Button x:Name="CheckConnection" ui:ActionIcon.Kind="Link" Height="36" Grid.Row="1" Grid.Column="2" Classes="compact" Content="Проверить связь" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />
+                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="1" Grid.Column="1" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" />
+                <Button x:Name="CheckConnection" ui:ActionIcon.Kind="Link" Height="36" Grid.Row="1" Grid.Column="2" Classes="compact" Content="{CompiledBinding Device.ActionText}" Command="{CompiledBinding Device.CheckCommand}" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />
               </Grid>
             </Border>
-            <Expander Header="Драйверы и помощь с подключением" FontSize="12" Margin="0,0,0,8" HorizontalAlignment="Stretch">
-            <WrapPanel Margin="0,8,0,0">
-
-              <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact" Content="Как подключить по Wi-Fi" />
-              <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact" Content="Проверить драйвер" />
-              <Button x:Name="OpenAppleSupportHelp" ui:ActionIcon.Kind="Help" Classes="compact" Content="Помощь Apple" />
-              <TextBlock x:Name="AppleSupportStatus" Text="Компоненты Apple: проверка при запуске" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" FontSize="12" Margin="0,0,0,6" />
-            </WrapPanel>
-            </Expander>
             <DockPanel Classes="control-row" Margin="0,0,0,6" LastChildFill="True">
-              <Button x:Name="RefreshFiles" ui:ActionIcon.Kind="Refresh" Classes="compact" Content="Обновить" DockPanel.Dock="Right" Margin="8,0,0,0" />
               <Button x:Name="ImportFile" ui:ActionIcon.Kind="Import" Classes="compact" Content="Добавить IPA…" DockPanel.Dock="Right" Margin="8,0,0,0" />
               <Button x:Name="SelectAllFiles" ui:ActionIcon.Kind="Check" Content="Выбрать все (0)" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip.Tip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся." />
               <TextBlock Text="Apple Account" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
@@ -168,17 +193,17 @@
             </DockPanel>
           </StackPanel>
           <Grid Grid.Row="1" Margin="0,6,0,12" ClipToBounds="True">
-          <Border x:Name="FilesFrame" Classes="table-frame">
-          <DataGrid x:Name="Files" SelectionMode="Extended">
-            <DataGrid.Columns>
-              <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="*" MinWidth="140" />
-              <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="90" />
-              <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="280" />
-              <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="140" />
-            </DataGrid.Columns>
-          </DataGrid>
-          </Border>
-          <TextBlock x:Name="FilesEmpty" IsHitTestVisible="False" Text="IPA пока нет. Скачайте приложения или нажмите «Добавить IPA…»." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Margin="24,32,24,4" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" IsVisible="False" />
+            <Border x:Name="FilesFrame" Classes="table-frame">
+              <DataGrid x:Name="Files" SelectionMode="Extended">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="*" MinWidth="140" />
+                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="90" />
+                  <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="280" />
+                  <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="140" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+            <TextBlock x:Name="FilesEmpty" IsHitTestVisible="False" Text="IPA пока нет. Скачайте приложения или нажмите «Добавить IPA…»." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Margin="24,32,24,4" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" IsVisible="False" />
           </Grid>
           <Border Grid.Row="3" Classes="selection-card">
             <Grid>
@@ -188,8 +213,19 @@
                 <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
               <DockPanel>
-                <Button x:Name="RetryInstalls" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="Повторить ошибки (0)" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <Button x:Name="ForgetInstallErrors" ui:ActionIcon.Kind="Close" Classes="toolbar" Content="Сбросить ошибки" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" />
+                <Button x:Name="MoreFiles" Content="Ещё" ui:ActionIcon.Kind="List" DockPanel.Dock="Right" Classes="toolbar" Margin="8,0,0,0" FontSize="12">
+                  <Button.Flyout>
+                    <Flyout Placement="BottomEdgeAlignedRight">
+                      <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                        <Button x:Name="RefreshFiles" ui:ActionIcon.Kind="Refresh" Classes="compact menu-action" Content="Обновить" />
+                        <Button x:Name="FileInfo" ui:ActionIcon.Kind="Info" Content="Об IPA…" Classes="menu-action" />
+                        <Button x:Name="DeleteFiles" ui:ActionIcon.Kind="Trash" Content="В корзину (0)" Classes="danger menu-action" ToolTip.Tip="Переместить выбранные внизу IPA в корзину. Приложения на iPhone сохранятся." />
+                        <Button x:Name="RetryInstalls" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Content="Повторить ошибки (0)" Padding="8,3" FontSize="12" />
+                        <Button x:Name="ForgetInstallErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" />
+                      </StackPanel>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
                 <Button x:Name="ClearInstall" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
                 <TextBlock x:Name="InstallCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — выбрать IPA" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
               </DockPanel>
@@ -213,78 +249,58 @@
                 </ItemsControl>
               </ScrollViewer>
               <WrapPanel Grid.Row="2" Margin="0,8,0,0">
-                <Button x:Name="FileInfo" ui:ActionIcon.Kind="Info" Content="Об IPA…" />
                 <Button x:Name="AddInstall" ui:ActionIcon.Kind="Plus" Content="Выбрать" ToolTip.Tip="Двойной клик по файлу также добавляет его в выбранное." />
                 <Button x:Name="InstallFiles" ui:ActionIcon.Kind="Phone" Content="Установить (0)" Classes="primary" />
-                <Button x:Name="DeleteFiles" ui:ActionIcon.Kind="Trash" Content="В корзину (0)" Classes="danger" ToolTip.Tip="Переместить выбранные внизу IPA в корзину. Приложения на iPhone сохранятся." />
               </WrapPanel>
             </Grid>
           </Border>
         </Grid>
       </TabItem>
-      <TabItem x:Name="SettingsTab" Header="Настройки" ui:ActionIcon.Kind="Settings">
-        <Grid x:Name="SettingsHost">
-        <ScrollViewer x:Name="SettingsContent" VerticalScrollBarVisibility="Auto">
-          <StackPanel Margin="24">
-            <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">
-              <StackPanel>
-                <TextBlock Text="Уведомления" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                <CheckBox x:Name="SoundsEnabled" Content="Звуковой сигнал после успешного скачивания и установки" Foreground="{DynamicResource TextBrush}" />
-                <TextBlock Text="Один сигнал после завершения всей очереди без ошибок. Используется системный звук Windows." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="12" />
-              </StackPanel>
-            </Border>
-            <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,24">
-              <StackPanel>
-                <TextBlock Text="IPA Desktop" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock x:Name="GuiVersionStatus" Text="Проверка версии…" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,14" />
-                <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
-                <WrapPanel>
-                  <Button x:Name="CheckGuiUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить версию" />
-                  <Button x:Name="InstallGuiUpdate" ui:ActionIcon.Kind="Download" Content="Установить обновление" IsEnabled="False" Classes="primary" />
-                  <Button x:Name="OpenGuiReleases" ui:ActionIcon.Kind="External" Content="Все версии" />
-                </WrapPanel>
-                <TextBlock Text="Установка — после подтверждения. Программа перезапустится, ваши IPA и настройки сохранятся." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
-              </StackPanel>
-            </Border>
-            <Border Classes="card" Padding="20" Margin="0,0,0,20">
-              <StackPanel>
-            <TextBlock Text="Движок ipatool" FontSize="20" FontWeight="SemiBold" />
-            <TextBlock Text="Защищённая сборка IPA Desktop на основе Sorvigolova / ipatool" Foreground="{DynamicResource AccentTextBrush}" Margin="0,12,0,24" />
-            <CheckBox x:Name="AutoUpdate" Foreground="{DynamicResource TextBrush}" Content="Проверять и устанавливать новые релизы при запуске" Margin="0,0,0,20" />
-            <WrapPanel>
-              <Button x:Name="CheckUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить обновления" Classes="primary" />
-              <Button x:Name="Rollback" ui:ActionIcon.Kind="History" Content="Откатить движок" />
-              <Button x:Name="OpenRelease" ui:ActionIcon.Kind="External" Content="Открыть релизы на GitHub" />
+      <TabItem x:Name="QueueTab" Header="{CompiledBinding Queue.TabTitle}" ui:ActionIcon.Kind="List">
+        <Grid Margin="16,12" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+          <DockPanel>
+            <WrapPanel DockPanel.Dock="Right">
+              <Button x:Name="ResumeQueue" Content="Продолжить оставшиеся" ui:ActionIcon.Kind="Refresh" Classes="primary" Command="{CompiledBinding Queue.ResumeCommand}" />
+              <Button Content="Убрать готовые" ui:ActionIcon.Kind="Clear" Command="{CompiledBinding Queue.ClearCompletedCommand}" />
             </WrapPanel>
-            <TextBlock Text="Обновление и откат ipatool сохраняют отдельный комплект для iPhone. Вход и 2FA доступны в окне программы." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,16,0,24" />
+            <StackPanel VerticalAlignment="Center" Spacing="4">
+              <TextBlock Text="Очередь операций" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="{CompiledBinding Queue.Summary}" Foreground="{DynamicResource MutedBrush}" />
+            </StackPanel>
+          </DockPanel>
+          <TextBlock Grid.Row="1" Text="{CompiledBinding Queue.ResumeHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" />
+          <Border Classes="table-frame" Grid.Row="2">
+            <Grid>
+              <DataGrid x:Name="OperationQueue" ItemsSource="{CompiledBinding Queue.Items}" SelectedItem="{CompiledBinding Queue.Selected, Mode=TwoWay}" SelectionMode="Single" RowHeight="56">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="*" MinWidth="90" />
+                  <DataGridTextColumn Header="Операция" Binding="{Binding Kind}" Width="100" />
+                  <DataGridTemplateColumn Header="Прогресс" Width="130">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate x:DataType="ui:QueueItemViewModel">
+                        <StackPanel Margin="10,6" VerticalAlignment="Center" Spacing="4">
+                          <TextBlock Text="{CompiledBinding ProgressText}" FontSize="12" />
+                          <ProgressBar Value="{CompiledBinding Progress}" IsIndeterminate="{CompiledBinding Indeterminate}" Height="3" Maximum="100" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                  <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="190" />
+                </DataGrid.Columns>
+              </DataGrid>
+              <TextBlock Text="{CompiledBinding Queue.EmptyMessage}" IsVisible="{CompiledBinding Queue.IsEmpty}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="440" Margin="24" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource MutedBrush}" />
+            </Grid>
+          </Border>
+          <Border Grid.Row="3" Classes="card" Padding="14,10">
+            <ScrollViewer MaxHeight="110" VerticalScrollBarVisibility="Auto">
+              <StackPanel Spacing="5">
+                <TextBlock Text="{CompiledBinding Queue.Selected.Target}" FontWeight="SemiBold" />
+                <TextBlock Text="{CompiledBinding Queue.SelectionDetail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
               </StackPanel>
-            </Border>
-            <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20">
-              <StackPanel>
-                <TextBlock Text="Инструменты для iPhone" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock x:Name="DeviceToolsVersion" Text="Комплект не установлен" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,12" />
-                <TextBlock Text="Источник: iamdarkls / IPA-Desktop · наша сборка libimobiledevice и ideviceinstaller" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,16" />
-                <CheckBox x:Name="AutoUpdateDeviceTools" Content="Проверять и обновлять инструменты при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
-                <WrapPanel>
-                  <Button x:Name="CheckDeviceUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить инструменты" Classes="primary" />
-                  <Button x:Name="RollbackDevices" ui:ActionIcon.Kind="History" Content="Откатить комплект" />
-                  <Button x:Name="OpenDeviceReleases" ui:ActionIcon.Kind="External" Content="Релизы комплекта" />
-                </WrapPanel>
-                <TextBlock Text="Переключение — после проверки запуска утилит комплекта. Предыдущий комплект сохраняется; откат отключает только его автообновление. Каталог обновляется отдельно при поиске." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
-              </StackPanel>
-            </Border>
-          </StackPanel>
-        </ScrollViewer>
+            </ScrollViewer>
+          </Border>
         </Grid>
-      </TabItem>
-      <TabItem Header="Журнал" ui:ActionIcon.Kind="Journal">
-        <DockPanel Margin="16,12">
-          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <Button x:Name="ExportDiagnostics" ui:ActionIcon.Kind="Export" Content="Экспорт диагностики…" />
-            <TextBlock Text="Версии программы и очищенный журнал" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="6,0,0,8" />
-          </WrapPanel>
-          <TextBox x:Name="Journal" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" />
-        </DockPanel>
       </TabItem>
       <TabItem Header="Наборы и хранилище" ui:ActionIcon.Kind="Layers">
         <Grid Margin="16,12">
@@ -336,17 +352,96 @@
               <TextBlock Text="Старые версии определяются по версии приложения, отдельно для каждого Apple Account. Удаление — в корзину, после подтверждения." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
             </StackPanel>
             <Border x:Name="StorageFrame" Classes="table-frame" Grid.Row="1" Margin="0,8,0,0">
-            <DataGrid x:Name="StorageFiles" SelectionMode="Extended">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="2*" MinWidth="120" />
-                <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="72" />
-                <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="*" MinWidth="100" />
-                <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="84" />
-                <DataGridTextColumn Header="Состояние" Binding="{Binding StorageStatus}" Width="126" />
-              </DataGrid.Columns>
-            </DataGrid>
+              <DataGrid x:Name="StorageFiles" SelectionMode="Extended">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="2*" MinWidth="120" />
+                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="72" />
+                  <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="*" MinWidth="100" />
+                  <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="84" />
+                  <DataGridTextColumn Header="Состояние" Binding="{Binding StorageStatus}" Width="126" />
+                </DataGrid.Columns>
+              </DataGrid>
             </Border>
           </Grid>
+        </Grid>
+      </TabItem>
+      <TabItem x:Name="SettingsTab" Header="Настройки" ui:ActionIcon.Kind="Settings">
+        <Grid x:Name="SettingsHost">
+          <ScrollViewer x:Name="SettingsContent" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24">
+              <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                  <TextBlock Text="Уведомления" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                  <CheckBox x:Name="SoundsEnabled" Content="Звуковой сигнал после успешного скачивания и установки" Foreground="{DynamicResource TextBrush}" />
+                  <TextBlock Text="Один сигнал после завершения всей очереди без ошибок. Используется системный звук Windows." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="12" />
+                </StackPanel>
+              </Border>
+              <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,24">
+                <StackPanel>
+                  <TextBlock Text="IPA Desktop" FontSize="22" FontWeight="SemiBold" />
+                  <TextBlock x:Name="GuiVersionStatus" Text="Проверка версии…" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,14" />
+                  <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
+                  <WrapPanel>
+                    <Button x:Name="CheckGuiUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить версию" />
+                    <Button x:Name="InstallGuiUpdate" ui:ActionIcon.Kind="Download" Content="Установить обновление" IsEnabled="False" Classes="primary" />
+                    <Button x:Name="MoreGui" Content="Ещё" ui:ActionIcon.Kind="List">
+                      <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                          <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                            <Button x:Name="OpenGuiReleases" ui:ActionIcon.Kind="External" Content="Все версии" Classes="menu-action" />
+                          </StackPanel>
+                        </Flyout>
+                      </Button.Flyout>
+                    </Button>
+                  </WrapPanel>
+                  <TextBlock Text="Установка — после подтверждения. Программа перезапустится, ваши IPA и настройки сохранятся." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+              <Border Classes="card" Padding="20" Margin="0,0,0,20">
+                <StackPanel>
+                  <TextBlock Text="Движок ipatool" FontSize="20" FontWeight="SemiBold" />
+                  <TextBlock Text="Защищённая сборка IPA Desktop на основе Sorvigolova / ipatool" Foreground="{DynamicResource AccentTextBrush}" Margin="0,12,0,24" />
+                  <CheckBox x:Name="AutoUpdate" Foreground="{DynamicResource TextBrush}" Content="Проверять и устанавливать новые релизы при запуске" Margin="0,0,0,20" />
+                  <WrapPanel>
+                    <Button x:Name="CheckUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить обновления" Classes="primary" />
+                    <Button x:Name="MoreEngine" Content="Ещё" ui:ActionIcon.Kind="List">
+                      <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                          <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                            <Button x:Name="Rollback" ui:ActionIcon.Kind="History" Content="Откатить движок" Classes="menu-action" />
+                            <Button x:Name="OpenRelease" ui:ActionIcon.Kind="External" Content="Открыть релизы на GitHub" Classes="menu-action" />
+                          </StackPanel>
+                        </Flyout>
+                      </Button.Flyout>
+                    </Button>
+                  </WrapPanel>
+                  <TextBlock Text="Обновление и откат ipatool сохраняют отдельный комплект для iPhone. Вход и 2FA доступны в окне программы." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,16,0,24" />
+                </StackPanel>
+              </Border>
+              <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20">
+                <StackPanel>
+                  <TextBlock Text="Инструменты для iPhone" FontSize="20" FontWeight="SemiBold" />
+                  <TextBlock x:Name="DeviceToolsVersion" Text="Комплект не установлен" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,12" />
+                  <TextBlock Text="Источник: iamdarkls / IPA-Desktop · наша сборка libimobiledevice и ideviceinstaller" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,16" />
+                  <CheckBox x:Name="AutoUpdateDeviceTools" Content="Проверять и обновлять инструменты при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
+                  <WrapPanel>
+                    <Button x:Name="CheckDeviceUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить инструменты" Classes="primary" />
+                    <Button x:Name="MoreTools" Content="Ещё" ui:ActionIcon.Kind="List">
+                      <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                          <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                            <Button x:Name="RollbackDevices" ui:ActionIcon.Kind="History" Content="Откатить комплект" Classes="menu-action" />
+                            <Button x:Name="OpenDeviceReleases" ui:ActionIcon.Kind="External" Content="Релизы комплекта" Classes="menu-action" />
+                          </StackPanel>
+                        </Flyout>
+                      </Button.Flyout>
+                    </Button>
+                  </WrapPanel>
+                  <TextBlock Text="Переключение — после проверки запуска утилит комплекта. Предыдущий комплект сохраняется; откат отключает только его автообновление. Каталог обновляется отдельно при поиске." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
         </Grid>
       </TabItem>
     </TabControl>
@@ -363,21 +458,21 @@
           </StackPanel>
         </DockPanel>
       </Border>
-    <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition />
-        <ColumnDefinition Width="120" />
-      </Grid.ColumnDefinitions>
-      <StackPanel>
-        <TextBlock x:Name="Status" Text="Готово" Margin="0,0,0,8" TextTrimming="CharacterEllipsis" />
-        <DockPanel Margin="0,0,0,7">
-          <TextBlock x:Name="TransferDetail" Text="" DockPanel.Dock="Right" Foreground="#8CB9FF" FontSize="12" MaxWidth="360" TextTrimming="CharacterEllipsis" Margin="10,0,0,0" />
-          <TextBlock x:Name="OperationDetail" Text="" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
-        </DockPanel>
-        <ProgressBar x:Name="Progress" Height="4" Minimum="0" Maximum="100" Foreground="#5094FF" Background="#29364C" />
-      </StackPanel>
-      <Button x:Name="Cancel" ui:ActionIcon.Kind="Close" Grid.Column="1" Content="Отмена" IsEnabled="False" Margin="16,0,0,0" />
-    </Grid>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition />
+          <ColumnDefinition Width="120" />
+        </Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock x:Name="Status" Text="{CompiledBinding Status}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis" />
+          <DockPanel Margin="0,0,0,7">
+            <TextBlock x:Name="TransferDetail" Text="{CompiledBinding TransferDetail}" DockPanel.Dock="Right" Foreground="#8CB9FF" FontSize="12" MaxWidth="360" TextTrimming="CharacterEllipsis" Margin="10,0,0,0" />
+            <TextBlock x:Name="OperationDetail" Text="{CompiledBinding OperationDetail}" ToolTip.Tip="{CompiledBinding ProgressTip}" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <ProgressBar x:Name="Progress" Value="{CompiledBinding Progress}" IsIndeterminate="{CompiledBinding Indeterminate}" Height="4" Minimum="0" Maximum="100" Foreground="#5094FF" Background="#29364C" />
+        </StackPanel>
+        <Button x:Name="Cancel" ui:ActionIcon.Kind="Close" Grid.Column="1" Content="Отмена" Command="{CompiledBinding CancelCommand}" Margin="16,0,0,0" />
+      </Grid>
     </StackPanel>
   </Grid>
 </Window>

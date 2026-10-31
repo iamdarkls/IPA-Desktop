@@ -13,7 +13,12 @@ namespace IpaDesktop.Tests;
 public sealed class UiTests
 {
  static T Find<T>(Window window,string name) where T:Control => window.FindControl<T>(name) ?? window.GetLogicalDescendants().OfType<T>().First(x=>x.Name==name);
- static void Click(Window window,string name) => Find<Button>(window,name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+ static void Click(Window window,string name)
+ {
+  var button=Find<Button>(window,name);
+  if(button.Command != null) button.Command.Execute(button.CommandParameter);
+  else button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+ }
  static async Task Wait(Func<bool> condition)
  {
   var time=Stopwatch.StartNew();
@@ -45,7 +50,7 @@ public sealed class UiTests
    Assert.Equal(2,Find<ItemsControl>(window,"ChosenApps").ItemCount);
    await Task.Delay(50);
    var toolbar=Find<ComboBox>(window,"VersionList");
-   foreach(var name in new[]{"Versions","VersionTable","VersionInfo","AddChosen","Download"})
+   foreach(var name in new[]{"Versions","MoreSearch","AddChosen","Download"})
    {
     var button=Find<Button>(window,name);
     Assert.Equal(toolbar.Bounds.Height,button.Bounds.Height);
@@ -65,13 +70,62 @@ public sealed class UiTests
     Assert.NotNull(origin);
     Assert.True(origin.Value.X>=0 && origin.Value.X+tab.Bounds.Width<=window.ClientSize.Width,"Tab header clipped: "+tab.Header);
    }
-   foreach(var name in new[]{"FileInfo","AddInstall","InstallFiles","DeleteFiles"})
+   foreach(var name in new[]{"AddInstall","InstallFiles"})
    {
     var button=Find<Button>(window,name);var origin=button.TranslatePoint(default,window);
     Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Y,button.Bounds.Y);
     Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Height,button.Bounds.Height);
     Assert.True(origin.Value.X>=0 && origin.Value.X+button.Bounds.Width<=window.ClientSize.Width,"Action clipped: "+name);
    }
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact] public async Task JournalReopensWithHistoryAndMoreMenuKeepsActionsAvailable()
+ {
+  using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;window.Show();
+  try
+  {
+   Assert.DoesNotContain(window.GetLogicalDescendants().OfType<TabItem>(),x=>Equals(x.Header,"Журнал"));
+   desktop.Model.AppendJournal("before-open\n");Click(window,"ShowJournal");await Task.Delay(50);
+   var journal=Assert.IsType<JournalWindow>(window.OwnedWindows.Single());
+   Assert.Contains("before-open",journal.FindControl<TextBox>("JournalText").Text);
+   desktop.Model.AppendJournal("while-open\n");await Task.Delay(30);
+   Assert.Contains("while-open",journal.FindControl<TextBox>("JournalText").Text);journal.Close();
+   desktop.Model.AppendJournal("while-closed\n");Click(window,"ShowJournal");await Task.Delay(30);
+   journal=Assert.IsType<JournalWindow>(window.OwnedWindows.Single());Assert.Contains("while-closed",journal.FindControl<TextBox>("JournalText").Text);journal.Close();
+   var more=Find<Button>(window,"MoreAccount");more.Flyout.ShowAt(more);await Task.Delay(30);
+   Assert.True(Find<Button>(window,"AccountInfo").IsEffectivelyVisible);Click(window,"AccountInfo");await Wait(()=>!Busy(desktop));
+   Assert.Contains("test@example.com",Find<TextBlock>(window,"AccountLabel").Text);
+  }
+  finally{window.Close();}
+ }
+ public static bool IsWindows => OperatingSystem.IsWindows();
+ [AvaloniaFact(SkipUnless=nameof(IsWindows), Skip="Windows installer integration test")] public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa()
+ {
+  using var fixture=new PairingFixture();var rows=new[]{fixture.Ipa("One"),fixture.Ipa("Two"),fixture.Ipa("Three")};
+  fixture.Runner.DisconnectAt=2;var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  async Task ConfirmInstall(int expectedInstalls)
+  {
+   await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Установка"));
+   var dialog=window.OwnedWindows.Single(x=>x.Title=="Установка");
+   dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   await Wait(()=>!Busy(desktop)&&desktop.Model.Queue.Items.Count==3&&fixture.Runner.Installs>=expectedInstalls);
+  }
+  try
+  {
+   var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
+   var files=Find<DataGrid>(window,"Files");files.ItemsSource=rows;foreach(var row in rows)files.SelectedItems.Add(row);Click(window,"AddInstall");
+   Click(window,"InstallFiles");await ConfirmInstall(2);Assert.Equal(2,fixture.Runner.Installs);
+   Assert.Equal(new[]{QueueItemState.Succeeded,QueueItemState.Uncertain,QueueItemState.Paused},desktop.Model.Queue.Items.Select(x=>x.State));
+   Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   fixture.Runner.DisconnectAt=0;await DesktopContract.ScanDevices(desktop);
+   Assert.Equal(PhoneStatus.Ready,desktop.Model.Device.Status);Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   var original=(DeviceRow)devices.SelectedItem;
+   devices.ItemsSource=new[]{new DeviceRow{ID="different",Name="Другой iPhone"}};devices.SelectedIndex=0;
+   Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   devices.ItemsSource=new[]{original};devices.SelectedIndex=0;Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   Click(window,"ResumeQueue");await ConfirmInstall(4);Assert.Equal(4,fixture.Runner.Installs);
+   Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
   }
   finally{window.Close();}
  }
@@ -84,12 +138,12 @@ public sealed class UiTests
    var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;Click(window,"AddInstall");
    Assert.True(Find<Button>(window,"InstallFiles").IsEnabled);
    fixture.Runner.Pairing.Enqueue(("validate","No device found"));Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));
-   Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.True(Find<Button>(window,"CheckConnection").IsEnabled);Assert.Equal(0,fixture.Runner.Installs);
+   Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.True(Find<Button>(window,"CheckConnection").IsEnabled);Assert.Equal(0,fixture.Runner.Installs);Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);
    Assert.True(Find<Border>(window,"ConnectionNotice").IsVisible);Assert.Contains("Соединение",Find<TextBlock>(window,"ConnectionTitle").Text);
    Assert.Contains("Что сделать",Find<TextBlock>(window,"NoticeRemedy").Text);
    await DesktopContract.ScanDevices(desktop);
    Assert.True(Find<Button>(window,"InstallFiles").IsEnabled);
-   Assert.Contains("восстановлена",Find<TextBlock>(window,"ConnectionTitle").Text);
+   Assert.Contains("восстановлена",Find<TextBlock>(window,"ConnectionTitle").Text);Assert.Equal(PhoneStatus.Ready,desktop.Model.Device.Status);
    Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
   }
   finally{window.Close();}
@@ -101,7 +155,7 @@ public sealed class UiTests
   {
    var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
    Click(window,"CheckConnection");await Wait(()=>Find<TextBlock>(window,"ConnectionTitle").Text?.Contains("Подтвердите")==true);
-   Assert.True(Busy(desktop));Assert.True(Find<Button>(window,"Cancel").IsEnabled);Assert.Contains("Доверять",Find<TextBlock>(window,"ConnectionMessage").Text);
+   Assert.True(Busy(desktop));Assert.Equal(PhoneStatus.WaitingForTrust,desktop.Model.Device.Status);Assert.True(Find<Button>(window,"Cancel").IsEnabled);Assert.Contains("Доверять",Find<TextBlock>(window,"ConnectionMessage").Text);
    window.Width=940;window.Height=720;await Task.Delay(50);
    fixture.Runner.Trusted=true;await Wait(()=>!Busy(desktop));Assert.Contains("готов",Find<TextBlock>(window,"ConnectionTitle").Text);Assert.Equal(0,fixture.Runner.Installs);
   }

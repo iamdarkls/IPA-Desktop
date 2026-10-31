@@ -60,8 +60,8 @@ namespace IpaDesktop
                     {
                         Dispatcher.UIThread.Post(new Action(delegate
                         {
-                            C<ProgressBar>("Progress").IsIndeterminate = false;
-                            C<ProgressBar>("Progress").Value = value;
+                            view.Model.Indeterminate = false;
+                            view.Model.Progress = value;
                         }));
                     });
                     ct.ThrowIfCancellationRequested();

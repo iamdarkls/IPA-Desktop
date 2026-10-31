@@ -2,6 +2,10 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using Avalonia.Controls;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using Avalonia.Platform.Storage;
 
 namespace IpaDesktop
 {
@@ -32,6 +36,7 @@ namespace IpaDesktop
         }
         internal void ReportItem(string name, Exception error)
         {
+            Model.Queue.Result(error);
             if (activeReport != null) activeReport.Add(name, error);
         }
         void RenderNotice()
@@ -58,7 +63,8 @@ namespace IpaDesktop
         internal void BeginQueue(string kind, int index, int total, string app)
         {
             queueProgress.Begin(kind, index, total, app);
-            C<TextBlock>("Status").Text = kind + " " + index + "/" + total + ": " + app;
+            Model.Queue.Begin(index);
+            Model.Status = kind + " " + index + "/" + total + ": " + app;
             RenderQueue();
         }
         /// <summary>Фиксирует итоговые счётчики, прекращая обновление завершённого прогресса.</summary>
@@ -72,12 +78,13 @@ namespace IpaDesktop
         /// <summary>Отрисовывает снимок прогресса в UI-потоке без прямого доступа фоновых процессов к Avalonia.</summary>
         void RenderQueue()
         {
-            C<TextBlock>("OperationDetail").Text = queueProgress.StatusText;
-            C<TextBlock>("TransferDetail").Text = queueProgress.TransferText;
-            ToolTip.SetTip(C<TextBlock>("OperationDetail"), queueProgress.Text);
+            Model.OperationDetail = queueProgress.StatusText;
+            Model.TransferDetail = queueProgress.TransferText;
+            Model.ProgressTip = queueProgress.Text;
+            Model.Queue.Measure(queueProgress.ItemPercent, queueProgress.TransferText);
             if (!queueProgress.Active) return;
-            C<ProgressBar>("Progress").IsIndeterminate = busy && queueProgress.Indeterminate;
-            C<ProgressBar>("Progress").Value = queueProgress.Value;
+            Model.Indeterminate = busy && queueProgress.Indeterminate;
+            Model.Progress = queueProgress.Value;
         }
         /// <summary>Передаёт метрики прогрессу, а обычные сообщения — в ограниченный буфер журнала.</summary>
         internal void Log(string text)
@@ -86,16 +93,51 @@ namespace IpaDesktop
             journalBuffer.Add(text);
         }
         /// <summary>Переносит накопленные сообщения журнала в интерфейс.</summary>
-        void FlushJournal()
+        void FlushJournal(bool all = false)
         {
-            JournalView.Flush(C<TextBox>("Journal"), journalBuffer, false);
+            string chunk;
+            do { chunk = journalBuffer.Drain(); Model.AppendJournal(chunk); } while (all && chunk.Length > 0);
+        }
+        Window journalWindow;
+        void ShowJournal()
+        {
+            FlushJournal(true);
+            if (journalWindow != null) { journalWindow.Activate(); return; }
+            journalWindow = new JournalWindow(w, Model);
+            journalWindow.Closed += (_, _) => journalWindow = null;
+            journalWindow.Show(w);
+        }
+        void CloseMenus()
+        {
+            foreach (var name in new[] { "MoreAccount", "MoreSearch", "MoreDownloads", "MoreDevice", "MoreFiles", "MoreGui", "MoreEngine", "MoreTools" })
+                C<Button>(name).Flyout?.Hide();
+        }
+        async Task ExportDiagnostics()
+        {
+            FlushJournal(true);
+            List<string> privateValues;
+            lock (privateGate) privateValues = reportPrivateValues.ToList();
+            privateValues.Add(Environment.UserName);
+            var email = C<TextBlock>("AccountLabel").Text;
+            if (email?.Contains("@") == true) privateValues.Add(email);
+            foreach (var device in C<ComboBox>("DeviceList").Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
+            var report = DiagnosticReport.Create(Model.JournalText, engine.Settings.Version ?? "not installed", engine.Settings.DeviceVersion ?? "not installed", privateValues);
+            var file = await w.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Экспорт диагностики", SuggestedFileName = "IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt",
+                FileTypeChoices = new[] { new FilePickerFileType("Текстовый отчёт") { Patterns = new[] { "*.txt" } } }
+            });
+            if (file == null) return;
+            await using (var stream = await file.OpenWriteAsync())
+            using (var writer = new StreamWriter(stream, Encoding.UTF8)) await writer.WriteAsync(report);
+            Log("Отчёт диагностики сохранён.");
         }
         /// <summary>Показывает ошибку пользователю и сохраняет сообщение в журнале.</summary>
         internal void Error(Exception e)
         {
             Log(e.Message);
             var failure=ErrorLocalizer.Describe(e);
-            C<TextBlock>("Status").Text = failure.Title;
+            Model.Status = failure.Title;
             if(activeReport != null && e is DeviceConnectionException) activeReport.StopReason=failure.Description;
             if (activeReport == null || (activeReport.Failed == 0 && activeReport.Succeeded == 0))
             {

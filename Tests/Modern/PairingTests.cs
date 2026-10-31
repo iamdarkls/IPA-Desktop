@@ -10,7 +10,7 @@ public sealed class PairingRunner : IProcessRunner
  public readonly List<(string Tool,string[] Args)> Calls=new();
  public readonly Queue<(string Command,string Reply)> Pairing=new();
  public bool NetworkBroken, WrongDevice, FailFirstInstall, FailAllInstalls, DisconnectInstall;
- public int Installs;
+ public int Installs, DisconnectAt;
  public bool WaitForTrust, Trusted;
  public string ID="00008030-0000111ABC000DEF";
  public Task<Result> Run(string exe,string[] args,CancellationToken ct,bool visible,bool publish,string workingDirectory=null)
@@ -33,7 +33,7 @@ public sealed class PairingRunner : IProcessRunner
   {
    Installs++;
    Assert.True(File.Exists(Path.Combine(workingDirectory,args.Last())));
-   if(DisconnectInstall){code=1;output="No device found";}
+   if(DisconnectInstall || Installs==DisconnectAt){code=1;output="No device found";}
    else if(FailAllInstalls || (FailFirstInstall&&Installs==1)){code=1;output="Could not connect to lockdownd: Invalid HostID";}
   }
   return Task.FromResult(new Result{Code=code,Output=output});

@@ -67,6 +67,7 @@ public sealed class DeviceReadiness
             throw new DeviceConnectionException(new(FailureCode.TrustPending,"Подтверждение доверия не получено за 90 секунд","iPhone не завершил сопряжение; установка не продолжалась.","Разблокируйте iPhone, подтвердите «Доверять» и повторите проверку связи. Если запрос не появляется, переподключите USB и проверьте компоненты Apple."));
         }
     }
+    public Task<Dictionary<string,string>> ValidateAsync(DeviceRow device, CancellationToken ct) => CheckAsync(device,ct);
     async Task<Dictionary<string,string>> CheckAsync(DeviceRow device, CancellationToken ct)
     {
         if(!device.Network) await client.PairAsync(device,"validate",ct);

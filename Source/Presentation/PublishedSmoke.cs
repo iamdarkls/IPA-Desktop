@@ -42,6 +42,24 @@ internal static class PublishedSmoke
                 throw new Exception("Published icon or live action label failed.");
             if(ErrorLocalizer.Describe("Invalid HostID").Code != FailureCode.Pairing)throw new Exception("Published error localization failed.");
             if(desktop.C<Button>("CheckConnection") == null || desktop.C<Border>("ConnectionNotice").IsVisible)throw new Exception("Published connection UI failed.");
+            // Verify the new compiled bindings and commands in the trimmed shipping binary.
+            string[] remaining = null;
+            desktop.Model.Queue.Start("Скачивание", new[]{ new QueueSeed("one","Queue one","1.0"), new QueueSeed("two","Queue two","2.0") },
+                null,"Apple Account", keys => remaining = keys.ToArray());
+            desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);
+            desktop.Model.Queue.Begin(2);desktop.Model.Queue.Measure(35,"fixture transfer");desktop.Model.Queue.Stop("Отменено",true);
+            desktop.C<TabItem>("QueueTab").IsSelected=true;await Task.Delay(100);
+            var queue=desktop.C<DataGrid>("OperationQueue");
+            if(!queue.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Queue two"))throw new Exception("Published queue row binding was trimmed.");
+            desktop.Model.Queue.ResumeCommand.Execute(null);
+            if(remaining == null || !remaining.SequenceEqual(new[]{"two"}))throw new Exception("Published queue resumed a successful item.");
+            desktop.Model.AppendJournal("Journal binding fixture");desktop.Model.ShowJournalCommand.Execute(null);await Task.Delay(50);
+            var journal=window.OwnedWindows.OfType<JournalWindow>().Single();
+            if(!journal.FindControl<TextBox>("JournalText").Text.Contains("Journal binding fixture"))throw new Exception("Published journal binding was trimmed.");
+            journal.Close();
+            var more=desktop.C<Button>("MoreAccount");more.Flyout.ShowAt(more);await Task.Delay(50);
+            if(!desktop.C<Button>("AccountInfo").IsEffectivelyVisible)throw new Exception("Published More menu lost its actions.");
+            more.Flyout.Hide();
             // Exercise a reflection-bound row from the shipping binary, not from a test assembly.
             using(var versions=new AppVersionWindow(window,"Smoke","123",new(){new AppVersionRow{ID="100",Version="1.2.3"}},engine.AppVersions,default))
             {
@@ -55,7 +73,7 @@ internal static class PublishedSmoke
                 if(login.PasswordBox.PasswordChar=='\0')throw new Exception("Published password box is not masked.");
                 login.Window.Close();await pending;
             }
-            File.WriteAllText(Path.Combine(directory,"smoke-ok.txt"),"PASS: published Avalonia startup, settings/sets migration, generated JSON, row binding, private login UI and search queue");
+            File.WriteAllText(Path.Combine(directory,"smoke-ok.txt"),"PASS: published Avalonia startup, settings/sets migration, generated JSON, row binding, private login UI, search, operation queue, More menu and journal window");
             ((IClassicDesktopStyleApplicationLifetime)App.Current.ApplicationLifetime).Shutdown(0);
         }
         catch(Exception error)

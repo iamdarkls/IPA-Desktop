@@ -79,6 +79,7 @@ namespace IpaDesktop
                 elapsed.Stop(); summary = reason + " · " + index + "/" + count + ": " + name;
             }
         }
+        public double? ItemPercent { get { lock (gate) return percent; } }
         public bool Active { get { lock (gate) return kind != null; } }
         public double Value { get { lock (gate) return count > 0 ? 100.0 * (index - 1 + (percent ?? 0) / 100.0) / count : 0; } }
         public bool Indeterminate { get { lock (gate) return !percent.HasValue; } }

@@ -24,7 +24,8 @@ namespace IpaDesktop
         readonly Window w;
         readonly Engine engine;
         CancellationTokenSource cancellation;
-        bool busy;
+        public DesktopViewModel Model { get; } = new();
+        bool busy { get => Model.IsBusy; set => Model.IsBusy = value; }
         bool setting;
         bool exitingForUpdate;
         bool closingAfterDeviceScan;
@@ -69,6 +70,7 @@ namespace IpaDesktop
             C<Button>("NoticeRetry").IsEnabled = !busy && noticeRetry != null && lastReport != null && lastReport.Failed > 0 &&
                 (lastReport.Kind == "Скачивание" ? C<Button>("RetryDownloads").IsEnabled : C<Button>("RetryInstalls").IsEnabled);
             C<Button>("ShowLastReport").IsEnabled = lastReport != null;
+            Model.Queue.Refresh();
         }
         internal T C<T>(string name) where T : Control
         {
@@ -81,6 +83,7 @@ namespace IpaDesktop
             {
                 try
                 {
+                    CloseMenus();
                     action();
                 } catch (Exception e)
                 {
@@ -96,7 +99,7 @@ namespace IpaDesktop
         {
             C<Button>(name).Click += async delegate
             {
-                try { await action(); } catch (Exception error) { Error(error); }
+                try { CloseMenus(); await action(); } catch (Exception error) { Error(error); }
             };
         }
         /// <summary>Отображает настройки, блокируя повторную реакцию обработчиков переключателей.</summary>
@@ -117,7 +120,7 @@ namespace IpaDesktop
             busy = true;
             C<Border>("ConnectionNotice").IsVisible=false;
             queueProgress.Reset();
-            C<TextBlock>("OperationDetail").Text = "";
+            Model.OperationDetail = "";
             cancellation = new CancellationTokenSource();
             string[] buttons =
             {
@@ -129,26 +132,28 @@ namespace IpaDesktop
             C<CheckBox>("CheckGuiUpdates").IsEnabled = false;
             C<CheckBox>("AutoUpdate").IsEnabled = false;
             C<CheckBox>("AutoUpdateDeviceTools").IsEnabled = false;
-            C<Button>("Cancel").IsEnabled = true;
-            C<ProgressBar>("Progress").IsIndeterminate = true;
-            C<TextBlock>("Status").Text = title;
+
+            Model.Indeterminate = true;
+            Model.Status = title;
             Log(title);
             ApplyActions();
             try
             {
                 await files.PauseDeviceDetectionAsync();
                 await action(cancellation.Token);
-                C<TextBlock>("Status").Text = "Готово";
+                Model.Status = "Готово";
             } catch (OperationCanceledException)
             {
                 queueProgress.Stop("Отменено");
+                Model.Queue.Stop("Операция отменена.", true);
                 if (activeReport != null) { activeReport.Canceled = true; lastReport = activeReport; RenderNotice(); }
                 files.ConnectionCanceled();
                 Log("Операция отменена.");
-                C<TextBlock>("Status").Text = "Отменено";
+                Model.Status = "Отменено";
             } catch (Exception e)
             {
                 queueProgress.Stop("Завершено с ошибкой");
+                Model.Queue.Stop(ErrorLocalizer.Describe(e).Description, false);
                 Error(e);
             } finally
             {
@@ -160,9 +165,9 @@ namespace IpaDesktop
                 C<CheckBox>("CheckGuiUpdates").IsEnabled = true;
                 C<CheckBox>("AutoUpdate").IsEnabled = true;
                 C<CheckBox>("AutoUpdateDeviceTools").IsEnabled = true;
-                C<Button>("Cancel").IsEnabled = false;
-                C<ProgressBar>("Progress").IsIndeterminate = false;
-                C<ProgressBar>("Progress").Value = 0;
+
+                Model.Indeterminate = false;
+                Model.Progress = 0;
                 RenderQueue();
                 StateView();
                 RefreshFiles();
@@ -179,15 +184,20 @@ namespace IpaDesktop
         }
         public Desktop(Engine backend, bool checkAtStartup, string assetDirectory)
         {
-            w = new MainWindow();
+            w = new MainWindow { DataContext = Model };
+            Model.CancelRequested = () => cancellation?.Cancel();
+            Model.JournalRequested = ShowJournal;
+            Model.ExportRequested = () => RunAsyncCommand(ExportDiagnostics);
+            Model.Queue.CanResumeBatch = batch => batch.Kind == "Скачивание"
+                ? !engine.AccountRequests.RequiresLogin
+                : files != null && files.CanResume(batch.TargetKey);
             w.Title = "IPA Desktop · " + AppInfo.Version;
             C<TextBlock>("GuiVersionBadge").Text = AppInfo.Version;
             C<TextBlock>("GuiVersionStatus").Text = "Установлена версия " + AppInfo.Version;
             journalTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-            JournalView.Attach(C<TextBox>("Journal"), journalBuffer);
             journalTimer.Tick += delegate { FlushJournal(); if (busy) RenderQueue(); };
             journalTimer.Start();
-            w.Closed += delegate { journalTimer.Stop(); };
+            w.Closed += delegate { journalTimer.Stop(); journalWindow?.Close(); };
             w.Opened += delegate
             {
                 var screen = w.Screens.ScreenFromWindow(w);
@@ -204,8 +214,8 @@ namespace IpaDesktop
                 lastProgress = now;
                 Dispatcher.UIThread.Post(new Action(delegate
                 {
-                    C < ProgressBar >("Progress").IsIndeterminate = false;
-                    C < ProgressBar >("Progress").Value = value;
+                    Model.Indeterminate = false;
+                    Model.Progress = value;
                 }));
             };
             account = new AccountController(this, engine);
@@ -224,30 +234,7 @@ namespace IpaDesktop
             OnAsync("NoticeDetails", showReport);
             On("DismissNotice", delegate { C<Border>("OperationNotice").IsVisible = false; });
             On("NoticeRetry", delegate { if (!busy && noticeRetry != null) noticeRetry(); });
-            On("Cancel", delegate
-            {
-                if (cancellation != null) cancellation.Cancel();
-            });
-            OnAsync("ExportDiagnostics", async delegate
-            {
-                JournalView.Flush(C<TextBox>("Journal"), journalBuffer, true);
-                List<string> privateValues;
-                lock (privateGate) privateValues = reportPrivateValues.ToList();
-                privateValues.Add(Environment.UserName);
-                var email = C<TextBlock>("AccountLabel").Text;
-                if (email.Contains("@")) privateValues.Add(email);
-                foreach (var device in C<ComboBox>("DeviceList").Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
-                var report = DiagnosticReport.Create(C<TextBox>("Journal").Text, engine.Settings.Version ?? "not installed", engine.Settings.DeviceVersion ?? "not installed", privateValues);
-                var file = await w.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-                {
-                    Title = "Экспорт диагностики", SuggestedFileName = "IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt",
-                    FileTypeChoices = new[] { new FilePickerFileType("Текстовый отчёт") { Patterns = new[] { "*.txt" } } }
-                });
-                if (file == null) return;
-                await using (var stream = await file.OpenWriteAsync())
-                using (var writer = new StreamWriter(stream, Encoding.UTF8)) await writer.WriteAsync(report);
-                Log("Отчёт диагностики сохранён.");
-            });
+            OnAsync("ExportDiagnostics", ExportDiagnostics);
             On("OpenFolder", delegate
             {
                 Process.Start(new ProcessStartInfo(engine.Downloads)
@@ -260,7 +247,7 @@ namespace IpaDesktop
                 if (busy)
                 {
                     e.Cancel = true;
-                    C<TextBlock>("Status").Text = "Сначала отмените текущую операцию и дождитесь её завершения.";
+                    Model.Status = "Сначала отмените текущую операцию и дождитесь её завершения.";
                 }
                 else if (!closingAfterDeviceScan && files.IsDetecting)
                 {
