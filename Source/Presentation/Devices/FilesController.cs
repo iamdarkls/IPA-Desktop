@@ -393,13 +393,7 @@ namespace IpaDesktop
         public async Task CheckSupport(CancellationToken cancellation)
         {
             appleSupport = await engine.AppleSupport.CheckAsync(cancellation);
-            var label = C<TextBlock>("AppleSupportStatus");
-            label.Text = appleSupport.Message;
-            ToolTip.SetTip(label, appleSupport.Details);
-            string color = appleSupport.Status == AppleSupportStatus.Running ? "#81D4AD" :
-                appleSupport.Status == AppleSupportStatus.NotDetected ? "#F2A0A0" : "#E8C382";
-            label.Foreground = new Avalonia.Media.SolidColorBrush(
-                (Avalonia.Media.Color)Avalonia.Media.Color.Parse(color));
+            view.Model.Device.SetSupportReport(appleSupport.Message, appleSupport.Details);
             Log(appleSupport.Message + ". " + appleSupport.Details);
         }
 

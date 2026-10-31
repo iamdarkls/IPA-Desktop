@@ -96,6 +96,10 @@ public sealed class UiTests
    var more=Find<Button>(window,"MoreAccount");more.Flyout.ShowAt(more);await Task.Delay(30);
    Assert.True(Find<Button>(window,"AccountInfo").IsEffectivelyVisible);Click(window,"AccountInfo");await Wait(()=>!Busy(desktop));
    Assert.Contains("test@example.com",Find<TextBlock>(window,"AccountLabel").Text);
+   Click(window,"CheckAppleSupport");await Wait(()=>!Busy(desktop));
+   Assert.Equal("Служба Apple запущена",desktop.Model.Device.SupportMessage);
+   Find<TabItem>(window,"FilesTab").IsSelected=true;var deviceMore=Find<Button>(window,"MoreDevice");deviceMore.Flyout.ShowAt(deviceMore);await Task.Delay(30);
+   Assert.Equal(desktop.Model.Device.SupportMessage,Find<TextBlock>(window,"AppleSupportStatus").Text);deviceMore.Flyout.Hide();
   }
   finally{window.Close();}
  }

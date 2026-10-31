@@ -9,6 +9,14 @@ public sealed class DeviceViewModel : ObservableObject
     PhoneStatus status;
     string selectedKey, detail = "Подключите и разблокируйте iPhone — он появится автоматически.";
     bool busy;
+    string supportMessage = "Компоненты Apple: проверка при запуске", supportDetails;
+    public string SupportMessage => supportMessage;
+    public string SupportDetails => supportDetails;
+    public void SetSupportReport(string message, string details)
+    {
+        supportMessage = message; supportDetails = details;
+        Changed(nameof(SupportMessage)); Changed(nameof(SupportDetails));
+    }
     public PhoneStatus Status => status;
     public string SelectedKey => selectedKey;
     public string Title => status switch

@@ -174,6 +174,7 @@
                           <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact menu-action" Content="Как подключить по Wi-Fi" />
                           <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact menu-action" Content="Проверить драйвер" />
                           <Button x:Name="OpenAppleSupportHelp" ui:ActionIcon.Kind="Help" Classes="compact menu-action" Content="Помощь Apple" />
+                          <TextBlock x:Name="AppleSupportStatus" Text="{CompiledBinding Device.SupportMessage}" ToolTip.Tip="{CompiledBinding Device.SupportDetails}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="8,6" />
                         </StackPanel>
                       </Flyout>
                     </Button.Flyout>
