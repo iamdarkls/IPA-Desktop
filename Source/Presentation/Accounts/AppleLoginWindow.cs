@@ -56,8 +56,8 @@ namespace IpaDesktop
             body.Children.Add(Note("Вход в окне: Windows 10 1809+ и Windows 11. Время одной попытки — до 5 минут.", 10));
             layout.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-            SubmitButton = new Button { Content = "Войти", IsDefault = true, Background = Brush("#3878E5") };
-            CancelButton = new Button { Content = "Отмена", Margin = new Thickness(0) };
+            SubmitButton = AppDialogs.Action("Войти", IconKind.Shield, primary: true); SubmitButton.IsDefault = true;
+            CancelButton = AppDialogs.Action("Отмена", IconKind.Close); CancelButton.Margin = new Thickness(0);
             SubmitButton.Click += Submit;
             CancelButton.Click += delegate { RequestClose(); };
             actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);

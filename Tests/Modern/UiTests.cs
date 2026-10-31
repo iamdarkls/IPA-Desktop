@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Xunit;
 namespace IpaDesktop.Tests;
 
@@ -50,10 +51,27 @@ public sealed class UiTests
     Assert.Equal(toolbar.Bounds.Height,button.Bounds.Height);
     Assert.Equal(toolbar.Bounds.Y,button.Bounds.Y);
    }
+   var download=Find<Button>(window,"Download");
+   Assert.Equal("Скачать (2)",download.Content);
+   Assert.Contains(download.GetVisualDescendants().OfType<TextBlock>(),x=>x.Text=="Скачать (2)");
+   Assert.Contains(download.GetVisualDescendants().OfType<AppIcon>(),x=>x.Kind==IconKind.Download);
    var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
    window.Width=940;window.Height=720;tabs.SelectedIndex=1;await Task.Delay(50);
    Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed: " + Find<DataGrid>(window,"Files").Bounds.Height);
    Assert.NotNull(Find<TextBlock>(window,"DeviceDetectionStatus"));
+   foreach(var tab in tabs.Items.Cast<TabItem>())
+   {
+    var origin=tab.TranslatePoint(default,window);
+    Assert.NotNull(origin);
+    Assert.True(origin.Value.X>=0 && origin.Value.X+tab.Bounds.Width<=window.ClientSize.Width,"Tab header clipped: "+tab.Header);
+   }
+   foreach(var name in new[]{"FileInfo","AddInstall","InstallFiles","DeleteFiles"})
+   {
+    var button=Find<Button>(window,name);var origin=button.TranslatePoint(default,window);
+    Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Y,button.Bounds.Y);
+    Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Height,button.Bounds.Height);
+    Assert.True(origin.Value.X>=0 && origin.Value.X+button.Bounds.Width<=window.ClientSize.Width,"Action clipped: "+name);
+   }
   }
   finally{window.Close();}
  }

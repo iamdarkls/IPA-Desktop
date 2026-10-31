@@ -35,6 +35,11 @@ internal static class PublishedSmoke
             await Task.Delay(100);
             desktop.C<Button>("AddChosen").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             if(desktop.C<ItemsControl>("ChosenApps").ItemCount!=1)throw new Exception("Published search/selection flow failed.");
+            await Task.Delay(50);
+            var download=desktop.C<Button>("Download");
+            if(!download.GetVisualDescendants().OfType<AppIcon>().Any(x=>x.Kind==IconKind.Download) ||
+               !download.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Скачать (1)"))
+                throw new Exception("Published icon or live action label failed.");
             if(ErrorLocalizer.Describe("Invalid HostID").Code != FailureCode.Pairing)throw new Exception("Published error localization failed.");
             if(desktop.C<Button>("CheckConnection") == null || desktop.C<Border>("ConnectionNotice").IsVisible)throw new Exception("Published connection UI failed.");
             // Exercise a reflection-bound row from the shipping binary, not from a test assembly.

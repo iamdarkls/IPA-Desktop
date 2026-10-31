@@ -44,11 +44,11 @@ namespace IpaDesktop
                 grid.Columns.Add(new DataGridTextColumn { Header = column[0], Binding = new Binding(column[1]), Width = new DataGridLength(Int32.Parse(column[2])) });
             Grid.SetRow(grid,1);layout.Children.Add(grid);
             var input = new DockPanel { Margin = new Thickness(0,12,0,0) };
-            insert = new Button { Content = "Добавить ID в таблицу", Margin = new Thickness(8,0,0,0) };DockPanel.SetDock(insert,Dock.Right);input.Children.Add(insert);
+            insert = AppDialogs.Action("Добавить ID в таблицу", IconKind.Plus); insert.Margin = new Thickness(8,0,0,0);DockPanel.SetDock(insert,Dock.Right);input.Children.Add(insert);
             manual = new TextBox { PlaceholderText = "ID версий через запятую или пробел", MinWidth = 150 };input.Children.Add(manual);Grid.SetRow(input,2);layout.Children.Add(input);
             var footer = new StackPanel { Margin = new Thickness(0,10,0,0) };
             status = new TextBlock { Text = "Версий: " + rows.Count + ". Можно ввести известный ID вручную; доступность проверит Apple.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) };footer.Children.Add(status);
-            var actions = new WrapPanel();details = new Button { Content = "Получить сведения" }; add = new Button { Content = "Добавить выбранные в очередь" };cancel = new Button { Content = "Закрыть" };
+            var actions = new WrapPanel();details = AppDialogs.Action("Получить сведения", IconKind.Info); add = AppDialogs.Action("Добавить выбранные в очередь", IconKind.Plus, primary: true);cancel = AppDialogs.Action("Закрыть", IconKind.Close);
             actions.Children.Add(details);actions.Children.Add(add);actions.Children.Add(cancel);footer.Children.Add(actions);Grid.SetRow(footer,3);layout.Children.Add(footer);Window.Content=layout;
             grid.SelectionChanged += delegate { Refresh(); };
             insert.Click += delegate

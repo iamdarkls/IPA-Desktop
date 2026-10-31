@@ -10,6 +10,14 @@ namespace IpaDesktop;
 
 public static class AppDialogs
 {
+    public static Button Action(string text, IconKind icon, bool primary = false)
+    {
+        var button = new Button { Content = text };
+        ActionIcon.SetKind(button, icon);
+        if (primary) button.Classes.Add("primary");
+        return button;
+    }
+
     public static Window Create(Window owner, string title, double width, double height) => new Window
     {
         Title = title, Width = width, Height = height, MinWidth = 460, MinHeight = 320,
@@ -25,14 +33,14 @@ public static class AppDialogs
         ScrollViewer.SetVerticalScrollBarVisibility(text, ScrollBarVisibility.Auto);
         layout.Children.Add(text);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,14,0,0) };
-        var copy = new Button { Content = "Копировать" };
+        var copy = Action("Копировать", IconKind.Layers);
         var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         copy.Click += async delegate
         {
             try { if (dialog.Clipboard != null) await dialog.Clipboard.SetTextAsync(text.Text ?? ""); status.Text = "Скопировано"; }
             catch (Exception) { status.Text = "Выделите текст и нажмите Ctrl+C."; }
         };
-        var close = new Button { Content = "Закрыть", IsCancel = true };
+        var close = Action("Закрыть", IconKind.Close); close.IsCancel = true;
         close.Click += delegate { dialog.Close(); };
         actions.Children.Add(copy); actions.Children.Add(close); actions.Children.Add(status);
         Grid.SetRow(actions,1); layout.Children.Add(actions); dialog.Content = layout;
@@ -45,8 +53,8 @@ public static class AppDialogs
         var layout = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("*,Auto") };
         layout.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var no = new Button { Content = "Отмена", IsCancel = true, IsDefault = true };
-        var yes = new Button { Content = "Продолжить", Background = Brush.Parse("#3878E5") };
+        var no = Action("Отмена", IconKind.Close); no.IsCancel = true; no.IsDefault = true;
+        var yes = Action("Продолжить", IconKind.Check, primary: true);
         no.Click += delegate { dialog.Close(false); }; yes.Click += delegate { dialog.Close(true); };
         actions.Children.Add(no); actions.Children.Add(yes); Grid.SetRow(actions,1); layout.Children.Add(actions); dialog.Content=layout;
         return await dialog.ShowDialog<bool>(owner);

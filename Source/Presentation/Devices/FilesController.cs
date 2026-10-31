@@ -388,7 +388,7 @@ namespace IpaDesktop
             C<ItemsControl>("ChosenFiles").IsEnabled = !busy;
             C<Button>("AddInstall").IsEnabled = !busy && C<DataGrid>("Files").SelectedItems.Count > 0;
             C<Button>("DeleteFiles").IsEnabled = !busy && installChosen.Count > 0;
-            C<Button>("DeleteFiles").Content = "Удалить выбранные IPA (" + installChosen.Count + ")";
+            C<Button>("DeleteFiles").Content = "В корзину (" + installChosen.Count + ")";
             C<Button>("ClearInstall").IsEnabled = !busy && installChosen.Count > 0;
             C<Button>("InstallFiles").IsEnabled = !busy && installChosen.Count > 0 && connectionAvailable;
             C<ComboBox>("DeviceList").IsEnabled = !busy;

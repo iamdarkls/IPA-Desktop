@@ -31,9 +31,9 @@ namespace IpaDesktop
             var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
             status.Foreground = Avalonia.Media.Brushes.Salmon;
             var buttons = new WrapPanel();
-            var remove = new Button { Content = "Убрать отмеченные" }; remove.Name = "DraftRemove";
+            var remove = AppDialogs.Action("Убрать отмеченные", IconKind.Trash); remove.Name = "DraftRemove";
             remove.Click += delegate { foreach (var item in list.SelectedItems.Cast<AppRow>().ToArray()) draft.Remove(item); };
-            var apply = new Button { Content = "Сохранить" }; apply.Name = "DraftSave";
+            var apply = AppDialogs.Action("Сохранить", IconKind.Save, primary: true); apply.Name = "DraftSave";
             apply.Click += delegate
             {
                 try
@@ -43,7 +43,7 @@ namespace IpaDesktop
                 }
                 catch (Exception e) { status.Text = e.Message; }
             };
-            var cancel = new Button { Content = "Отмена", IsCancel = true };
+            var cancel = AppDialogs.Action("Отмена", IconKind.Close); cancel.IsCancel = true;
             cancel.Click += delegate { dialog.Close(); };
             buttons.Children.Add(remove); buttons.Children.Add(apply); buttons.Children.Add(cancel);
             bottom.Children.Add(hint); bottom.Children.Add(status); bottom.Children.Add(buttons);
