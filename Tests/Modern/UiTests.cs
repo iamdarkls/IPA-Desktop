@@ -108,13 +108,31 @@ public sealed class UiTests
   {
    await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Установка"));
    var dialog=window.OwnedWindows.Single(x=>x.Title=="Установка");
-   dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-   await Wait(()=>!Busy(desktop)&&desktop.Model.Queue.Items.Count==3&&fixture.Runner.Installs>=expectedInstalls);
+   bool started=false,finished=false;
+   void Changed(object sender,System.ComponentModel.PropertyChangedEventArgs args)
+   {
+    if(args.PropertyName!=nameof(DesktopViewModel.IsBusy))return;
+    if(desktop.Model.IsBusy)started=true;else if(started)finished=true;
+   }
+   desktop.Model.PropertyChanged+=Changed;
+   try
+   {
+    dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    await Wait(()=>finished);
+   }
+   finally{desktop.Model.PropertyChanged-=Changed;}
+   var diagnostic="installs="+fixture.Runner.Installs+" rows="+desktop.Model.Queue.Items.Count+" status="+desktop.Model.Status+"\n"+
+    String.Join("\n",desktop.Model.Queue.Items.Select(x=>x.Name+": "+x.Status+" "+x.Detail))+"\n"+ToolTip.GetTip(Find<TextBlock>(window,"NoticeText"));
+   Assert.True(fixture.Runner.Installs==expectedInstalls,diagnostic);
+   Assert.True(desktop.Model.Queue.Items.Count==3,diagnostic);
   }
   try
   {
+   Find<TabItem>(window,"FilesTab").IsSelected=true;
+   var files=Find<DataGrid>(window,"Files");await Wait(()=>files.ItemsSource?.Cast<LocalRow>().Count()==3);
    var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
-   var files=Find<DataGrid>(window,"Files");files.ItemsSource=rows;foreach(var row in rows)files.SelectedItems.Add(row);Click(window,"AddInstall");
+   foreach(var row in files.ItemsSource.Cast<LocalRow>().ToArray())files.SelectedItems.Add(row);Click(window,"AddInstall");
+   Assert.Equal(3,Find<ItemsControl>(window,"ChosenFiles").ItemCount);
    Click(window,"InstallFiles");await ConfirmInstall(2);Assert.Equal(2,fixture.Runner.Installs);
    Assert.Equal(new[]{QueueItemState.Succeeded,QueueItemState.Uncertain,QueueItemState.Paused},desktop.Model.Queue.Items.Select(x=>x.State));
    Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
