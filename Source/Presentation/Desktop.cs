@@ -36,6 +36,7 @@ namespace IpaDesktop
         UpdatesController updates;
         AppSetsController appSets;
         StorageController storage;
+        LibraryController library;
         public Window Window => w;
         internal bool IsBusy => busy;
         internal bool IsUpdatingSettings => setting;
@@ -67,6 +68,7 @@ namespace IpaDesktop
             if (updates != null) updates.RefreshActions();
             if (appSets != null) appSets.RefreshActions();
             if (storage != null) storage.RefreshActions();
+            library?.RefreshActions();
             C<Button>("NoticeRetry").IsEnabled = !busy && noticeRetry != null && lastReport != null && lastReport.Failed > 0 &&
                 (lastReport.Kind == "Скачивание" ? C<Button>("RetryDownloads").IsEnabled : C<Button>("RetryInstalls").IsEnabled);
             C<Button>("ShowLastReport").IsEnabled = lastReport != null;
@@ -114,9 +116,11 @@ namespace IpaDesktop
             setting = false;
         }
         /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
-        internal async void Work(string title, Func<CancellationToken, Task> action)
+        internal void Work(string title, Func<CancellationToken, Task> action) => RunAsyncCommand(async()=>{await RunWorkAsync(title,action);});
+        internal async Task<bool> RunWorkAsync(string title, Func<CancellationToken, Task> action)
         {
-            if (busy) return;
+            if (busy) return false;
+            bool succeeded=false;
             busy = true;
             C<Border>("ConnectionNotice").IsVisible=false;
             queueProgress.Reset();
@@ -142,6 +146,7 @@ namespace IpaDesktop
                 await files.PauseDeviceDetectionAsync();
                 await action(cancellation.Token);
                 Model.Status = "Готово";
+                succeeded=true;
             } catch (OperationCanceledException)
             {
                 queueProgress.Stop("Отменено");
@@ -175,6 +180,7 @@ namespace IpaDesktop
                 if (exitingForUpdate) w.Close();
                 else files.ResumeDeviceDetection();
             }
+            return succeeded;
         }
         public Desktop() : this(null, true)
         {
@@ -189,15 +195,15 @@ namespace IpaDesktop
             Model.JournalRequested = ShowJournal;
             Model.ExportRequested = () => RunAsyncCommand(ExportDiagnostics);
             Model.Queue.CanResumeBatch = batch => batch.Kind == "Скачивание"
-                ? !engine.AccountRequests.RequiresLogin
+                ? !engine.AccountRequests.RequiresLogin && Model.AccountKey != null && batch.AccountKey==Model.AccountKey
                 : files != null && files.CanResume(batch.TargetKey);
             w.Title = "IPA Desktop · " + AppInfo.Version;
             C<TextBlock>("GuiVersionBadge").Text = AppInfo.Version;
             C<TextBlock>("GuiVersionStatus").Text = "Установлена версия " + AppInfo.Version;
             journalTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-            journalTimer.Tick += delegate { FlushJournal(); if (busy) RenderQueue(); };
+            journalTimer.Tick += delegate { FlushJournal(); if (busy) RenderQueue(); if(busy && DateTime.UtcNow-lastQueueSave>TimeSpan.FromSeconds(2))SaveQueue(); };
             journalTimer.Start();
-            w.Closed += delegate { journalTimer.Stop(); journalWindow?.Close(); };
+            w.Closed += delegate { journalTimer.Stop(); SaveQueue(); journalWindow?.Close(); };
             w.Opened += delegate
             {
                 var screen = w.Screens.ScreenFromWindow(w);
@@ -224,6 +230,8 @@ namespace IpaDesktop
             updates = new UpdatesController(this, engine);
             storage = new StorageController(this, engine);
             appSets = new AppSetsController(this, engine);
+            library = new LibraryController(this,engine);
+            ConfigureQueueStorage();
             StateView();
             RefreshFiles();
             Func<Task> showReport = async delegate

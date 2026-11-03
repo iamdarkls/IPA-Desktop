@@ -225,17 +225,18 @@ namespace IpaDesktop
             return added;
         }
         /// <summary>Запускает пакет и обновляет отдельные списки успешных и неудачных запросов.</summary>
-        void StartDownloads(List<DownloadItem> rows, bool remember = true, QueueBatchViewModel resumeBatch = null)
+        internal void StartDownloads(List<DownloadItem> rows, bool remember = true, QueueBatchViewModel resumeBatch = null)
         {
             if (rows.Count == 0) throw new Exception("Добавьте приложения в выбранное.");
             if (remember) lastDownloads = rows.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
             Work("Скачивание IPA…", async delegate(CancellationToken ct)
             {
+                var accountEmail=await view.RequireAccountAsync(ct,resumeBatch?.AccountKey);
                 view.StartReport("Скачивание", rows.Count, delegate { StartDownloads(failedDownloads.Snapshot(), false); });
                 QueueBatchViewModel batch = null;
                 batch = view.Model.Queue.Start("Скачивание", rows.Select(row => new QueueSeed(row.Key, row.Name,
-                    row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account",
-                    keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch);
+                    row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account · "+Desktop.AccountHint(accountEmail),
+                    keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch, view.Model.AccountKey);
                 var result = await BatchRunner.Run(rows,
                     (row, token) => engine.ApplicationDownloads.DownloadAsync(row, token),
                     (row, index) => { view.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },

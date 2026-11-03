@@ -43,9 +43,10 @@ internal static class PublishedSmoke
             if(ErrorLocalizer.Describe("Invalid HostID").Code != FailureCode.Pairing)throw new Exception("Published error localization failed.");
             if(desktop.C<Button>("CheckConnection") == null || desktop.C<Border>("ConnectionNotice").IsVisible)throw new Exception("Published connection UI failed.");
             // Verify the new compiled bindings and commands in the trimmed shipping binary.
+            desktop.SetAccountIdentity("smoke@example.com");
             string[] remaining = null;
             desktop.Model.Queue.Start("Скачивание", new[]{ new QueueSeed("one","Queue one","1.0"), new QueueSeed("two","Queue two","2.0") },
-                null,"Apple Account", keys => remaining = keys.ToArray());
+                null,"Apple Account", keys => remaining = keys.ToArray(),accountKey:desktop.Model.AccountKey);
             desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);
             desktop.Model.Queue.Begin(2);desktop.Model.Queue.Measure(35,"fixture transfer");desktop.Model.Queue.Stop("Отменено",true);
             desktop.C<TabItem>("QueueTab").IsSelected=true;await Task.Delay(100);
@@ -57,6 +58,14 @@ internal static class PublishedSmoke
             var journal=window.OwnedWindows.OfType<JournalWindow>().Single();
             if(!journal.FindControl<TextBox>("JournalText").Text.Contains("Journal binding fixture"))throw new Exception("Published journal binding was trimmed.");
             journal.Close();
+            var archive=new QueueArchiveStore(engine.Root).Load();
+            if(archive.Batches.Count==0 || archive.Batches[0].Items.Count!=2)throw new Exception("Published queue persistence failed.");
+            var library=new AppBrowserWindow(window,desktop.Model,"Library fixture",false,()=>true);library.Show(window);
+            library.SetRows(new(){new LibraryApp{Name="Published library",ID="123",BundleID="com.fixture",Version="1.0"}},"fixture");await Task.Delay(50);
+            if(!library.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Published library"))throw new Exception("Published library binding was trimmed.");
+            library.Close();
+            var direct=new ProxyConfiguration(()=>new State{ProxyMode="Direct"});
+            if(direct.EnvironmentChanges()["NO_PROXY"]!="*")throw new Exception("Published proxy environment failed.");
             var more=desktop.C<Button>("MoreAccount");more.Flyout.ShowAt(more);await Task.Delay(50);
             if(!desktop.C<Button>("AccountInfo").IsEffectivelyVisible)throw new Exception("Published More menu lost its actions.");
             more.Flyout.Hide();

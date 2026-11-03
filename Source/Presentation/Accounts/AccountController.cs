@@ -39,6 +39,7 @@ namespace IpaDesktop
                     {
                         if (!await login.Window.ShowDialog<bool>(w)) throw new OperationCanceledException();
                         signedIn = true;
+                        view.SetAccountIdentity(login.SignedInEmail);
                         view.RegisterPrivate(login.SignedInEmail);
                         C<TextBlock>("AccountLabel").Text = login.SignedInEmail;
                         Log("Вход в Apple Account подтверждён.");
@@ -59,6 +60,7 @@ namespace IpaDesktop
                         "auth", "revoke"
                     }, ct, false));
                     signedIn = false;
+                    view.SetAccountIdentity(null);
                     C<TextBlock>("AccountLabel").Text = "Вход не выполнен";
                 });
             });
@@ -90,6 +92,7 @@ namespace IpaDesktop
             var email = Convert.ToString(Engine.Get(data, "email"));
             if (String.IsNullOrWhiteSpace(email) || !Object.Equals(Engine.Get(data, "success"), true)) throw new Exception("Не удалось подтвердить сохранённый вход в аккаунт.");
             view.RegisterPrivate(email);
+            view.SetAccountIdentity(email);
             signedIn = true;
             C<TextBlock>("AccountLabel").Text = email;
             Log("Аккаунт проверен.");

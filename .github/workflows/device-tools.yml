@@ -95,6 +95,7 @@ jobs:
             if($name -eq 'idevice_id' -and (($help -join "`n") -notmatch '--list')){throw 'Device listing CLI contract changed'}
             if($name -eq 'ideviceinfo' -and ((($help -join "`n") -notmatch '--udid') -or (($help -join "`n") -notmatch '--key'))){throw 'Device info CLI contract changed'}
             if($name -eq 'ideviceinstaller' -and (($help -join "`n") -notmatch 'install PATH')){throw 'Installer CLI contract changed'}
+            if($name -eq 'ideviceinstaller' -and (($help -join "`n") -notmatch '--placeholders')){throw 'Installer placeholder browsing missing'}
             if($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network'){throw "$name network transport missing"}
             if($name -eq 'idevicepair'){
               foreach($command in @('validate','pair','unpair')){if(($help -join "`n") -notmatch ("\b"+$command+"\b")){throw "Pairing command missing: $command"}}

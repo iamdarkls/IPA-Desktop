@@ -34,6 +34,8 @@ namespace IpaDesktop
             get;
             private set;
         }
+        public PurchaseHistory Purchases { get; private set; }
+        public ProxyConfiguration Network { get; private set; }
         public AppVersions AppVersions { get; private set; }
         public IAppleLoginService AppleLogin { get; set; }
         public AccountRequestGuard AccountRequests { get; private set; }
@@ -110,6 +112,8 @@ namespace IpaDesktop
             Downloads = Path.Combine(root, "Apps");
             Directory.CreateDirectory(Downloads);
             runner = processRunner ?? new ProcessRunner(Downloads);
+            Network=new ProxyConfiguration(()=>Settings);
+            if(runner is ProcessRunner native)native.NetworkEnvironment=exe=>Path.GetFileName(exe).StartsWith("ipatool",StringComparison.OrdinalIgnoreCase)?Network.EnvironmentChanges():null;
             locator = new ToolLocator(settings);
             var policy=processRunner==null ? new GuardedEnginePolicy(runner,()=>locator.Find("ipatool*.exe")) : null;
             var rawTools = new AppToolClient(runner, locator, policy);
@@ -117,8 +121,9 @@ namespace IpaDesktop
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "AccountProtection")
                 : Path.Combine(root, "AccountProtection"));
             tools = new ProtectedAppToolClient(rawTools, AccountRequests);
-            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
+            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(Network.EnvironmentChanges), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
             AppVersions = new AppVersions(tools);
+            Purchases = new PurchaseHistory(tools);
             catalog = new AppCatalog(settings, locator);
             updater = new EngineUpdater(settings, runner);
             AppleSupport = new AppleSupportService(appleSupportProbe);

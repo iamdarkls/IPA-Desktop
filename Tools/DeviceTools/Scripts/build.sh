@@ -24,6 +24,7 @@ for project in libplist libimobiledevice-glue libusbmuxd libtatsu libimobiledevi
   git checkout --detach FETCH_HEAD
   test "$(git rev-parse HEAD)" = "$revision"
   git archive --format=tar --prefix="$project/" -o "$root/device-build/source-archives/$project.tar" HEAD
+  if [[ "$project" == ideviceinstaller ]]; then python "$root/Tools/DeviceTools/Scripts/patch_installer.py" . "$root/device-build/source-archives/ideviceinstaller.tar"; fi
   NOCONFIGURE=1 ./autogen.sh
   options=(--prefix="$prefix" --enable-shared --disable-static)
   case "$project" in

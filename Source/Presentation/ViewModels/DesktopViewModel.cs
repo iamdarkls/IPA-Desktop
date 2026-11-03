@@ -5,6 +5,8 @@ namespace IpaDesktop;
 public sealed class DesktopViewModel : ObservableObject
 {
     bool busy;
+    string accountKey;
+    public string AccountKey { get => accountKey; set => Set(ref accountKey,value); }
     string journal = "", status = "Готово", operationDetail = "", transferDetail = "", progressTip = "";
     double progress;
     bool indeterminate, followJournal = true;

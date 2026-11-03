@@ -109,7 +109,7 @@ namespace IpaDesktop
         }
         void CloseMenus()
         {
-            foreach (var name in new[] { "MoreAccount", "MoreSearch", "MoreDownloads", "MoreDevice", "MoreFiles", "MoreGui", "MoreEngine", "MoreTools" })
+            foreach (var name in new[] { "MoreAccount", "MoreSearch", "MoreDownloads", "MoreDevice", "MoreFiles", "MoreGui", "MoreEngine", "MoreTools", "MoreQueue" })
                 C<Button>(name).Flyout?.Hide();
         }
         async Task ExportDiagnostics()

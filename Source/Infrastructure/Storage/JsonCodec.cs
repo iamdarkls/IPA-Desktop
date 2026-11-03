@@ -62,6 +62,7 @@ public static class JsonCodec
 
 [JsonSourceGenerationOptions(IncludeFields = true, PropertyNameCaseInsensitive = true, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(State))]
+[JsonSerializable(typeof(QueueArchive))]
 [JsonSerializable(typeof(Release))]
 [JsonSerializable(typeof(Release[]))]
 [JsonSerializable(typeof(List<AppSet>))]

@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using IpaDesktop;
 public sealed class RecordingLoginFactory : ILoginProcessFactory {
- public string Error="none";
- public ILoginProcess Start(string exe,string folder){try{return new ConPtyLoginFactory().Start(exe,folder);}catch(Exception e){Error=e.GetType().Name+":"+e.Message;throw;}}
+ public string Error="none";public System.Collections.Generic.Dictionary<string,string> EnvironmentChanges;
+ public ILoginProcess Start(string exe,string folder){try{return new ConPtyLoginFactory(()=>EnvironmentChanges).Start(exe,folder);}catch(Exception e){Error=e.GetType().Name+":"+e.Message;throw;}}
 }
 public sealed class LoginTools : IAppToolClient {
  public bool Mismatch;public int Calls;
@@ -48,10 +48,10 @@ public static class LoginContract {
   protocol.Append("{\"success\":true,\"email\":\"fixture@example.com\"}");
   Assert(protocol.Complete(0)=="fixture@example.com","Account variant could not complete");
 
-  foreach(string mode in new[]{"success","2fa","repaint","reject","save","changed","huge","slow","mismatch"}){
+  foreach(string mode in new[]{"success","proxy","2fa","repaint","reject","save","changed","huge","slow","mismatch"}){
    File.WriteAllText(Path.Combine(folder,"mode.txt"),mode=="mismatch"?"success":mode);
    var tools=new LoginTools{Mismatch=mode=="mismatch"};int codes=0;bool cancelled=false,failed=false;
-   var factory=new RecordingLoginFactory();var service=new AppleLoginService(factory,delegate{return exe;},folder,tools);
+   var factory=new RecordingLoginFactory{EnvironmentChanges=mode=="proxy"?new System.Collections.Generic.Dictionary<string,string>{{"HTTPS_PROXY","http://127.0.0.1:18888"}}:null};var service=new AppleLoginService(factory,delegate{return exe;},folder,tools);
    using(var stop=new CancellationTokenSource())using(var password=Secret("Fixture-Password\"\\!7")){
     stop.CancelAfter(mode=="slow"?1800:12000);
     try{
@@ -61,9 +61,9 @@ public static class LoginContract {
     catch(OperationCanceledException){cancelled=true;}
     catch(AppleLoginException e){failed=true;Assert(!e.ToString().Contains("Fixture-Password")&&!e.ToString().Contains("123456")&&!e.ToString().Contains("fixture-token-secret"),"Raw secret escaped into login exception");}
     Assert(mode=="slow"?cancelled:!cancelled,"Cancellation/timeout behavior changed: "+mode);
-    Assert(mode=="success"||mode=="2fa"||mode=="repaint"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+(File.Exists(Path.Combine(folder,"stage.txt"))?File.ReadAllText(Path.Combine(folder,"stage.txt")):factory.Error));
+    Assert(mode=="success"||mode=="proxy"||mode=="2fa"||mode=="repaint"?!failed:mode=="slow"||failed,"Unexpected login outcome: "+mode+" stage="+(File.Exists(Path.Combine(folder,"stage.txt"))?File.ReadAllText(Path.Combine(folder,"stage.txt")):factory.Error));
     Assert(codes==((mode=="2fa"||mode=="reject"||mode=="repaint")?1:0),"Unexpected/repeated 2FA request: "+mode);
-    Assert(tools.Calls==((mode=="success"||mode=="2fa"||mode=="repaint"||mode=="mismatch")?1:0),"Session verification was skipped or attempted after failure: "+mode);
+    Assert(tools.Calls==((mode=="success"||mode=="proxy"||mode=="2fa"||mode=="repaint"||mode=="mismatch")?1:0),"Session verification was skipped or attempted after failure: "+mode);
    }
    int pid=Int32.Parse(File.ReadAllText(Path.Combine(folder,"pid.txt")));bool exited=false;
    try{using(var process=Process.GetProcessById(pid))exited=process.HasExited;}catch(ArgumentException){exited=true;}

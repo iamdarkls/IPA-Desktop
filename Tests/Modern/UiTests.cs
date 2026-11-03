@@ -103,6 +103,67 @@ public sealed class UiTests
   }
   finally{window.Close();}
  }
+ [AvaloniaFact] public async Task RestartedDownloadQueueWaitsForOriginalAccountAndRestoresItsResumeAction()
+ {
+  using var folder=new TempFolder();var runner=new RecordingProcessRunner();var engine=Backend(folder.Path,runner);
+  var first=new Desktop(engine,false);first.Window.Show();Click(first.Window,"AccountInfo");await Wait(()=>!Busy(first));
+  first.Model.Queue.Start("Скачивание",new[]{new QueueSeed("123@latest","Restored app","Последняя")},null,"Account",_=>throw new Exception("Old callback must not survive"),accountKey:first.Model.AccountKey);
+  first.Model.Queue.Begin(1);first.Window.Close();
+  var second=new Desktop(engine,false);var window=second.Window;window.Show();
+  try
+  {
+   Assert.Equal(QueueItemState.Interrupted,Assert.Single(second.Model.Queue.Items).State);Assert.False(second.Model.Queue.ResumeCommand.CanExecute(null));
+   runner.SessionEmail="other@example.com";Click(window,"AccountInfo");await Wait(()=>!Busy(second));Assert.False(second.Model.Queue.ResumeCommand.CanExecute(null));
+   runner.SessionEmail="test@example.com";Click(window,"AccountInfo");await Wait(()=>!Busy(second));Assert.True(second.Model.Queue.ResumeCommand.CanExecute(null));
+   second.Model.Queue.ResumeCommand.Execute(null);await Wait(()=>!Busy(second));Assert.Equal(QueueItemState.Succeeded,second.Model.Queue.Items.Single().State);
+   Assert.Contains(runner.Calls,x=>x.Length>0&&x[0]=="download");
+  }
+  finally{window.Close();}
+ }
+ static void AddAccountMetadata(LocalRow row)
+ {
+  using var zip=System.IO.Compression.ZipFile.Open(row.Path,System.IO.Compression.ZipArchiveMode.Update);
+  using var writer=new StreamWriter(zip.CreateEntry("iTunesMetadata.plist").Open());
+  writer.Write("<plist><dict><key>itemId</key><integer>123</integer><key>appleId</key><string>fixture@example.com</string><key>softwareVersionBundleId</key><string>com.fixture</string><key>bundleShortVersionString</key><string>1.0</string></dict></plist>");
+ }
+ [AvaloniaFact] public async Task DeviceLibraryAndResultVerificationRequireExplicitConfirmation()
+ {
+  using var fixture=new PairingFixture();var row=fixture.Ipa("Library");AddAccountMetadata(row);
+  fixture.Runner.InventoryXml="<plist><array><dict><key>CFBundleIdentifier</key><string>com.fixture</string><key>CFBundleDisplayName</key><string>Library fixture</string><key>CFBundleShortVersionString</key><string>1.0</string><key>iTunesMetadata</key><dict><key>itemId</key><integer>123</integer></dict></dict></array></plist>";
+  var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  try
+  {
+   var phones=Find<ComboBox>(window,"DeviceList");phones.ItemsSource=new[]{fixture.Device};phones.SelectedIndex=0;
+   Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));
+   Click(window,"DeviceApps");await Wait(()=>!Busy(desktop));
+   var browser=Assert.IsType<AppBrowserWindow>(window.OwnedWindows.Single());Assert.Single(browser.Apps.ItemsSource.Cast<LibraryApp>());browser.Close();
+   var file=new FileInfo(row.Path);desktop.Model.Queue.Start("Установка",new[]{new QueueSeed(row.Path,"Library","1.0"){FileSize=file.Length,ModifiedTicks=file.LastWriteTimeUtc.Ticks}},fixture.Device.ID+"|False","Phone",_=>{});
+   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Stop("Обрыв",false);Assert.True(desktop.Model.Queue.VerifyCommand.CanExecute(null));desktop.Model.Queue.VerifyCommand.Execute(null);
+   await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Версия найдена на iPhone"));Assert.Equal(QueueItemState.Uncertain,desktop.Model.Queue.Items.Single().State);
+   var confirm=window.OwnedWindows.Single(x=>x.Title=="Версия найдена на iPhone");confirm.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   await Wait(()=>!Busy(desktop));Assert.Equal(QueueItemState.Succeeded,desktop.Model.Queue.Items.Single().State);
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact(SkipUnless=nameof(IsWindows),Skip="Windows set installation integration test")] public async Task SetWizardReusesOnlyMatchingLocalIpaAndConfirmsBeforeInstalling()
+ {
+  using var fixture=new PairingFixture();var row=fixture.Ipa("Set");AddAccountMetadata(row);
+  var binaries=Path.Combine(fixture.Engine.Root,"Versions/fixture/windows_amd64");File.WriteAllText(Path.Combine(binaries,"ipatool.exe"),"fixture");
+  fixture.Engine.AppSets.AddApps("Local set",new[]{new AppRow{ID="123",Name="Set"}});
+  var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
+  async Task Confirm(string title)
+  {
+   await Wait(()=>window.OwnedWindows.Any(x=>x.Title==title));var dialog=window.OwnedWindows.Single(x=>x.Title==title);
+   dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+  }
+  try
+  {
+   var phones=Find<ComboBox>(window,"DeviceList");phones.ItemsSource=new[]{fixture.Device};phones.SelectedIndex=0;
+   Click(window,"InstallSet");await Confirm("Подготовка установки набора");await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Установка"));Assert.Equal(0,fixture.Runner.Installs);
+   await Confirm("Установка");await Wait(()=>!Busy(desktop)&&fixture.Runner.Installs==1);Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
+  }
+  finally{window.Close();}
+ }
  public static bool IsWindows => OperatingSystem.IsWindows();
  [AvaloniaFact(SkipUnless=nameof(IsWindows), Skip="Windows installer integration test")] public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa()
  {

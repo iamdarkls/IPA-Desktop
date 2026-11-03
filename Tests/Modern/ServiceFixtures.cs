@@ -47,6 +47,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
     public string LastWorkingDirectory;
     public bool FailInstall;
     public bool FailDownload;
+    public string SessionEmail="test@example.com";
     public string DeviceIds="00008030-0000111ABC000DEF\n00008030-0000111ABC000ABC\n";
     public bool HoldDiscovery,FailDiscovery;
     public int CanceledDiscoveries;
@@ -81,7 +82,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
         else if (Path.GetFileName(exe) == "ideviceinfo.exe")
             output = args.Length == 2 ? "UniqueDeviceID: " + args[1] + "\nProductType: iPhone16,2\nProductVersion: 18.0\n" : "Test iPhone";
         else if (args.Length >= 2 && args[0] == "auth" && args[1] == "info")
-            output = "{\"success\":true,\"email\":\"test@example.com\"}";
+            output = "{\"success\":true,\"email\":\""+SessionEmail+"\"}";
         return Task.FromResult(new Result { Code = 0, Output = output });
     }
 }

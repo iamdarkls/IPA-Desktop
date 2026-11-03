@@ -75,6 +75,7 @@ namespace IpaDesktop
                 return target.ToArray();
             }
         }
+        public static string StoreID(byte[] bytes) => Field(Value(bytes, "itemId", "itemID", "softwareVersionItemId"));
         static string Value(byte[] bytes, params string[] keys)
         {
             if (bytes == null) return null;

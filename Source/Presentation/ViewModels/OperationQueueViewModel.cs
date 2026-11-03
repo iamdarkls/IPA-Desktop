@@ -6,7 +6,13 @@ using System.Collections.ObjectModel;
 namespace IpaDesktop;
 
 public enum QueueItemState { Waiting, Running, Succeeded, Failed, Paused, Interrupted, Uncertain }
-public sealed record QueueSeed(string Key, string Name, string Version);
+public sealed record QueueSeed(string Key, string Name, string Version)
+{
+    public string BundleID { get; init; }
+    public string Build { get; init; }
+    public long FileSize { get; init; }
+    public long ModifiedTicks { get; init; }
+}
 
 public sealed class QueueItemViewModel : ObservableObject
 {
@@ -54,6 +60,7 @@ public sealed class QueueBatchViewModel
     public string Kind { get; init; }
     public string TargetKey { get; init; }
     public string TargetLabel { get; init; }
+    public string AccountKey { get; init; }
     public List<QueueItemViewModel> Items { get; } = new();
     public Action<IReadOnlyCollection<string>> Resume { get; init; }
 }
@@ -65,6 +72,36 @@ public sealed class OperationQueueViewModel : ObservableObject
     IReadOnlyList<QueueItemViewModel> active = Array.Empty<QueueItemViewModel>();
     QueueItemViewModel current, selected;
     bool busy;
+    public Action PersistRequested { get; set; }
+    string storageStatus = "История сохраняется на этом компьютере; продолжение запускается вручную.";
+    public string StorageStatus { get => storageStatus; set => Set(ref storageStatus,value); }
+    public Action<QueueItemViewModel> VerifyRequested { get; set; }
+    public Func<QueueItemViewModel,bool> CanVerify { get; set; } = _ => false;
+    public DelegateCommand VerifyCommand { get; }
+    public void ClearHistory() { if(busy)return; Items.Clear();Selected=null;active=Array.Empty<QueueItemViewModel>();current=null;Refresh();PersistRequested?.Invoke(); }
+    public void AcceptInstalled(QueueItemViewModel item)
+    {
+        if(item.Kind!="Установка")throw new InvalidOperationException();
+        foreach(var row in Items.Where(x=>x.Kind==item.Kind&&x.Batch.TargetKey==item.Batch.TargetKey&&x.Seed.Key==item.Seed.Key))
+            row.Update(QueueItemState.Succeeded,"Нужная версия найдена на iPhone; пользователь подтвердил завершение.",100);
+        Refresh();PersistRequested?.Invoke();
+    }
+    public void Restore(QueueArchive archive, Action<QueueBatchViewModel,IReadOnlyCollection<string>> resume)
+    {
+        foreach(var record in archive.Batches)
+        {
+            QueueBatchViewModel batch=null;
+            batch=new(){Kind=record.Kind,TargetKey=record.TargetKey,TargetLabel=record.TargetLabel,AccountKey=record.AccountKey,Resume=keys=>resume(batch,keys)};
+            foreach(var value in record.Items)
+            {
+                var row=new QueueItemViewModel(value.Seed,batch);
+                var state=value.State==QueueItemState.Running ? (record.Kind=="Установка"?QueueItemState.Uncertain:QueueItemState.Interrupted) : value.State==QueueItemState.Waiting?QueueItemState.Paused:value.State;
+                row.Update(state,value.State is QueueItemState.Running or QueueItemState.Waiting ? "Программа была закрыта. Перепроверьте результат и продолжите вручную." : value.Detail,value.Percent);
+                batch.Items.Add(row);Items.Add(row);
+            }
+        }
+        Selected=Items.FirstOrDefault(x=>x.State!=QueueItemState.Succeeded)??Items.FirstOrDefault();Refresh();
+    }
     public Func<QueueBatchViewModel, bool> CanResumeBatch { get; set; } = _ => false;
     public QueueItemViewModel Selected
     {
@@ -74,7 +111,7 @@ public sealed class OperationQueueViewModel : ObservableObject
     public string TabTitle => Items.Count == 0 ? "Очередь" : "Очередь (" + Items.Count(x => x.State != QueueItemState.Succeeded) + ")";
     public string Summary => "Всего: " + Items.Count + " · готово: " + Items.Count(x => x.State == QueueItemState.Succeeded) +
         " · осталось: " + Items.Count(x => x.State != QueueItemState.Succeeded);
-    public string EmptyMessage => "Здесь появятся скачивания и установки. История сохраняется до закрытия программы.";
+    public string EmptyMessage => "Здесь появятся скачивания и установки. История сохраняется между запусками.";
     public bool IsEmpty => Items.Count == 0;
     public string SelectionDetail => selected?.Detail ?? "Выберите строку, чтобы увидеть результат и доступное действие.";
     public string ResumeHint => busy ? "Выполняется операция. Можно отменить её кнопкой внизу; продолжение всегда запускается вручную." : selected == null ? "Выберите операцию в очереди." :
@@ -85,32 +122,33 @@ public sealed class OperationQueueViewModel : ObservableObject
     public DelegateCommand ClearCompletedCommand { get; }
     public OperationQueueViewModel()
     {
+        VerifyCommand = new(()=>VerifyRequested?.Invoke(selected),()=>!busy&&selected!=null&&CanVerify(selected));
         ResumeCommand = new(() => selected.Batch.Resume(selected.Batch.Items.Where(x => x.State != QueueItemState.Succeeded).Select(x => x.Seed.Key).ToArray()),
             () => !busy && selected != null && selected.Batch.Items.Any(x => x.State != QueueItemState.Succeeded) && CanResumeBatch(selected.Batch));
         ClearCompletedCommand = new(() =>
         {
             foreach (var item in Items.Where(x => x.State == QueueItemState.Succeeded).ToArray()) Items.Remove(item);
             if (selected != null && !Items.Contains(selected)) Selected = Items.FirstOrDefault();
-            Refresh();
+            Refresh();PersistRequested?.Invoke();
         }, () => !busy && Items.Any(x => x.State == QueueItemState.Succeeded));
     }
     public QueueBatchViewModel Start(string kind, IEnumerable<QueueSeed> seeds, string targetKey, string targetLabel,
-        Action<IReadOnlyCollection<string>> resume, QueueBatchViewModel previous = null)
+        Action<IReadOnlyCollection<string>> resume, QueueBatchViewModel previous = null, string accountKey = null)
     {
-        var batch = previous ?? new QueueBatchViewModel { Kind = kind, TargetKey = targetKey, TargetLabel = targetLabel, Resume = resume };
+        var batch = previous ?? new QueueBatchViewModel { Kind = kind, TargetKey = targetKey, TargetLabel = targetLabel, AccountKey = accountKey, Resume = resume };
         var rows = new List<QueueItemViewModel>();
-        foreach (var seed in seeds)
+        foreach (var seed in seeds.ToArray())
         {
             var row = previous?.Items.FirstOrDefault(x => x.Seed.Key == seed.Key && x.State != QueueItemState.Succeeded);
             if (row == null) { row = new(seed, batch); batch.Items.Add(row); Items.Add(row); }
             row.Update(QueueItemState.Waiting, "Ожидает запуска"); rows.Add(row);
         }
-        active = rows; current = null; Selected = rows.FirstOrDefault(); Refresh();
+        active = rows; current = null; Selected = rows.FirstOrDefault(); Refresh();PersistRequested?.Invoke();
         return batch;
     }
     public void Begin(int position)
     {
-        current = active[position - 1]; Selected = current; current.Update(QueueItemState.Running, "Ожидание прогресса от утилиты"); Refresh();
+        current = active[position - 1]; Selected = current; current.Update(QueueItemState.Running, "Ожидание прогресса от утилиты"); Refresh();PersistRequested?.Invoke();
     }
     public void Result(Exception error)
     {
@@ -123,23 +161,23 @@ public sealed class OperationQueueViewModel : ObservableObject
         {
             // A legacy retry action may start another batch. Resolve the same unfinished IPA in older batches too.
             foreach (var row in Items.Where(x => x != current && x.State != QueueItemState.Succeeded && x.Seed.Key == current.Seed.Key &&
-                         x.Batch.Kind == current.Batch.Kind && x.Batch.TargetKey == current.Batch.TargetKey))
+                         x.Batch.Kind == current.Batch.Kind && x.Batch.TargetKey == current.Batch.TargetKey && x.Batch.AccountKey == current.Batch.AccountKey))
                 row.Update(QueueItemState.Succeeded, "Операция завершена при повторе в другой очереди.", 100);
         }
-        current = null; Refresh();
+        current = null; Refresh();PersistRequested?.Invoke();
     }
     public void Stop(string reason, bool canceled)
     {
         if (current != null && current.State == QueueItemState.Running)
             current.Update(canceled ? QueueItemState.Interrupted : QueueItemState.Uncertain, reason + " Проверьте результат перед повтором.");
         foreach (var item in active.Where(x => x.State == QueueItemState.Waiting)) item.Update(QueueItemState.Paused, reason + " Автоматического продолжения не будет.");
-        current = null; active = Array.Empty<QueueItemViewModel>(); Refresh();
+        current = null; active = Array.Empty<QueueItemViewModel>(); Refresh();PersistRequested?.Invoke();
     }
     public void Measure(double? percent, string metrics) { current?.Measure(percent, metrics); Changed(nameof(SelectionDetail)); }
     public void SetBusy(bool value) { busy = value; Refresh(); }
     public void Refresh()
     {
         Changed(nameof(TabTitle)); Changed(nameof(Summary)); Changed(nameof(IsEmpty)); Changed(nameof(SelectionDetail)); Changed(nameof(ResumeHint));
-        ResumeCommand.Refresh(); ClearCompletedCommand.Refresh();
+        ResumeCommand.Refresh(); ClearCompletedCommand.Refresh();VerifyCommand.Refresh();
     }
 }

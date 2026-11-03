@@ -48,3 +48,7 @@ GitHub Actions ежедневно в **08:17 МСК** проверяет ста�
 В Windows ZIP находятся `sources.json` с ревизиями, `LICENSES`, `msys2-packages.txt` и манифест SHA-256. Рядом публикуется Sources ZIP с исходниками шести проектов. Сторонние компоненты сохраняют LGPL/GPL и другие лицензии; MIT интерфейса на них не распространяется.
 
 Зависимости и компилятор — [MSYS2](https://www.msys2.org/). [Рецепты сборки](https://github.com/msys2/MINGW-packages), [каталог пакетов](https://packages.msys2.org/), [исходные пакеты](https://repo.msys2.org/mingw/sources/).
+
+### Local browse patch (1.0.5)
+
+`Scripts/patch_installer.py` verifies the pinned source hash and adds `list --placeholders`, setting the boolean `ShowPlaceholders` option. This only extends browsing; install/pair behavior is unchanged. The source archive contains the patched source. A placeholder can represent an offloaded or incomplete app; the GUI does not treat it as a completed installation.

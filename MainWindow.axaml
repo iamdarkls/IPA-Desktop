@@ -41,6 +41,7 @@
                 <Button x:Name="Logout" ui:ActionIcon.Kind="Logout" Content="Выйти" Classes="menu-action" />
                 <Button x:Name="ShowLastReport" ui:ActionIcon.Kind="Report" Content="Итог операции" IsEnabled="False" Classes="menu-action" />
                 <Button x:Name="ExportDiagnostics" ui:ActionIcon.Kind="Export" Content="Экспорт диагностики…" Classes="menu-action" />
+                <Button x:Name="PurchaseHistory" Content="История покупок" ui:ActionIcon.Kind="History" Classes="menu-action" />
               </StackPanel>
             </Flyout>
           </Button.Flyout>
@@ -170,6 +171,7 @@
                     <Button.Flyout>
                       <Flyout Placement="BottomEdgeAlignedRight">
                         <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
+                          <Button x:Name="DeviceApps" Content="Приложения на iPhone" ui:ActionIcon.Kind="List" Classes="menu-action" />
                           <Button x:Name="DeviceInfo" ui:ActionIcon.Kind="Info" Classes="compact menu-action" Content="Об устройстве" />
                           <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact menu-action" Content="Как подключить по Wi-Fi" />
                           <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact menu-action" Content="Проверить драйвер" />
@@ -259,24 +261,37 @@
       </TabItem>
       <TabItem x:Name="QueueTab" Header="{CompiledBinding Queue.TabTitle}" ui:ActionIcon.Kind="List">
         <Grid Margin="16,12" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
-          <DockPanel>
-            <WrapPanel DockPanel.Dock="Right">
+          <Grid RowDefinitions="Auto,Auto">
+            <WrapPanel Grid.Row="1">
               <Button x:Name="ResumeQueue" Content="Продолжить оставшиеся" ui:ActionIcon.Kind="Refresh" Classes="primary" Command="{CompiledBinding Queue.ResumeCommand}" />
+              <Button Content="Проверить на iPhone" ui:ActionIcon.Kind="Check" Command="{CompiledBinding Queue.VerifyCommand}" />
               <Button Content="Убрать готовые" ui:ActionIcon.Kind="Clear" Command="{CompiledBinding Queue.ClearCompletedCommand}" />
+              <Button x:Name="MoreQueue" Content="Ещё" ui:ActionIcon.Kind="List">
+                <Button.Flyout>
+                  <Flyout>
+                    <StackPanel>
+                      <Button x:Name="ResetQueueHistory" Content="Сбросить историю…" ui:ActionIcon.Kind="Trash" Classes="menu-action" />
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
             </WrapPanel>
-            <StackPanel VerticalAlignment="Center" Spacing="4">
+            <StackPanel VerticalAlignment="Center" Spacing="4" Margin="0,0,0,10">
               <TextBlock Text="Очередь операций" FontSize="20" FontWeight="SemiBold" />
               <TextBlock Text="{CompiledBinding Queue.Summary}" Foreground="{DynamicResource MutedBrush}" />
             </StackPanel>
-          </DockPanel>
-          <TextBlock Grid.Row="1" Text="{CompiledBinding Queue.ResumeHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" />
+          </Grid>
+          <StackPanel Grid.Row="1" Spacing="4">
+            <TextBlock Text="{CompiledBinding Queue.ResumeHint}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" />
+            <TextBlock Text="{CompiledBinding Queue.StorageStatus}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedBrush}" />
+          </StackPanel>
           <Border Classes="table-frame" Grid.Row="2">
             <Grid>
               <DataGrid x:Name="OperationQueue" ItemsSource="{CompiledBinding Queue.Items}" SelectedItem="{CompiledBinding Queue.Selected, Mode=TwoWay}" SelectionMode="Single" RowHeight="56">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="2*" MinWidth="140" />
                   <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="*" MinWidth="90" />
-                  <DataGridTextColumn Header="Операция" Binding="{Binding Kind}" Width="100" />
+                  <DataGridTextColumn Header="Операция" Binding="{Binding Kind}" Width="130" />
                   <DataGridTemplateColumn Header="Прогресс" Width="130">
                     <DataGridTemplateColumn.CellTemplate>
                       <DataTemplate x:DataType="ui:QueueItemViewModel">
@@ -326,6 +341,7 @@
                   </ListBox.ItemTemplate>
                 </ListBox>
                 <TextBlock x:Name="SetPreview" Text="Отметьте один или несколько наборов." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,12" MaxHeight="85" TextTrimming="CharacterEllipsis" />
+                <Button x:Name="InstallSet" Content="Установить наборы…" ui:ActionIcon.Kind="Phone" Classes="primary" />
                 <Button x:Name="UseSet" ui:ActionIcon.Kind="Download" Content="В очередь скачивания (0)" Classes="primary" Margin="0,0,0,8" />
                 <Button x:Name="EditSet" ui:ActionIcon.Kind="Edit" Content="Редактировать набор…" Margin="0,0,0,8" />
                 <Button x:Name="DeleteSet" ui:ActionIcon.Kind="Trash" Content="Удалить наборы (0)" Classes="danger" Margin="0,0,0,12" />
@@ -370,6 +386,13 @@
         <Grid x:Name="SettingsHost">
           <ScrollViewer x:Name="SettingsContent" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="24">
+              <Border Classes="card" Padding="20" Margin="0,0,0,20">
+                <StackPanel Spacing="10">
+                  <TextBlock Text="Сеть и прокси" FontSize="20" FontWeight="SemiBold" />
+                  <Button x:Name="NetworkSettings" Content="Настроить подключение" ui:ActionIcon.Kind="Link" />
+                  <TextBlock Text="Один маршрут для входа и загрузок. Проверка сети не отправляет пароль и не сбрасывает паузы Apple Account." FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
+                </StackPanel>
+              </Border>
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">
                 <StackPanel>
                   <TextBlock Text="Уведомления" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />

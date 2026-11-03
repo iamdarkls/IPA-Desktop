@@ -17,6 +17,7 @@ public static class FakeAppleLogin {
   if(Console.IsInputRedirected || IsWindowVisible(GetConsoleWindow()))return 41;
   if(args.Length!=4 || String.Join(" ",args)!="auth login --format json")return 42;
   string mode=File.ReadAllText("mode.txt");
+  if(mode=="proxy"&&Environment.GetEnvironmentVariable("HTTPS_PROXY")!="http://127.0.0.1:18888")return 47;
   File.WriteAllText("stage.txt","email");Console.Write("\x1b[32mEnter em");Console.Out.Flush();Thread.Sleep(25);Console.Write("ail: \x1b[0m");Console.Out.Flush();
   if(Console.ReadLine()!="fixture@example.com")return 43;
   if(mode=="changed"){Console.Write("Enter 2FA code: ");Console.Out.Flush();Thread.Sleep(20000);return 46;}

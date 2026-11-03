@@ -344,12 +344,13 @@ namespace IpaDesktop
             });
         }
         /// <summary>Подтверждает выбранное устройство и запускает последовательную установку снимка очереди.</summary>
-        void StartInstall(List<LocalRow> rows, QueueBatchViewModel resumeBatch = null) { view.RunAsyncCommand(() => StartInstallCore(rows, resumeBatch)); }
-        async Task StartInstallCore(List<LocalRow> rows, QueueBatchViewModel resumeBatch)
+        internal void StartInstall(List<LocalRow> rows, QueueBatchViewModel resumeBatch = null, string expectedDevice = null) { view.RunAsyncCommand(() => StartInstallCore(rows, resumeBatch, expectedDevice)); }
+        async Task StartInstallCore(List<LocalRow> rows, QueueBatchViewModel resumeBatch, string expectedDevice)
         {
             var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
             if (device == null || rows.Count == 0) throw new Exception("Выберите устройство и IPA для установки.");
             if (busy) return;
+            if(expectedDevice!=null && !String.Equals(ConnectionKey(device),expectedDevice,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Выбран другой iPhone. Повторите подготовку набора.");
             if (resumeBatch != null && !CanResume(resumeBatch.TargetKey)) throw new Exception("Для продолжения восстановите связь с тем же iPhone.");
             var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
             if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
@@ -358,7 +359,7 @@ namespace IpaDesktop
             {
                 view.StartReport("Установка", rows.Count, delegate { StartInstall(failedInstalls.Snapshot()); });
                 QueueBatchViewModel batch = null;
-                batch = view.Model.Queue.Start("Установка", rows.Select(row => new QueueSeed(row.Path, row.DisplayName, row.Version)), ConnectionKey(device), device.DisplayLabel,
+                batch = view.Model.Queue.Start("Установка", rows.Select(row => Seed(row)), ConnectionKey(device), device.DisplayLabel,
                     keys => StartInstall(rows.Where(row => keys.Contains(row.Path)).ToList(), batch), resumeBatch);
                 await CheckSupport(ct);
                 await EnsureConnection(device,ct);
@@ -398,6 +399,17 @@ namespace IpaDesktop
         }
 
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
+        internal static QueueSeed Seed(LocalRow row)
+        {
+            var file=new FileInfo(row.Path);
+            return new QueueSeed(row.Path,row.DisplayName,row.Version){BundleID=row.BundleID,Build=row.Build,FileSize=file.Length,ModifiedTicks=file.LastWriteTimeUtc.Ticks};
+        }
+        internal void ResolveVerified(string path) { installChosen.Remove(path);failedInstalls.Remove(path);RefreshInstallChosen(); }
+        internal void MarkConnectionLost(DeviceRow phone,DeviceConnectionException error)
+        {
+            blockedConnections.Add(ConnectionKey(phone));verifiedConnections.Remove(ConnectionKey(phone));
+            ShowConnection(new(error.Failure.Title,error.Failure.Remedy,false));view.Model.Device.SetState(PhoneStatus.Lost,error.Failure.Remedy);
+        }
         internal bool CanResume(string key)
         {
             var device = C<ComboBox>("DeviceList").SelectedItem as DeviceRow;

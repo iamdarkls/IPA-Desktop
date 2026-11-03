@@ -14,9 +14,11 @@ namespace IpaDesktop
     /// <summary>ConPTY Windows 10 1809+: скрытый TTY для штатного ipatool, без shell и секретных аргументов.</summary>
     public sealed class ConPtyLoginFactory : ILoginProcessFactory
     {
+        readonly Func<Dictionary<string,string>> environment;
+        public ConPtyLoginFactory(Func<Dictionary<string,string>> environment = null) => this.environment=environment;
         public ILoginProcess Start(string executable, string workingDirectory)
         {
-            return new ConPtyLoginProcess(executable, workingDirectory);
+            return new ConPtyLoginProcess(executable, workingDirectory, environment?.Invoke());
         }
     }
     public sealed class ConPtyLoginProcess : ILoginProcess
@@ -30,7 +32,7 @@ namespace IpaDesktop
         bool ended, overflow;
         int disposed;
 
-        public ConPtyLoginProcess(string executable, string workingDirectory)
+        public ConPtyLoginProcess(string executable, string workingDirectory, Dictionary<string,string> environment = null)
         {
             IntPtr inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero, outputRead = IntPtr.Zero, outputWrite = IntPtr.Zero;
             IntPtr attributes = IntPtr.Zero;
@@ -57,8 +59,14 @@ namespace IpaDesktop
                 start.Info.Flags = 0x00000100;
                 ProcessInfo info;
                 // Только фиксированная команда. Адрес, пароль и код передаются позже в терминальный канал.
-                if (!CreateProcess(executable, new StringBuilder(ProcessRunner.Quote(executable) + " auth login --format json"), IntPtr.Zero, IntPtr.Zero,
-                    false, 0x00080000, IntPtr.Zero, workingDirectory, ref start, out info)) throw new Win32Exception();
+                IntPtr environmentBlock=IntPtr.Zero;
+                try
+                {
+                    if(environment!=null)environmentBlock=Marshal.StringToHGlobalUni(ProxyConfiguration.EnvironmentBlock(environment));
+                    if (!CreateProcess(executable, new StringBuilder(ProcessRunner.Quote(executable) + " auth login --format json"), IntPtr.Zero, IntPtr.Zero,
+                        false, 0x00080000 | (environment==null ? 0u : 0x00000400u), environmentBlock, workingDirectory, ref start, out info)) throw new Win32Exception();
+                }
+                finally { if(environmentBlock!=IntPtr.Zero)Marshal.FreeHGlobal(environmentBlock); }
                 process = info.Process; CloseHandle(info.Thread);
                 input = new FileStream(new SafeFileHandle(inputWrite, true), FileAccess.Write, 4096, false); inputWrite = IntPtr.Zero;
                 reader = new FileStream(new SafeFileHandle(outputRead, true), FileAccess.Read, 4096, false); outputRead = IntPtr.Zero;

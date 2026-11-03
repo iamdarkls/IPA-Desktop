@@ -17,6 +17,7 @@ namespace IpaDesktop
     public sealed class ProcessRunner : IProcessRunner
     {
         readonly string Downloads;
+        public Func<string,Dictionary<string,string>> NetworkEnvironment { get; set; }
         public Action<string> Log
         {
             get;
@@ -62,7 +63,7 @@ namespace IpaDesktop
             return b.Append('"').ToString();
         }
         /// <summary>Запускает процесс в фоне; отмена завершает дочерний процесс, а ожидание и чтение вывода ограничены.</summary>
-        public ProcessRunner CreateIsolated() => new ProcessRunner(Downloads);
+        public ProcessRunner CreateIsolated() => new ProcessRunner(Downloads) { NetworkEnvironment = NetworkEnvironment };
         public Task<Result> Run(string exe, string[] args, CancellationToken token, bool visible, bool publish, string workingDirectory = null)
             => RunMonitored(exe,args,token,visible,publish,workingDirectory,null);
         public Task<Result> RunMonitored(string exe, string[] args, CancellationToken token, bool visible, bool publish, string workingDirectory, ProcessRunPolicy policy)
@@ -74,6 +75,8 @@ namespace IpaDesktop
                 {
                     WorkingDirectory = workingDirectory ?? Downloads, UseShellExecute = false, CreateNoWindow = !visible
                 };
+                var network=NetworkEnvironment?.Invoke(exe);
+                if(network!=null)foreach(var entry in network) { if(entry.Value==null) si.Environment.Remove(entry.Key); else si.Environment[entry.Key]=entry.Value; }
                 si.EnvironmentVariables["PATH"] = Path.GetDirectoryName(exe) + ";" + Environment.GetEnvironmentVariable("PATH");
                 if (!visible)
                 {

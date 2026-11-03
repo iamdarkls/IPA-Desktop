@@ -76,6 +76,7 @@ try{
   if($LASTEXITCODE -ne 0 -or !$reported){throw 'Recovered native tool does not run independently'}
   $help=& $exe --help 2>&1
   if($LASTEXITCODE -ne 0 -or ($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network')){throw 'Recovered native network support missing'}
+  if($name -eq 'ideviceinstaller' -and ($help -join "`n") -notmatch '--placeholders'){throw 'Recovered placeholder browsing missing'}
   Write-Host "$name : $reported"
  }
 }finally{$env:PATH=$savedPath}

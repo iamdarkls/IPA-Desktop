@@ -26,7 +26,8 @@ namespace IpaDesktop
             Transfer = delegate { };
         }
         /// <summary>Запускает скачивание с получением лицензии и отдельным назначением для каждого запроса.</summary>
-        public async Task DownloadAsync(DownloadItem item, CancellationToken ct)
+        public Task DownloadAsync(DownloadItem item, CancellationToken ct) => DownloadFileAsync(item,ct);
+        public async Task<string> DownloadFileAsync(DownloadItem item, CancellationToken ct)
         {
             if (!AppSetStore.ValidId(item.ID)) throw new IOException("Некорректный App Store ID.");
             Directory.CreateDirectory(folder);
@@ -53,6 +54,7 @@ namespace IpaDesktop
                 try { await observing.ConfigureAwait(false); } catch (OperationCanceledException) { }
                 if (failure != null) failure.Throw();
             }
+            return destination;
         }
         /// <summary>Раз в секунду читает только размер нашего временного IPA; не сканирует папку и не читает тело файла.</summary>
         async Task ObserveAsync(string path, CancellationToken ct)

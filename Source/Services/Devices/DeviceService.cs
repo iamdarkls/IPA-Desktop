@@ -27,6 +27,7 @@ namespace IpaDesktop
         public Task<Dictionary<string, string>> ReadDeviceAsync(DeviceRow device, CancellationToken ct) { return client.ReadDeviceAsync(device, ct); }
         public Task<Dictionary<string,string>> ValidateReadyAsync(DeviceRow device, CancellationToken ct) => readiness.ValidateAsync(device,ct);
         public Task<Dictionary<string,string>> EnsureReadyAsync(DeviceRow device, Action<DeviceConnectionProgress> progress, CancellationToken ct) => readiness.EnsureAsync(device,progress,ct);
+        public Task<List<LibraryApp>> ApplicationsAsync(DeviceRow device, CancellationToken ct) => client.ApplicationsAsync(device,ct);
         public Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct) { return installation.InstallAsync(device, file, ct); }
         public Task InstallAsync(DeviceRow device, LocalRow file, Action<DeviceConnectionProgress> progress, CancellationToken ct) => installation.InstallAsync(device,file,ct,progress);
         public static string[] Arguments(DeviceRow device, params string[] args) { return DeviceCommandClient.Arguments(device, args); }

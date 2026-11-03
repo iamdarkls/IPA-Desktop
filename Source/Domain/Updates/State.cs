@@ -10,6 +10,8 @@ namespace IpaDesktop
             AutoUpdateDeviceTools = true;
             CheckGuiUpdates = true;
         }
+        public string ProxyMode { get; set; } = "System";
+        public string ProxyUrl { get; set; }
         public bool SoundsEnabled { get; set; }
         public State Copy() { return (State)MemberwiseClone(); }
         public bool AutoUpdateDeviceTools { get; set; }

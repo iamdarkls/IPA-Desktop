@@ -12,6 +12,16 @@ namespace IpaDesktop
         readonly IProcessRunner runner, presenceRunner; readonly ToolLocator locator;
         public DeviceCommandClient(IProcessRunner runner, ToolLocator locator, IProcessRunner presenceRunner = null)
         { this.runner = runner; this.locator = locator; this.presenceRunner=presenceRunner ?? (runner as ProcessRunner)?.CreateIsolated(); }
+        public async Task<List<LibraryApp>> ApplicationsAsync(DeviceRow device, CancellationToken ct)
+        {
+            var executable=locator.Find("ideviceinstaller*.exe");
+            var help=await Probe(executable,new[]{"--help"},ct,10);
+            var args=new List<string>{"--udid",device.ID,"list","--user","--xml"};
+            if(help.Output.Contains("--placeholders",StringComparison.Ordinal))args.Add("--placeholders");
+            foreach(var name in new[]{"CFBundleIdentifier","CFBundleDisplayName","CFBundleShortVersionString","CFBundleVersion","IsPlaceholder","iTunesMetadata"})args.AddRange(new[]{"--attribute",name});
+            var result=await Probe(executable,Arguments(device,args.ToArray()),ct,45);
+            return DeviceApplications.Parse(result.Output);
+        }
         public Task<Result> ListAsync(bool network, CancellationToken ct) { return Probe(locator.Find("idevice_id*.exe"), new[] { network ? "-n" : "-l" }, ct); }
         public Task<Result> NameAsync(DeviceRow device, CancellationToken ct, int seconds = 5) { return Probe(locator.Find("ideviceinfo*.exe"), Arguments(device, "-u", device.ID, "-k", "DeviceName"), ct, seconds); }
         public async Task InstallAsync(DeviceRow device, InstallationPackage package, CancellationToken ct)

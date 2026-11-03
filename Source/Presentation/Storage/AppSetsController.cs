@@ -31,6 +31,7 @@ namespace IpaDesktop
             });
             On("DeleteSet", DeleteSelected);
             On("UseSet", UseSelected);
+            OnAsync("InstallSet", InstallSelected);
             RefreshSets();
         }
         /// <summary>Обе кнопки дополняют набор одинаково; повторное имя не уничтожает прежние приложения.</summary>
@@ -97,6 +98,47 @@ namespace IpaDesktop
                 Log(message);
             });
         }
+        async Task InstallSelected()
+        {
+            if(busy)return;
+            var sets=Selected();var phone=C<ComboBox>("DeviceList").SelectedItem as DeviceRow;
+            if(sets.Count==0||phone==null)throw new InvalidOperationException("Выберите наборы и iPhone во вкладке «iPhone и IPA».");
+            var target=phone.ID+"|"+phone.Network;
+            AppRow[] apps=null;string account=null;AppSetInstallationPlan plan=null;
+            if(!await view.RunWorkAsync("Подготовка набора…",async ct=>
+            {
+                account=await view.RequireAccountAsync(ct);
+                apps=await Task.Run(()=>engine.AppSets.ResolveMany(sets),ct);
+                plan=AppSetInstallationPlan.Build(apps,await engine.LocalFiles.ListAsync(),account);
+            }))return;
+            if(!await AppDialogs.Confirm(w,"Подготовка установки набора",phone.DisplayLabel+"\nApple Account: "+account+"\n\n"+plan.Preview+"\n\nИспользовать эти локальные версии и скачать недостающие? Перед установкой будет отдельное подтверждение."))return;
+            var expectedAccount=view.Model.AccountKey;
+            if(plan.Missing.Count>0)
+            {
+                if(!await view.RunWorkAsync("Загрузка недостающих приложений набора…",async ct=>
+                {
+                    await view.RequireAccountAsync(ct,expectedAccount);
+                    view.StartReport("Скачивание",plan.Missing.Count,()=>{});
+                    QueueBatchViewModel batch=null;
+                    batch=view.Model.Queue.Start("Скачивание",plan.Missing.Select(x=>new QueueSeed(x.ID+"@latest",x.Name,"Последняя доступная")),null,"Apple Account · "+Desktop.AccountHint(account),
+                        keys=>view.RunAsyncCommand(()=>view.ResumeStoredBatch(batch,keys)),null,expectedAccount);
+                    var result=await BatchRunner.Run(plan.Missing,async (app,token)=>
+                    {
+                        var path=await engine.ApplicationDownloads.DownloadFileAsync(new DownloadItem{ID=app.ID,Name=app.Name},token);
+                        if(!System.IO.File.Exists(path))throw new System.IO.IOException("Движок не создал IPA для "+app.Name);
+                    },(app,index)=>view.BeginQueue("Скачивание",index,plan.Missing.Count,app.Name),app=>view.ReportItem(app.Name,null),(app,error)=>view.ReportItem(app.Name,error),null,ct);
+                    view.CompleteQueue(result.Succeeded,result.Failed.Count);
+                    if(result.Failed.Count>0)throw new InvalidOperationException("Часть набора не скачалась. Установка не запущена. Продолжите загрузку в очереди и подготовьте набор снова.");
+                }))return;
+            }
+            if(!await view.RunWorkAsync("Проверка готовности набора…",async ct=>
+            {
+                await view.RequireAccountAsync(ct,expectedAccount);
+                plan=AppSetInstallationPlan.Build(apps,await engine.LocalFiles.ListAsync(),account);
+                if(plan.Missing.Count>0)throw new InvalidOperationException("Не все IPA найдены с метаданными исходного аккаунта. Автоматическая установка набора остановлена.");
+            }))return;
+            view.StartSetInstallation(plan.Local,target);
+        }
         void DeleteSelected()
         {
             var selected = Selected();
@@ -111,6 +153,7 @@ namespace IpaDesktop
             C<Button>("AddToSet").IsEnabled = C<Button>("SaveSet").IsEnabled = !busy && view.SelectedDownloads().Count > 0;
             C<Button>("EditSet").IsEnabled = !busy && count == 1;
             C<Button>("UseSet").IsEnabled = C<Button>("DeleteSet").IsEnabled = !busy && count > 0;
+            C<Button>("InstallSet").IsEnabled=!busy && count>0 && C<ComboBox>("DeviceList").SelectedItem!=null;
             C<Button>("UseSet").Content = "В очередь скачивания (" + count + ")";
             C<Button>("DeleteSet").Content = "Удалить наборы (" + count + ")";
             C<AutoCompleteBox>("SearchSet").IsEnabled = C<ListBox>("AppSets").IsEnabled = C<TextBox>("SetName").IsEnabled = !busy;

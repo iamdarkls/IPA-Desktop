@@ -11,12 +11,16 @@ public sealed class PairingRunner : IProcessRunner
  public readonly Queue<(string Command,string Reply)> Pairing=new();
  public bool NetworkBroken, WrongDevice, FailFirstInstall, FailAllInstalls, DisconnectInstall;
  public int Installs, DisconnectAt;
+ public string InventoryXml="<plist><array/></plist>";
  public bool WaitForTrust, Trusted;
  public string ID="00008030-0000111ABC000DEF";
  public Task<Result> Run(string exe,string[] args,CancellationToken ct,bool visible,bool publish,string workingDirectory=null)
  {
   ct.ThrowIfCancellationRequested();var name=Path.GetFileName(exe);Calls.Add((name,args.ToArray()));
   string output="SUCCESS";int code=0;
+  if(name=="ipatool.exe"&&args.Take(2).SequenceEqual(new[]{"auth","info"}))return Task.FromResult(new Result{Code=0,Output="{\"success\":true,\"email\":\"fixture@example.com\"}"});
+  if(name=="ideviceinstaller.exe"&&args.Contains("--help"))return Task.FromResult(new Result{Code=0,Output="--placeholders --xml list install --network"});
+  if(name=="ideviceinstaller.exe"&&args.Contains("list"))return Task.FromResult(new Result{Code=0,Output=InventoryXml});
   if(name=="idevicepair.exe")
   {
    var command=args.Last();
