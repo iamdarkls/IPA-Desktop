@@ -70,13 +70,31 @@ public sealed class UiTests
     Assert.NotNull(origin);
     Assert.True(origin.Value.X>=0 && origin.Value.X+tab.Bounds.Width<=window.ClientSize.Width,"Tab header clipped: "+tab.Header);
    }
-   foreach(var name in new[]{"AddInstall","InstallFiles"})
+   foreach(var name in new[]{"AddInstall","InstallFiles","DeleteFiles","DeviceApps","CheckConnection"})
    {
     var button=Find<Button>(window,name);var origin=button.TranslatePoint(default,window);
-    Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Y,button.Bounds.Y);
-    Assert.Equal(Find<Button>(window,"InstallFiles").Bounds.Height,button.Bounds.Height);
+    if(name is "AddInstall" or "InstallFiles" or "DeleteFiles")
+    {
+     var install=Find<Button>(window,"InstallFiles");
+     Assert.Equal(install.TranslatePoint(default,window).Value.Y,button.TranslatePoint(default,window).Value.Y);
+     Assert.Equal(install.Bounds.Height,button.Bounds.Height);
+    }
+    Assert.True(button.IsEffectivelyVisible,"Frequent action hidden: "+name);
     Assert.True(origin.Value.X>=0 && origin.Value.X+button.Bounds.Width<=window.ClientSize.Width,"Action clipped: "+name);
    }
+   desktop.Model.Queue.Start("Скачивание",Enumerable.Range(1,1234).Select(i=>new QueueSeed(i+"@latest","App "+i,"Последняя")),null,"Fixture",_=>{});
+   await Task.Delay(50);
+   var count=window.GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="QueuePendingCount");
+   Assert.Equal("1234",count.Text);
+   var queueTab=Find<TabItem>(window,"QueueTab");var countOrigin=count.TranslatePoint(default,queueTab).Value;
+   Assert.True(countOrigin.X>=0&&countOrigin.X+count.Bounds.Width<=queueTab.Bounds.Width,"Queue count clipped");
+   Assert.True(count.Bounds.Width>=count.DesiredSize.Width,"Queue count width truncated");
+   foreach(var tab in tabs.Items.Cast<TabItem>())
+   {
+    var origin=tab.TranslatePoint(default,window).Value;
+    Assert.True(origin.X+tab.Bounds.Width<=window.ClientSize.Width,"Tab clipped after count update");
+   }
+   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(30);Assert.Equal("1233",count.Text);
   }
   finally{window.Close();}
  }

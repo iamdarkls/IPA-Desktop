@@ -108,7 +108,8 @@ public sealed class OperationQueueViewModel : ObservableObject
         get => selected;
         set { if (Set(ref selected, value)) { Changed(nameof(SelectionDetail)); Refresh(); } }
     }
-    public string TabTitle => Items.Count == 0 ? "Очередь" : "Очередь (" + Items.Count(x => x.State != QueueItemState.Succeeded) + ")";
+    public int PendingCount => Items.Count(x => x.State != QueueItemState.Succeeded);
+    public string TabTitle => Items.Count == 0 ? "Очередь" : "Очередь (" + PendingCount + ")";
     public string Summary => "Всего: " + Items.Count + " · готово: " + Items.Count(x => x.State == QueueItemState.Succeeded) +
         " · осталось: " + Items.Count(x => x.State != QueueItemState.Succeeded);
     public string EmptyMessage => "Здесь появятся скачивания и установки. История сохраняется между запусками.";
@@ -177,7 +178,7 @@ public sealed class OperationQueueViewModel : ObservableObject
     public void SetBusy(bool value) { busy = value; Refresh(); }
     public void Refresh()
     {
-        Changed(nameof(TabTitle)); Changed(nameof(Summary)); Changed(nameof(IsEmpty)); Changed(nameof(SelectionDetail)); Changed(nameof(ResumeHint));
+        Changed(nameof(PendingCount)); Changed(nameof(TabTitle)); Changed(nameof(Summary)); Changed(nameof(IsEmpty)); Changed(nameof(SelectionDetail)); Changed(nameof(ResumeHint));
         ResumeCommand.Refresh(); ClearCompletedCommand.Refresh();VerifyCommand.Refresh();
     }
 }
