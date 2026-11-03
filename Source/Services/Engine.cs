@@ -103,12 +103,13 @@ namespace IpaDesktop
         public Engine(string root) : this(root, null)
         {
         }
-        public Engine(string root, IProcessRunner processRunner) : this(root, processRunner, new WindowsAppleSupportProbe())
+        public Engine(string root, IProcessRunner processRunner) : this(root, processRunner, RuntimePlatform.Windows ? new WindowsAppleSupportProbe() : new UnixAppleSupportProbe())
         {
         }
         public Engine(string root, IProcessRunner processRunner, IAppleSupportProbe appleSupportProbe)
         {
             settings = new SettingsStore(root);
+            if(processRunner==null)RuntimePlatform.Bootstrap(settings);
             Downloads = Path.Combine(root, "Apps");
             Directory.CreateDirectory(Downloads);
             runner = processRunner ?? new ProcessRunner(Downloads);
@@ -121,7 +122,7 @@ namespace IpaDesktop
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "AccountProtection")
                 : Path.Combine(root, "AccountProtection"));
             tools = new ProtectedAppToolClient(rawTools, AccountRequests);
-            AppleLogin = new AppleLoginService(new ConPtyLoginFactory(Network.EnvironmentChanges), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
+            AppleLogin = new AppleLoginService(RuntimePlatform.Windows ? new ConPtyLoginFactory(Network.EnvironmentChanges) : new UnixLoginFactory(Network.EnvironmentChanges), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
             AppVersions = new AppVersions(tools);
             Purchases = new PurchaseHistory(tools);
             catalog = new AppCatalog(settings, locator);

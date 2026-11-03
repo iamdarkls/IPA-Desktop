@@ -136,7 +136,7 @@ namespace IpaDesktop
                 foreach (var e in z.Entries)
                 {
                     var p = Path.GetFullPath(Path.Combine(dest, e.FullName.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)));
-                    if (!p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new IOException("Небезопасный путь в ZIP.");
+                    if (!p.StartsWith(prefix, RuntimePlatform.Windows?StringComparison.OrdinalIgnoreCase:StringComparison.Ordinal)) throw new IOException("Небезопасный путь в ZIP.");
                     if (e.FullName.EndsWith("/") || e.FullName.EndsWith("\\"))
                     {
                         Directory.CreateDirectory(p);

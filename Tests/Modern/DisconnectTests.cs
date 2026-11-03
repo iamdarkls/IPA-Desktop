@@ -33,7 +33,7 @@ public sealed class DisconnectTests
  {
   using var folder=new TempFolder();var runner=new ProcessRunner(folder.Path);
   var root=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../"));var config=AppContext.BaseDirectory.Contains("Release")?"Release":"Debug";
-  var fixture=Path.Combine(root,"Tests/LoginFixture/bin",config,"net10.0-windows/LoginFixture.dll");Assert.True(File.Exists(fixture));
+  var fixture=Path.Combine(root,"Tests/LoginFixture/bin",config,"net10.0/LoginFixture.dll");Assert.True(File.Exists(fixture));
   var idle=new DeviceConnectionException(new(FailureCode.Transport,"Нет прогресса","Установщик завис","Проверьте связь"));
   var policy=new ProcessRunPolicy(TimeSpan.FromSeconds(2),DeviceCommandClient.FailureFromOutput,()=>idle);
   var task=runner.RunMonitored(DotnetHost,new[]{fixture,"--process-fixture",mode},TestContext.Current.CancellationToken,false,false,null,policy);

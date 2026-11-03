@@ -55,7 +55,7 @@ public static class ErrorLocalizer
         if(Has("zip_open","invalid archive","central directory","не существует"))
             return new(FailureCode.Storage,"Не удалось прочитать IPA-файл","Файл удалён, повреждён или недоступен.","Проверьте файл в папке IPA, повторно скачайте его и добавьте в очередь.");
         if(error is HttpRequestException || Has("could not resolve","name resolution","network is unreachable","timed out","tls handshake","context deadline exceeded","client.timeout exceeded","authentication service unavailable"))
-            return new(FailureCode.Network,"Нет ответа от сервера","Не удалось связаться с Apple или сервером обновлений.","Проверьте интернет, дату и время Windows, VPN и брандмауэр. Повторите запрос позже.");
+            return new(FailureCode.Network,"Нет ответа от сервера","Не удалось связаться с Apple или сервером обновлений.","Проверьте интернет, дату и время системы, VPN и брандмауэр. Повторите запрос позже.");
         if(Has("однозначная windows-утилита","сначала установите инструменты","idevicepair отсутствует"))
             return new(FailureCode.MissingTool,"Нужны обновлённые инструменты iPhone","В выбранном комплекте отсутствует необходимая утилита.","Откройте «Настройки» → «Инструменты iPhone» и установите актуальный комплект. Для проверки доверия нужен idevicepair.");
         // Existing Russian validation messages already explain the concrete failure.

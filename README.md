@@ -1,3 +1,5 @@
+> Версия 1.0 поддерживает Windows x64, macOS 15+ (Intel и Apple Silicon) и Linux x64 (Ubuntu 24.04+). Выберите архив своей системы в Releases. [Установка и требования для каждой ОС](Docs/PLATFORMS.md). На macOS/Linux инструменты iPhone включены в архив программы.
+
 <p align="center">
   <img src="Assets/App.svg" width="88" alt="Иконка IPA Desktop">
 </p>
@@ -8,7 +10,7 @@
 
 Приложение на C#, Avalonia и .NET 10 с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
 
-**[Скачать для Windows](https://github.com/iamdarkls/IPA-Desktop/releases/latest)** · [История изменений](https://github.com/iamdarkls/IPA-Desktop/releases) · [Сообщить об ошибке](https://github.com/iamdarkls/IPA-Desktop/issues)
+**[Скачать для Windows, macOS и Linux](https://github.com/iamdarkls/IPA-Desktop/releases/latest)** · [История изменений](https://github.com/iamdarkls/IPA-Desktop/releases) · [Сообщить об ошибке](https://github.com/iamdarkls/IPA-Desktop/issues)
 
 ## Быстрый старт
 
@@ -122,7 +124,7 @@
 ```powershell
 dotnet restore Tests/Modern/IPA-Desktop.Tests.csproj
 dotnet build Tests/Modern/IPA-Desktop.Tests.csproj -c Release
-dotnet Tests/Modern/bin/Release/net10.0-windows/IPA-Desktop.Tests.dll
+dotnet Tests/Modern/bin/Release/net10.0/IPA-Desktop.Tests.dll
 .\Build.cmd
 python Scripts/package.py artifacts/publish
 ```

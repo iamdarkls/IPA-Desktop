@@ -393,6 +393,7 @@ namespace IpaDesktop
         /// <summary>Обновляет статус компонентов Apple из отдельного сервиса проверки Windows.</summary>
         public async Task CheckSupport(CancellationToken cancellation)
         {
+            if(!RuntimePlatform.Windows)C<Button>("CheckAppleSupport").Content="Проверить подключение";
             appleSupport = await engine.AppleSupport.CheckAsync(cancellation);
             view.Model.Device.SetSupportReport(appleSupport.Message, appleSupport.Details);
             Log(appleSupport.Message + ". " + appleSupport.Details);

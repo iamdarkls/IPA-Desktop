@@ -32,7 +32,7 @@ namespace IpaDesktop
         /// <summary>Формирует сводку версий и журнал, затем очищает весь отчёт от чувствительных данных.</summary>
         public static string Create(string journal, string engineVersion, string toolsVersion, IEnumerable<string> privateValues)
         {
-            var header = "IPA Desktop " + GuiUpdater.CurrentVersion + Environment.NewLine + "Windows: " + Environment.OSVersion.Version + Environment.NewLine + "ipatool: " + engineVersion + Environment.NewLine + "Device tools: " + toolsVersion + Environment.NewLine + "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine + Environment.NewLine;
+            var header = "IPA Desktop " + GuiUpdater.CurrentVersion + Environment.NewLine + "OS: " + System.Runtime.InteropServices.RuntimeInformation.OSDescription + Environment.NewLine + "ipatool: " + engineVersion + Environment.NewLine + "Device tools: " + toolsVersion + Environment.NewLine + "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine + Environment.NewLine;
             return Redact(header + journal, privateValues);
         }
     }

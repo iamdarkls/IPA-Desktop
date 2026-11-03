@@ -51,8 +51,8 @@ namespace IpaDesktop
         public static Asset SelectAsset(Release release)
         {
             var version = ParseVersion(release.tag_name).ToString();
-            var matches = (release.assets ?? new Asset[0]).Where(a => a.name == "IPA-Desktop-" + version + "-Windows.zip").ToArray();
-            if (matches.Length != 1) throw new InvalidDataException("В релизе нет единственного ZIP для Windows.");
+            var matches = (release.assets ?? new Asset[0]).Where(a => a.name == "IPA-Desktop-" + version + "-" + RuntimePlatform.AssetSuffix + ".zip").ToArray();
+            if (matches.Length != 1) throw new InvalidDataException("В релизе нет единственного ZIP для "+RuntimePlatform.Rid+".");
             var asset = matches[0];
             string expected = AppInfo.ReleasesUrl + "/download/" + release.tag_name + "/" + asset.name;
             if (asset.browser_download_url != expected || asset.size <= 0 || asset.size > 128 * 1024 * 1024 || asset.digest == null || !System.Text.RegularExpressions.Regex.IsMatch(asset.digest, "^sha256:[0-9a-fA-F]{64}$")) throw new InvalidDataException("Не удалось проверить источник, размер или SHA-256 обновления.");
@@ -127,10 +127,10 @@ namespace IpaDesktop
                 await Task.Run(delegate
                 {
                     ct.ThrowIfCancellationRequested();
-                    Extract(zip, stage);
+                    if(RuntimePlatform.Windows)Extract(zip, stage);else UnixGuiUpdate.Extract(zip,stage);
                 }, ct);
                 File.Delete(zip);
-                return stage;
+                return RuntimePlatform.Windows?stage:Path.Combine(stage,OperatingSystem.IsMacOS()?"IPA-Desktop.app":"IPA-Desktop");
             } catch
             {
                 try
@@ -150,6 +150,7 @@ namespace IpaDesktop
         /// <summary>Запускает обновляющий скрипт, который дождётся закрытия приложения и заменит файлы.</summary>
         public static void Launch(string stage)
         {
+            if(!RuntimePlatform.Windows){UnixGuiUpdate.Launch(stage);return;}
             string target = AppDomain.CurrentDomain.BaseDirectory;
             string probe = Path.Combine(target, ".update-probe-" + Guid.NewGuid().ToString("N"));
             File.WriteAllText(probe, "");

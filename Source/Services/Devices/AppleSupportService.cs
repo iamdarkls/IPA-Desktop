@@ -22,6 +22,7 @@ namespace IpaDesktop
             {
                 cancellation.ThrowIfCancellationRequested();
                 var snapshot = probe.Read();
+                if(probe is UnixAppleSupportProbe)return new AppleSupportReport{Status=AppleSupportStatus.Unknown,Message=OperatingSystem.IsMacOS()?"Системные компоненты macOS":"Подключение через usbmuxd",Details=snapshot.Details};
                 cancellation.ThrowIfCancellationRequested();
                 return Evaluate(snapshot);
             }, cancellation);

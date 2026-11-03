@@ -17,6 +17,8 @@ namespace IpaDesktop
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool CreateHardLink(string newName, string existingName, IntPtr securityAttributes);
 
+        [DllImport("libc", SetLastError=true, EntryPoint="link")] static extern int Link(string existingName,string newName);
+
         InstallationPackage(string source)
         {
             WorkingDirectory = Path.GetDirectoryName(Path.GetFullPath(source));
@@ -36,7 +38,7 @@ namespace IpaDesktop
                 {
                     Directory.CreateDirectory(package.directory);
                     string target = Path.Combine(package.WorkingDirectory, package.RelativePath);
-                    if (!CreateHardLink(target, Path.GetFullPath(source), IntPtr.Zero))
+                    if (!(RuntimePlatform.Windows ? CreateHardLink(target, Path.GetFullPath(source), IntPtr.Zero) : Link(Path.GetFullPath(source),target)==0))
                     {
                         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
                         using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))

@@ -32,7 +32,7 @@ public sealed class CoreTests
  { using var folder = new TempFolder(); ReliabilityContract.Run(folder.Path); }
  [Fact] public void DownloadProgressAndCancellationContracts()
  { using var folder = new TempFolder(); DownloadMeterContract.Run(folder.Path); }
- [WindowsFact] public void DeviceTransportAndInstallationContracts()
+ [Fact] public void DeviceTransportAndInstallationContracts()
  { using var folder = new TempFolder(); WifiVersionContract.Run(folder.Path); }
  [Fact] public void MetadataFixturesRemainCompatible()
  {
@@ -51,19 +51,19 @@ public sealed class CoreTests
   var result = await BatchRunner.Run(new[]{1,2,3},(int item,CancellationToken ct)=>item==2?Task.FromException(new IOException("fixture")):Task.CompletedTask,(_,_)=>{},i=>succeeded.Add(i),(i,_)=>failed.Add(i),null,CancellationToken.None);
   Assert.Equal(new[]{1,3},succeeded); Assert.Equal(new[]{2},failed); Assert.Equal(2,result.Succeeded);
  }
- [WindowsFact] public void PrivateConPtyLoginContract()
+ [Fact] public void PrivateTerminalLoginContract()
  {
   using var folder = new TempFolder();
   var root = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory,"../../../../../"));
   var configuration = AppContext.BaseDirectory.Contains("Release")?"Release":"Debug";
-  var fixture = System.IO.Path.Combine(root,"Tests/LoginFixture/bin",configuration,"net10.0-windows/LoginFixture.exe");
+  var fixture = System.IO.Path.Combine(root,"Tests/LoginFixture/bin",configuration,"net10.0/"+RuntimePlatform.ToolName("LoginFixture.exe"));
   Assert.True(File.Exists(fixture),fixture); LoginContract.Run(fixture,folder.Path);
  }
 
  [Fact] public void ModernUpdaterValidatesSourceAndCompleteManifest()
  {
   using var folder=new TempFolder();
-  var release=new Release{tag_name="v0.3.1",assets=new[]{new Asset{name="IPA-Desktop-0.3.1-Windows.zip",size=10,digest="sha256:"+new string('a',64),browser_download_url=AppInfo.ReleasesUrl+"/download/v0.3.1/IPA-Desktop-0.3.1-Windows.zip"}}};
+  var release=new Release{tag_name="v0.3.1",assets=new[]{new Asset{name="IPA-Desktop-0.3.1-"+RuntimePlatform.AssetSuffix+".zip",size=10,digest="sha256:"+new string('a',64),browser_download_url=AppInfo.ReleasesUrl+"/download/v0.3.1/IPA-Desktop-0.3.1-"+RuntimePlatform.AssetSuffix+".zip"}}};
   Assert.NotNull(GuiUpdater.SelectAsset(release));release.assets[0].browser_download_url="https://example.com/fixture.zip";
   Assert.Throws<InvalidDataException>(()=>GuiUpdater.SelectAsset(release));
   var zip=Path.Combine(folder.Path,"package.zip");

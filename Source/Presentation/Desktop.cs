@@ -168,8 +168,8 @@ namespace IpaDesktop
                 cancellation = null;
                 foreach (var name in buttons) C<Button>(name).IsEnabled = true;
                 C<CheckBox>("CheckGuiUpdates").IsEnabled = true;
-                C<CheckBox>("AutoUpdate").IsEnabled = true;
-                C<CheckBox>("AutoUpdateDeviceTools").IsEnabled = true;
+                C<CheckBox>("AutoUpdate").IsEnabled = RuntimePlatform.Windows;
+                C<CheckBox>("AutoUpdateDeviceTools").IsEnabled = RuntimePlatform.Windows;
 
                 Model.Indeterminate = false;
                 Model.Progress = 0;

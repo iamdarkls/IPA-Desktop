@@ -12,9 +12,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("This release supports Windows only.");
-        using var mutex = new Mutex(true, "Local\\IPA-Desktop-0.1", out var created);
+        using var mutex = new Mutex(true, OperatingSystem.IsWindows()?"Local\\IPA-Desktop-0.1":"IPA-Desktop-1.0", out var created);
         if (!created) return 0;
         if (args.Length == 2 && args[0] == "--smoke-test")
         {

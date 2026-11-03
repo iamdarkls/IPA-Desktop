@@ -28,8 +28,8 @@ public sealed class UiTests
  {
   var engine=new Engine(root,runner??new RecordingProcessRunner(),new InstalledAppleSupportProbe());
   engine.Settings.Current="test"; engine.Settings.CheckGuiUpdates=false;engine.Settings.AutoUpdate=false;engine.Settings.AutoUpdateDeviceTools=false;engine.Settings.SoundsEnabled=false;
-  var bins=Path.Combine(root,"Versions/test/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"ipatool.exe","idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  var bins=Path.Combine(root,"Versions/test/"+RuntimePlatform.ToolFolder);Directory.CreateDirectory(bins);
+  foreach(var name in new[]{"ipatool.exe","idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,RuntimePlatform.ToolName(name)),"fixture");
   return engine;
  }
  static bool Busy(Desktop desktop)=>(bool)typeof(Desktop).GetProperty("IsBusy",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(desktop);
@@ -163,10 +163,10 @@ public sealed class UiTests
   }
   finally{window.Close();}
  }
- [AvaloniaFact(SkipUnless=nameof(IsWindows),Skip="Windows set installation integration test")] public async Task SetWizardReusesOnlyMatchingLocalIpaAndConfirmsBeforeInstalling()
+ [AvaloniaFact] public async Task SetWizardReusesOnlyMatchingLocalIpaAndConfirmsBeforeInstalling()
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa("Set");AddAccountMetadata(row);
-  var binaries=Path.Combine(fixture.Engine.Root,"Versions/fixture/windows_amd64");File.WriteAllText(Path.Combine(binaries,"ipatool.exe"),"fixture");
+  var binaries=Path.Combine(fixture.Engine.Root,"Versions/fixture/"+RuntimePlatform.ToolFolder);File.WriteAllText(Path.Combine(binaries,RuntimePlatform.ToolName("ipatool.exe")),"fixture");
   fixture.Engine.AppSets.AddApps("Local set",new[]{new AppRow{ID="123",Name="Set"}});
   var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   async Task Confirm(string title)
@@ -183,7 +183,7 @@ public sealed class UiTests
   finally{window.Close();}
  }
  public static bool IsWindows => OperatingSystem.IsWindows();
- [AvaloniaFact(SkipUnless=nameof(IsWindows), Skip="Windows installer integration test")] public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa()
+ [AvaloniaFact] public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa()
  {
   using var fixture=new PairingFixture();var rows=new[]{fixture.Ipa("One"),fixture.Ipa("Two"),fixture.Ipa("Three")};
   fixture.Runner.DisconnectAt=2;var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();

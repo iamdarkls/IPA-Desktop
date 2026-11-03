@@ -16,7 +16,7 @@ public sealed class PairingRunner : IProcessRunner
  public string ID="00008030-0000111ABC000DEF";
  public Task<Result> Run(string exe,string[] args,CancellationToken ct,bool visible,bool publish,string workingDirectory=null)
  {
-  ct.ThrowIfCancellationRequested();var name=Path.GetFileName(exe);Calls.Add((name,args.ToArray()));
+  ct.ThrowIfCancellationRequested();var name=(Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe"));Calls.Add((name,args.ToArray()));
   string output="SUCCESS";int code=0;
   if(name=="ipatool.exe"&&args.Take(2).SequenceEqual(new[]{"auth","info"}))return Task.FromResult(new Result{Code=0,Output="{\"success\":true,\"email\":\"fixture@example.com\"}"});
   if(name=="ideviceinstaller.exe"&&args.Contains("--help"))return Task.FromResult(new Result{Code=0,Output="--placeholders --xml list install --network"});
@@ -53,8 +53,8 @@ public sealed class PairingFixture : IDisposable
  public PairingFixture()
  {
   var store=new SettingsStore(folder.Path);store.Settings.Current="fixture";store.Save();
-  var bins=Path.Combine(folder.Path,"Versions/fixture/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"idevicepair.exe","ideviceinfo.exe","ideviceinstaller.exe","idevice_id.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  var bins=Path.Combine(folder.Path,"Versions/fixture/"+RuntimePlatform.ToolFolder);Directory.CreateDirectory(bins);
+  foreach(var name in new[]{"idevicepair.exe","ideviceinfo.exe","ideviceinstaller.exe","idevice_id.exe"})File.WriteAllText(Path.Combine(bins,RuntimePlatform.ToolName(name)),"fixture");
   Client=new DeviceCommandClient(Runner,new ToolLocator(store));Engine=new Engine(folder.Path,Runner,new InstalledAppleSupportProbe());
   Engine.Settings.SoundsEnabled=false;Engine.Settings.CheckGuiUpdates=false;
  }
@@ -124,14 +124,14 @@ public sealed class PairingTests
   await Assert.ThrowsAsync<DeviceConnectionException>(()=>BatchRunner.Run(new[]{1,2,3,4},(i,ct)=>i==2?Task.FromException(new DeviceConnectionException(ErrorLocalizer.Describe("No device found"))):Task.CompletedTask,(i,n)=>started.Add(i),i=>done.Add(i),(i,e)=>errors.Add(i),null,CancellationToken.None));
   Assert.Equal(new[]{1,2},started);Assert.Equal(new[]{1},done);Assert.Equal(new[]{2},errors);
  }
- [WindowsFact] public async Task HandshakeFailureRepairsAndRetriesOnlyCurrentIpaOnce()
+ [Fact] public async Task HandshakeFailureRepairsAndRetriesOnlyCurrentIpaOnce()
  {
   using var f=new PairingFixture();f.Runner.FailFirstInstall=true;
   var one=f.Ipa();var two=f.Ipa("two");var successes=new List<string>();
   await BatchRunner.Run(new[]{one,two},(row,ct)=>f.Engine.Devices.InstallAsync(f.Device,row,ct),(row,n)=>{},row=>successes.Add(row.Path),(row,e)=>throw e,null,CancellationToken.None);
   Assert.Equal(3,f.Runner.Installs);Assert.Equal(2,successes.Count);Assert.Single(f.Runner.Calls,x=>x.Args.Contains("pair"));
  }
- [WindowsFact] public async Task PersistentHandshakeFailureDoesNotRestartAllIpas()
+ [Fact] public async Task PersistentHandshakeFailureDoesNotRestartAllIpas()
  {
   using var f=new PairingFixture();f.Runner.FailAllInstalls=true;var errors=new List<string>();
   await Assert.ThrowsAsync<DeviceConnectionException>(()=>BatchRunner.Run(new[]{f.Ipa(),f.Ipa("two")},(row,ct)=>f.Engine.Devices.InstallAsync(f.Device,row,ct),(row,n)=>{},row=>{},(row,e)=>errors.Add(row.Path),null,CancellationToken.None));

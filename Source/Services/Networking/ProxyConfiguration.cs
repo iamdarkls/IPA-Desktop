@@ -95,7 +95,7 @@ public sealed class ProxyConfiguration
             return "Маршрут: "+Describe(route)+"\nTLS-соединение установлено. HTTP "+(int)response.StatusCode+". Для адреса без команды ответ 4xx допустим.\nПароль, токены и запрос авторизации не отправлялись. Это не проверка доступности аккаунта.";
         }
         catch(OperationCanceledException) when(!ct.IsCancellationRequested) { throw new TimeoutException("Проверка сети не завершилась за 20 секунд. Проверьте прокси и интернет."); }
-        catch(HttpRequestException) { throw new InvalidOperationException("Не удалось установить HTTPS-соединение. Проверьте прокси, сертификаты, дату Windows и интернет. Проверка сертификата не отключалась."); }
+        catch(HttpRequestException) { throw new InvalidOperationException("Не удалось установить HTTPS-соединение. Проверьте прокси, сертификаты, дату системы и интернет. Проверка сертификата не отключалась."); }
         catch(SocketException) { throw new InvalidOperationException("Прокси недоступен по указанному адресу и порту. Проверьте, запущен ли VPN-клиент и включён ли в нём локальный прокси."); }
     }
 }

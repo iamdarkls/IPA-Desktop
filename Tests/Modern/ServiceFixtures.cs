@@ -60,7 +60,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
     {
         ct.ThrowIfCancellationRequested();
         lock (gate) { Calls.Add((string[])args.Clone()); }
-        if(Path.GetFileName(exe)=="idevice_id.exe"){
+        if((Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe"))=="idevice_id.exe"){
             if(HoldDiscovery)return Hold(ct);
             if(FailDiscovery)return Task.FromResult(new Result{Code=1,Output="discovery unavailable"});
         }
@@ -77,9 +77,9 @@ public sealed class RecordingProcessRunner : IProcessRunner
         if (FailDownload && args.Length > 0 && args[0] == "download")
             return Task.FromResult(new Result { Code = 1, Output = "ERROR: fixture download failure" });
         string output = "{\"success\":true}";
-        if (Path.GetFileName(exe) == "idevice_id.exe")
+        if ((Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe")) == "idevice_id.exe")
             output = DeviceIds;
-        else if (Path.GetFileName(exe) == "ideviceinfo.exe")
+        else if ((Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe")) == "ideviceinfo.exe")
             output = args.Length == 2 ? "UniqueDeviceID: " + args[1] + "\nProductType: iPhone16,2\nProductVersion: 18.0\n" : "Test iPhone";
         else if (args.Length >= 2 && args[0] == "auth" && args[1] == "info")
             output = "{\"success\":true,\"email\":\""+SessionEmail+"\"}";
@@ -92,21 +92,21 @@ public sealed class WifiRunner : IProcessRunner {
  public string Ios="17.0";
  public Task<Result> Run(string exe,string[] args,CancellationToken ct,bool visible,bool publish,string workingDirectory=null){
   ct.ThrowIfCancellationRequested();bool net=Array.IndexOf(args,"--network")>=0||Array.IndexOf(args,"-n")>=0;
-  if(exe.EndsWith("idevice_id.exe")){
+  if(exe.EndsWith(RuntimePlatform.ToolName("idevice_id.exe"))){
    if(net&&NetworkFailure||!net&&UsbFailure)return Task.FromResult(new Result{Code=1,Output="discovery failed"});
    return Task.FromResult(new Result{Code=0,Output="00008030-0000111ABC000DEF\ninvalid\n00008030-0000111ABC000DEF"});
   }
-  if(exe.EndsWith("ideviceinfo.exe")){
+  if(exe.EndsWith(RuntimePlatform.ToolName("ideviceinfo.exe"))){
    if(net&&NetworkFailure)return Task.FromResult(new Result{Code=1,Output="network unreachable"});
    return Task.FromResult(new Result{Code=0,Output=Array.IndexOf(args,"-k")>=0?"Test iPhone":"UniqueDeviceID: "+(WrongIdentity?"00008030-0000111ABC000ABC":"00008030-0000111ABC000DEF")+"\nProductType: iPhone16,2\nProductVersion: "+Ios});
   }
-  if(exe.EndsWith("ideviceinstaller.exe")){
+  if(exe.EndsWith(RuntimePlatform.ToolName("ideviceinstaller.exe"))){
    Installs++;if(net)NetworkInstalls++;
    int offset=net?1:0;if(args[offset]!="--udid"||args[offset+1]!="00008030-0000111ABC000DEF"||args[offset+2]!="install")throw new Exception("Transport/UDID arguments lost");
    if(!File.Exists(Path.Combine(workingDirectory,args[offset+3])))throw new Exception("Missing staged package");
    return Task.FromResult(new Result{Code=InstallFailure?1:0,Output=InstallFailure?"connection lost":"OK"});
   }
-  if(exe.EndsWith("idevicepair.exe"))return Task.FromResult(new Result{Code=0,Output="SUCCESS"});
+  if(exe.EndsWith(RuntimePlatform.ToolName("idevicepair.exe")))return Task.FromResult(new Result{Code=0,Output="SUCCESS"});
   throw new Exception("Unexpected command");
  }
 }
@@ -131,8 +131,8 @@ public static class WifiVersionContract {
  public static void Run(string root){
   var ct=CancellationToken.None;Directory.CreateDirectory(root);
   var runner=new WifiRunner();var engine=new Engine(root,runner);engine.Settings.Current="test";
-  string bins=Path.Combine(root,"Versions/test/windows_amd64");Directory.CreateDirectory(bins);
-  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,name),"fixture");
+  string bins=Path.Combine(root,"Versions/test/"+RuntimePlatform.ToolFolder);Directory.CreateDirectory(bins);
+  foreach(var name in new[]{"idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,RuntimePlatform.ToolName(name)),"fixture");
   var devices=engine.Devices.FindAsync(true,ct).GetAwaiter().GetResult();
   Assert(devices.Count==2&&!devices[0].Network&&devices[1].Network&&devices[1].DisplayLabel.Contains("Wi-Fi"),"Discovery merged transports or duplicated UDIDs");
   runner.UsbFailure=true;Assert(engine.Devices.FindAsync(true,ct).GetAwaiter().GetResult().Count==1,"USB failure blocked Wi-Fi");runner.UsbFailure=false;

@@ -75,10 +75,10 @@ namespace IpaDesktop
         public void Delete(string file)
         {
             var path = Path.GetFullPath(file);
-            if (!String.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
+            if (!String.Equals(Path.GetDirectoryName(path), folder, RuntimePlatform.Windows?StringComparison.OrdinalIgnoreCase:StringComparison.Ordinal) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
             if (!File.Exists(path)) return;
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("Удаление ссылок не поддерживается.");
-            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin, Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+            RuntimePlatform.Trash(path);
         }
     }
 }

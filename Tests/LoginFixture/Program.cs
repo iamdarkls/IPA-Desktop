@@ -13,8 +13,8 @@ public static class FakeAppleLogin {
    while(true){if(args[1]=="repeat"){Console.WriteLine("PROGRESS: 10");Console.Out.Flush();}Thread.Sleep(40);}
   }
   File.WriteAllText("pid.txt",System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
-  File.WriteAllText("stage.txt","redirected="+Console.IsInputRedirected+" visible="+IsWindowVisible(GetConsoleWindow())+" argc="+args.Length);
-  if(Console.IsInputRedirected || IsWindowVisible(GetConsoleWindow()))return 41;
+  File.WriteAllText("stage.txt","redirected="+Console.IsInputRedirected+" visible="+(OperatingSystem.IsWindows() && IsWindowVisible(GetConsoleWindow()))+" argc="+args.Length);
+  if(Console.IsInputRedirected || (OperatingSystem.IsWindows() && IsWindowVisible(GetConsoleWindow())))return 41;
   if(args.Length!=4 || String.Join(" ",args)!="auth login --format json")return 42;
   string mode=File.ReadAllText("mode.txt");
   if(mode=="proxy"&&Environment.GetEnvironmentVariable("HTTPS_PROXY")!="http://127.0.0.1:18888")return 47;

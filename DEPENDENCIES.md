@@ -41,3 +41,5 @@ dotnet test Tests/Modern/IPA-Desktop.Tests.csproj -c Release --no-build --no-res
 ```
 
 Новые основные версии графических библиотек проверяются также запуском готового Windows EXE через Scripts/Verify-Package.ps1. Компиляции недостаточно для проверки бинарной совместимости и загрузки нативных DLL.
+
+В версии 1.0 целевая платформа .NET изменена на net10.0; Windows API вызываются только в Windows. Unix-сборки содержат собственные нативные инструменты, приватный PTY и исходные архивы. См. Docs/PLATFORMS.md.

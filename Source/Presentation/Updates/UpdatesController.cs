@@ -129,6 +129,7 @@ namespace IpaDesktop
         }
         public async Task Update(CancellationToken ct, bool startup)
         {
+            if(!RuntimePlatform.Windows){Log("На этой системе движок обновляется вместе с IPA Desktop.");await CheckGui(ct);return;}
             var release = await engine.Check(ct);
             if (engine.Settings.Source == EngineUpdater.SourceRepository && String.Equals(release.tag_name, engine.Settings.Version, StringComparison.Ordinal) && !String.IsNullOrEmpty(engine.Settings.DeviceCurrent))
             {
@@ -141,6 +142,7 @@ namespace IpaDesktop
         }
         public async Task UpdateDevices(CancellationToken ct, bool startup)
         {
+            if(!RuntimePlatform.Windows){Log("На этой системе инструменты iPhone обновляются вместе с IPA Desktop.");await CheckGui(ct);return;}
             var release = await engine.CheckDeviceTools(ct);
             if (engine.DeviceToolsCurrent(release))
             {

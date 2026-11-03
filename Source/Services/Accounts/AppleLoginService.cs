@@ -80,7 +80,7 @@ namespace IpaDesktop
             var text = Text();
             try
             {
-                if (text.Contains("could not save account")) throw new AppleLoginException("Движок не смог сохранить сессию. Проверьте доступ к папке .ipatool в профиле Windows и повторите вход.");
+                if (text.Contains("could not save account")) throw new AppleLoginException("Движок не смог сохранить сессию. Проверьте доступ к папке .ipatool в профиле пользователя и повторите вход.");
                 if (exitCode == 0 && passwordSent)
                 {
                     try
@@ -96,7 +96,7 @@ namespace IpaDesktop
                 var failure = ErrorLocalizer.Describe(text);
                 if (AccountRequestGuard.IsAccountFailure(failure.Code) || failure.Code == FailureCode.RateLimited) throw new AppleLoginException(failure);
                 if (lower.Contains("resolve") || lower.Contains("connect") || lower.Contains("timeout") || lower.Contains("ssl") || lower.Contains("tls"))
-                    throw new AppleLoginException("Не удалось связаться с Apple. Проверьте подключение, дату Windows и повторите вход позже.");
+                    throw new AppleLoginException("Не удалось связаться с Apple. Проверьте подключение, дату системы и повторите вход позже.");
                 if (lower.Contains("terms") || lower.Contains("agreement")) throw new AppleLoginException(ErrorLocalizer.Describe("agreement required"));
                 throw new AppleLoginException(new UserError(FailureCode.Unknown, "Apple не подтвердила вход", "Ответ не содержит однозначной причины отказа. Это не подтверждение неверного пароля или блокировки по IP.", "Остановите попытки и проверьте состояние аккаунта на доверенном устройстве Apple. Автоматического повтора нет."));
             }

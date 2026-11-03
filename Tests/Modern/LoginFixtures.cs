@@ -7,7 +7,7 @@ using System.Diagnostics;
 using IpaDesktop;
 public sealed class RecordingLoginFactory : ILoginProcessFactory {
  public string Error="none";public System.Collections.Generic.Dictionary<string,string> EnvironmentChanges;
- public ILoginProcess Start(string exe,string folder){try{return new ConPtyLoginFactory(()=>EnvironmentChanges).Start(exe,folder);}catch(Exception e){Error=e.GetType().Name+":"+e.Message;throw;}}
+ public ILoginProcess Start(string exe,string folder){try{return (RuntimePlatform.Windows?(ILoginProcessFactory)new ConPtyLoginFactory(()=>EnvironmentChanges):new UnixLoginFactory(()=>EnvironmentChanges)).Start(exe,folder);}catch(Exception e){Error=e.GetType().Name+":"+e.Message;throw;}}
 }
 public sealed class LoginTools : IAppToolClient {
  public bool Mismatch;public int Calls;
@@ -71,7 +71,7 @@ public static class LoginContract {
   }
   // A cancelled code prompt also terminates the child without sending a code.
   File.WriteAllText(Path.Combine(folder,"mode.txt"),"2fa");
-  var finalTools=new LoginTools();var cancelService=new AppleLoginService(new ConPtyLoginFactory(),delegate{return exe;},folder,finalTools);
+  var finalTools=new LoginTools();var cancelService=new AppleLoginService((RuntimePlatform.Windows?(ILoginProcessFactory)new ConPtyLoginFactory():new UnixLoginFactory()),delegate{return exe;},folder,finalTools);
   using(var stop=new CancellationTokenSource())using(var password=Secret("Fixture-Password\"\\!7")){
    stop.CancelAfter(4000);bool cancelled=false;
    try{cancelService.LoginAsync("fixture@example.com",password,async delegate(CancellationToken ct){stop.Cancel();await Task.Delay(1000,ct);return Secret("123456");},stop.Token).GetAwaiter().GetResult();}

@@ -45,7 +45,7 @@ namespace IpaDesktop
             if (String.IsNullOrEmpty(version)) throw new Exception("Сначала установите инструменты: кнопка «Проверить обновления».");
             var p = Path.GetFullPath(Path.Combine(Root, "Versions", version));
             var prefix = Path.GetFullPath(Path.Combine(Root, "Versions")) + Path.DirectorySeparatorChar;
-            if (!p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new Exception("Некорректный путь инструментов.");
+            if (!p.StartsWith(prefix, RuntimePlatform.Windows?StringComparison.OrdinalIgnoreCase:StringComparison.Ordinal)) throw new Exception("Некорректный путь инструментов.");
             return p;
         }
         public string CurrentRoot { get { return VersionRoot(Settings.Current); } }
@@ -71,9 +71,9 @@ namespace IpaDesktop
                 paths.Remove(pattern);
                 // Two matches already prove ambiguity. Do not allocate all matches
                 // or traverse the remaining license/source directories needlessly.
-                var files = Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories)
-                    .Where(x => x.Replace('\\', '/').Contains("/windows_amd64/")).Take(2).ToArray();
-                if (files.Length != 1) throw new Exception("Не найдена однозначная Windows-утилита: " + pattern);
+                var files = Directory.EnumerateFiles(root, RuntimePlatform.ToolName(pattern), SearchOption.AllDirectories)
+                    .Where(x => x.Replace('\\', '/').Contains("/"+RuntimePlatform.ToolFolder+"/")).Take(2).ToArray();
+                if (files.Length != 1) throw new Exception("Не найдена однозначная утилита для "+RuntimePlatform.Rid+": " + pattern);
                 paths[pattern] = files[0];
                 return files[0];
             }

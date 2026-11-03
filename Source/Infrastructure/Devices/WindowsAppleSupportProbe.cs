@@ -14,6 +14,7 @@ namespace IpaDesktop
     }
 
     /// <summary>Только читает службы и реестр Windows; не устанавливает драйверы и не меняет службы.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public sealed class WindowsAppleSupportProbe : IAppleSupportProbe
     {
         public AppleSupportSnapshot Read()

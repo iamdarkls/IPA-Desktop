@@ -71,13 +71,14 @@ namespace IpaDesktop
             return Task.Run(delegate
             {
                 token.ThrowIfCancellationRequested();
-                var si = new ProcessStartInfo(exe, String.Join(" ", args.Select(Quote)))
+                var si = new ProcessStartInfo(exe)
                 {
                     WorkingDirectory = workingDirectory ?? Downloads, UseShellExecute = false, CreateNoWindow = !visible
                 };
+                foreach(var arg in args)si.ArgumentList.Add(arg);
                 var network=NetworkEnvironment?.Invoke(exe);
                 if(network!=null)foreach(var entry in network) { if(entry.Value==null) si.Environment.Remove(entry.Key); else si.Environment[entry.Key]=entry.Value; }
-                si.EnvironmentVariables["PATH"] = Path.GetDirectoryName(exe) + ";" + Environment.GetEnvironmentVariable("PATH");
+                si.EnvironmentVariables["PATH"] = Path.GetDirectoryName(exe) + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
                 if (!visible)
                 {
                     si.RedirectStandardInput = true;
