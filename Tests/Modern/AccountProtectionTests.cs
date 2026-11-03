@@ -3,6 +3,16 @@ namespace IpaDesktop.Tests;
 
 public sealed class AccountProtectionTests
 {
+    [Fact] public void PrivateInputPreservesUtf8AndWipesTheOwnedBuffer()
+    {
+        using var secret=LoginContract.Secret("пароль🙂");
+        var input=new LoginInput(secret,'\n');var memory=input.Bytes;
+        Assert.Equal("пароль🙂\n",System.Text.Encoding.UTF8.GetString(memory.Span));
+        input.Dispose();Assert.All(memory.ToArray(),value=>Assert.Equal(0,value));
+        using var invalid=LoginContract.Secret("line\nbreak");
+        Assert.Throws<ArgumentException>(()=>new LoginInput(invalid,'\n'));
+    }
+
     [Fact] public void ConcurrentCopiesAndRestartCannotBypassLoginPause()
     {
         using var folder = new TempFolder(); var now=DateTimeOffset.UtcNow;

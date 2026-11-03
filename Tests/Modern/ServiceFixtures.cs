@@ -160,11 +160,12 @@ public static class WifiVersionContract {
 }
 
 public sealed class GrowingDownloadTool : IAppToolClient {
+ public TimeProvider Clock=TimeProvider.System;
  public async Task<Result> RunAsync(string[] args,CancellationToken ct,bool publish){
   string path=args[Array.IndexOf(args,"-o")+1]+".tmp";
   try{
    using(var file=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.ReadWrite)){
-    for(int i=1;i<=3;i++){file.SetLength(i*1048576);file.Flush();await Task.Delay(1150,ct).ConfigureAwait(false);}
+    for(int i=1;i<=3;i++){file.SetLength(i*1048576);file.Flush();await Task.Delay(TimeSpan.FromSeconds(1),Clock,ct).ConfigureAwait(false);}
    }
    return new Result{Code=0,Output="{\"success\":true}"};
   }finally{File.Delete(path);}
@@ -172,7 +173,7 @@ public sealed class GrowingDownloadTool : IAppToolClient {
 }
 public static class DownloadMeterContract {
  static void Assert(bool ok,string text){if(!ok)throw new Exception(text);}
- public static void Run(string folder){
+ public static async Task RunAsync(string folder){
   Directory.CreateDirectory(folder);
   var meter=new FileTransferMeter();
   Assert(!meter.Sample(1048576,0).BytesPerSecond.HasValue,"Speed invented from first sample");
@@ -183,17 +184,22 @@ public static class DownloadMeterContract {
   Assert(progress.Feed(update.Message),"Measured transfer was not accepted");progress.Feed("PROGRESS:50");
   Assert(progress.Text.Contains("≈")&&progress.Text.Contains("МБ/с")&&Math.Abs(progress.Value-25)<0.01,"Percentage erased measured metrics or changed queue progress");
   progress.Begin("Установка",1,1,"Test");Assert(!progress.Feed(update.Message),"File-download measurement leaked into install progress");
-  var downloads=new ApplicationDownloads(new GrowingDownloadTool(),folder);var messages=new List<string>();
+  var clock=new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+  var downloads=new ApplicationDownloads(new GrowingDownloadTool{Clock=clock},folder,clock);var messages=new List<string>();
   downloads.Transfer=delegate(string text){lock(messages){messages.Add(text);}};
-  downloads.DownloadAsync(new DownloadItem{ID="123",Name="Test"},CancellationToken.None).GetAwaiter().GetResult();
+  var download=downloads.DownloadAsync(new DownloadItem{ID="123",Name="Test"},CancellationToken.None);
+  for(int i=0;i<1000&&!download.IsCompleted;i++){clock.Advance(TimeSpan.FromMilliseconds(100));await Task.Delay(1);}
+  await download.WaitAsync(TimeSpan.FromSeconds(5));
   lock(messages){Assert(messages.Count>=2&&messages.Exists(x=>x.StartsWith("FILE_TRANSFER:")&&!x.EndsWith(":?")),"Actual growing temporary file did not report speed");}
   int count;lock(messages){count=messages.Count;}
   using(var stop=new CancellationTokenSource()){
-   stop.CancelAfter(1250);bool cancelled=false;
-   try{downloads.DownloadAsync(new DownloadItem{ID="123",Name="Canceled"},stop.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}
-   Assert(cancelled,"Download cancellation was swallowed");
+   var canceled=downloads.DownloadAsync(new DownloadItem{ID="123",Name="Canceled"},stop.Token);
+   clock.Advance(TimeSpan.FromSeconds(1));await Task.Yield();stop.Cancel();
+   await Xunit.Assert.ThrowsAnyAsync<OperationCanceledException>(()=>canceled);
   }
-  lock(messages){count=messages.Count;}Thread.Sleep(1100);lock(messages){Assert(messages.Count==count,"Transfer monitor continued after completion or cancellation");}
+  lock(messages){count=messages.Count;}
+  clock.Advance(TimeSpan.FromSeconds(20));await Task.Yield();
+  lock(messages){Assert(messages.Count==count,"Transfer monitor continued after completion or cancellation");}
   Assert(Directory.GetFiles(folder,"*.tmp").Length==0,"Test download retained temporary files");
  }
 }

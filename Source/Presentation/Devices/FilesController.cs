@@ -156,7 +156,7 @@ namespace IpaDesktop
             On("OpenAppleSupportHelp", delegate
             {
                 string url = appleSupport == null ? "https://support.apple.com/ru-ru/118290" : appleSupport.HelpUrl;
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                SystemIntegration.Open(url);
             });
             C<CheckBox>("SearchWifi").Click += async delegate
             {

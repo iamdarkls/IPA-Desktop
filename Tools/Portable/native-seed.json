@@ -1,0 +1,30 @@
+{
+  "inputs": "16d308de4031851ed2082754cd27f3c793c0f57f1bffb7cf9449f4f7c030c99c",
+  "tag": "v1.0.0",
+  "platforms": {
+    "linux-x64": {
+      "image": "20261025.353.1",
+      "suffix": "Linux-x64",
+      "assets": {
+        "IPA-Desktop-1.0.0-Linux-x64.zip": "090d6033cf4bce9d414e393fe249e2b6e529915f772bd51a7e9f7bc33826db62",
+        "IPA-Desktop-1.0.0-linux-x64-native-sources.zip": "71a0382a5388ec4ea3472334434f08ff2af57400068983eaa472e424c7cdb5c9"
+      }
+    },
+    "osx-arm64": {
+      "image": "20261028.0489.1",
+      "suffix": "macOS-arm64",
+      "assets": {
+        "IPA-Desktop-1.0.0-macOS-arm64.zip": "30b549ddac167337cecee755da869f7a4a2c00f857e7c39b0b253dff3daadc96",
+        "IPA-Desktop-1.0.0-osx-arm64-native-sources.zip": "7f36620d0dd5ea35bb037fbbe63e1e8f7b3cf87f379c793f9d027a1717a868ba"
+      }
+    },
+    "osx-x64": {
+      "image": "20260824.0482.1",
+      "suffix": "macOS-x64",
+      "assets": {
+        "IPA-Desktop-1.0.0-macOS-x64.zip": "9c8b256350aec7f8ea37b53ea39c6245d88eee99aba4008df7319459352efc93",
+        "IPA-Desktop-1.0.0-osx-x64-native-sources.zip": "df7face5e204d56deef9059cb3d6b349cc5523bed805b53e5d01aab65609904e"
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using Xunit;
 namespace IpaDesktop.Tests;
 
+[Collection("Desktop UI")]
 public sealed class UiTests
 {
  static T Find<T>(Window window,string name) where T:Control => window.FindControl<T>(name) ?? window.GetLogicalDescendants().OfType<T>().First(x=>x.Name==name);

@@ -3,7 +3,6 @@ using System.IO;
 using System.Text;
 using System.Security;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -37,16 +36,12 @@ public sealed class UnixLoginProcess : ILoginProcess
     public Task SendAsync(SecureString value,CancellationToken ct)=>Send(value,ct);
     async Task Send(SecureString value,CancellationToken ct)
     {
-        if(value==null||value.Length==0||value.Length>1024)throw new ArgumentException("Проверьте введённые данные.");
-        var pointer=IntPtr.Zero;char[] chars=null;byte[] bytes=null;
-        try
-        {
-            pointer=Marshal.SecureStringToGlobalAllocUnicode(value);chars=new char[value.Length+1];
-            for(int i=0;i<value.Length;i++){chars[i]=(char)Marshal.ReadInt16(pointer,i*2);if(Char.IsControl(chars[i]))throw new ArgumentException("Управляющие символы недопустимы.");}
-            chars[value.Length]='\n';bytes=Encoding.UTF8.GetBytes(chars);await process.StandardInput.BaseStream.WriteAsync(bytes,ct).ConfigureAwait(false);await process.StandardInput.BaseStream.FlushAsync(ct).ConfigureAwait(false);
-        }
-        finally {if(pointer!=IntPtr.Zero)Marshal.ZeroFreeGlobalAllocUnicode(pointer);if(chars!=null)Array.Clear(chars);if(bytes!=null)Array.Clear(bytes);}
+        ct.ThrowIfCancellationRequested();
+        using var inputValue=new LoginInput(value,'\n');
+        await process.StandardInput.BaseStream.WriteAsync(inputValue.Bytes,ct).ConfigureAwait(false);
+        await process.StandardInput.BaseStream.FlushAsync(ct).ConfigureAwait(false);
     }
+
     public int ExitCode=>process.ExitCode;
     public void Dispose(){try{if(!process.HasExited){process.StandardInput.Close();if(!process.WaitForExit(2500)){process.Kill(true);process.WaitForExit(1000);}}}catch(InvalidOperationException){}finally{process.Dispose();}}
 }

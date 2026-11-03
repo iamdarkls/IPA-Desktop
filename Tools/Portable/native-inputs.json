@@ -1,0 +1,14 @@
+[
+  "Tools/AccountSafety/pins.json",
+  "Tools/AccountSafety/patch.py",
+  "Tools/AccountSafety/account_safety.h",
+  "Tools/AccountSafety/cfg_smoke.cpp",
+  "Tools/AccountSafety/test_auth.py",
+  "Tools/AccountSafety/transport_fixture.cpp",
+  "Tools/DeviceTools/pins.json",
+  "Tools/DeviceTools/VERSION",
+  "Tools/DeviceTools/Scripts/patch_installer.py",
+  "Tools/Portable/build-native.sh",
+  "Tools/Portable/bundle-libraries.py",
+  "Tools/Portable/ipa-pty.c"
+]

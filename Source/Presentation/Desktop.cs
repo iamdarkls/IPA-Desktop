@@ -245,10 +245,7 @@ namespace IpaDesktop
             OnAsync("ExportDiagnostics", ExportDiagnostics);
             On("OpenFolder", delegate
             {
-                Process.Start(new ProcessStartInfo(engine.Downloads)
-                {
-                    UseShellExecute = true
-                });
+                SystemIntegration.Open(engine.Downloads);
             });
             w.Closing += delegate(object sender, WindowClosingEventArgs e)
             {

@@ -30,8 +30,8 @@ public sealed class CoreTests
  }
  [Fact] public void CatalogRecoveryAndAtomicImportContracts()
  { using var folder = new TempFolder(); ReliabilityContract.Run(folder.Path); }
- [Fact] public void DownloadProgressAndCancellationContracts()
- { using var folder = new TempFolder(); DownloadMeterContract.Run(folder.Path); }
+ [Fact] public async Task DownloadProgressAndCancellationContracts()
+ { using var folder = new TempFolder(); await DownloadMeterContract.RunAsync(folder.Path); }
  [Fact] public void DeviceTransportAndInstallationContracts()
  { using var folder = new TempFolder(); WifiVersionContract.Run(folder.Path); }
  [Fact] public void MetadataFixturesRemainCompatible()

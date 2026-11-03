@@ -24,6 +24,8 @@ def create(publish, destination=None):
             target = stage / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
+        for name in ('Docs/PLATFORMS.md', 'DEPENDENCIES.md'):
+            target=stage/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/name,target)
         # These non-runtime entries let old update helpers copy the new apphost.
         # The Avalonia executable loads its compiled resources, never these markers.
         for name in legacy:

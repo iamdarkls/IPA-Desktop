@@ -1,4 +1,4 @@
-> Версия 1.0 поддерживает Windows x64, macOS 15+ (Intel и Apple Silicon) и Linux x64 (Ubuntu 24.04+). Выберите архив своей системы в Releases. [Установка и требования для каждой ОС](Docs/PLATFORMS.md). На macOS/Linux инструменты iPhone включены в архив программы.
+> Версия 1.0 поддерживает Windows x64, macOS 15+ (Intel и Apple Silicon) и Linux x64 (Ubuntu 24.04+). Выберите архив своей системы в Releases. [Установка и требования для каждой ОС](https://github.com/iamdarkls/IPA-Desktop/blob/main/Docs/PLATFORMS.md). На macOS/Linux инструменты iPhone включены в архив программы.
 
 <p align="center">
   <img src="Assets/App.svg" width="88" alt="Иконка IPA Desktop">
@@ -163,3 +163,5 @@ GitHub Actions проверяет Windows-сборку и пакеты обно�
 Эти меры уменьшают лишние обращения, но не гарантируют отсутствие блокировок Apple и не определяют срок ограничений по сети. Проверки авторизации выполняются с имитатором транспорта, без аккаунтов клиентов.
 
 Состояние зависимостей и проверенные ограничения совместимости: [DEPENDENCIES.md](DEPENDENCIES.md).
+
+Общий запуск сборки и быстрых проверок: [Docs/BUILD.md](https://github.com/iamdarkls/IPA-Desktop/blob/main/Docs/BUILD.md).

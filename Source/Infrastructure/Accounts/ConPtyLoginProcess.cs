@@ -140,26 +140,9 @@ namespace IpaDesktop
             return Task.Run(delegate
             {
                 ct.ThrowIfCancellationRequested();
-                IntPtr pointer = IntPtr.Zero; char[] chars = null; byte[] bytes = null;
-                try
-                {
-                    if (value == null || value.Length == 0 || value.Length > 1024) throw new ArgumentException("Проверьте введённые данные.");
-                    pointer = Marshal.SecureStringToGlobalAllocUnicode(value);
-                    chars = new char[value.Length + (enter ? 1 : 0)];
-                    for (int i = 0; i < value.Length; i++)
-                    {
-                        chars[i] = (char)Marshal.ReadInt16(pointer, i * 2);
-                        if (Char.IsControl(chars[i])) throw new ArgumentException("Ввод не должен содержать управляющие символы или переносы строк.");
-                    }
-                    if (enter) chars[value.Length] = '\r'; bytes = Encoding.UTF8.GetBytes(chars);
-                    ct.ThrowIfCancellationRequested(); input.Write(bytes, 0, bytes.Length); input.Flush();
-                }
-                finally
-                {
-                    if (pointer != IntPtr.Zero) Marshal.ZeroFreeGlobalAllocUnicode(pointer);
-                    if (chars != null) Array.Clear(chars, 0, chars.Length);
-                    if (bytes != null) Array.Clear(bytes, 0, bytes.Length);
-                }
+                using var inputValue=new LoginInput(value,enter?'\r':null);
+                ct.ThrowIfCancellationRequested();
+                input.Write(inputValue.Bytes.Span);input.Flush();
             }, ct);
         }
         public int ExitCode

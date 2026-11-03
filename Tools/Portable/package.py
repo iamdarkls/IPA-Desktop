@@ -7,6 +7,7 @@ if root.exists():shutil.rmtree(root)
 base=root/'Contents/MacOS' if mac else root
 shutil.copytree(publish,base);shutil.copytree('artifacts/unix/native',base/'native')
 (base/'Scripts').mkdir();shutil.copy2('Scripts/Update-App.sh',base/'Scripts/Update-App.sh')
+shutil.copytree('Docs',base/'Docs')
 for file in ['README.md','LICENSE.txt','DEPENDENCIES.md']:shutil.copy2(file,base/file)
 if mac:
  info={'CFBundleExecutable':'IPA-Desktop','CFBundleIdentifier':'ru.darkls.ipa-desktop','CFBundleName':'IPA Desktop','CFBundleDisplayName':'IPA Desktop','CFBundleVersion':version,'CFBundleShortVersionString':version,'CFBundlePackageType':'APPL','LSMinimumSystemVersion':'15.0','NSHighResolutionCapable':True}
@@ -14,7 +15,9 @@ if mac:
  subprocess.run(['codesign','--force','--deep','--sign','-',str(root)],check=True)
  subprocess.run(['codesign','--verify','--deep','--strict',str(root)],check=True)
 suffix=('macOS' if mac else 'Linux')+'-'+rid.split('-')[1]
-archive=Path('artifacts')/f'IPA-Desktop-{version}-{suffix}.zip'
+destination=Path('artifacts/release');destination.mkdir(parents=True,exist_ok=True)
+shutil.copy2('artifacts/unix/native-sources.zip',destination/f'IPA-Desktop-{version}-{rid}-native-sources.zip')
+archive=destination/f'IPA-Desktop-{version}-{suffix}.zip'
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
  for p in sorted(root.rglob('*')):
   if p.is_file():z.write(p,Path(name)/p.relative_to(root))

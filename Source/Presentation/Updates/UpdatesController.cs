@@ -71,17 +71,11 @@ namespace IpaDesktop
             });
             On("OpenGuiReleases", delegate
             {
-                Process.Start(new ProcessStartInfo(AppInfo.ReleasesUrl)
-                {
-                    UseShellExecute = true
-                });
+                SystemIntegration.Open(AppInfo.ReleasesUrl);
             });
             On("OpenRelease", delegate
             {
-                Process.Start(new ProcessStartInfo("https://github.com/iamdarkls/IPA-Desktop/releases/tag/ipatool-guard-v1.2.1.1")
-                {
-                    UseShellExecute = true
-                });
+                SystemIntegration.Open("https://github.com/iamdarkls/IPA-Desktop/releases/tag/ipatool-guard-v1.2.1.1");
             });
             C<CheckBox>("AutoUpdateDeviceTools").Click += delegate
             {
@@ -100,7 +94,7 @@ namespace IpaDesktop
             });
             On("OpenDeviceReleases", delegate
             {
-                Process.Start(new ProcessStartInfo(AppInfo.ReleasesUrl + "?q=device-tools") { UseShellExecute = true });
+                SystemIntegration.Open(AppInfo.ReleasesUrl + "?q=device-tools");
             });
             On("CheckUpdate", delegate
             {

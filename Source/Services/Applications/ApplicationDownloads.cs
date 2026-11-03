@@ -18,11 +18,13 @@ namespace IpaDesktop
     {
         readonly IAppToolClient tools;
         readonly string folder;
+        readonly TimeProvider clock;
         public Action<string> Transfer { get; set; }
-        public ApplicationDownloads(IAppToolClient tools, string folder)
+        public ApplicationDownloads(IAppToolClient tools, string folder, TimeProvider clock = null)
         {
             this.tools = tools;
             this.folder = folder;
+            this.clock=clock??TimeProvider.System;
             Transfer = delegate { };
         }
         /// <summary>Запускает скачивание с получением лицензии и отдельным назначением для каждого запроса.</summary>
@@ -46,27 +48,26 @@ namespace IpaDesktop
             using (var monitor = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
                 var observing = ObserveAsync(destination + ".tmp", monitor.Token);
-                // C# 5 не поддерживает await в finally: сохраняем исходную ошибку и дожидаемся наблюдателя перед её повторным выбросом.
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo failure = null;
                 try { ToolResponse.Ensure(await tools.RunAsync(arguments.ToArray(), ct, true)); }
-                catch (Exception error) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error); }
-                monitor.Cancel();
-                try { await observing.ConfigureAwait(false); } catch (OperationCanceledException) { }
-                if (failure != null) failure.Throw();
+                finally
+                {
+                    monitor.Cancel();
+                    try { await observing.ConfigureAwait(false); } catch (OperationCanceledException) when(monitor.IsCancellationRequested) { }
+                }
             }
             return destination;
         }
         /// <summary>Раз в секунду читает только размер нашего временного IPA; не сканирует папку и не читает тело файла.</summary>
         async Task ObserveAsync(string path, CancellationToken ct)
         {
-            var meter = new FileTransferMeter(); var time = Stopwatch.StartNew();
+            var meter = new FileTransferMeter(); var start = clock.GetTimestamp();
             while (true)
             {
-                await Task.Delay(1000, ct).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(1),clock, ct).ConfigureAwait(false);
                 try
                 {
                     var file = new FileInfo(path);
-                    if (file.Exists) Transfer(meter.Sample(file.Length, time.Elapsed.TotalSeconds).Message);
+                    if (file.Exists) Transfer(meter.Sample(file.Length, clock.GetElapsedTime(start).TotalSeconds).Message);
                     else meter.Reset();
                 }
                 catch (IOException) { meter.Reset(); }

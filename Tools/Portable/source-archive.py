@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys,zipfile,subprocess
-rid=sys.argv[1];root=Path('artifacts/unix');version='1.0.0'
-with zipfile.ZipFile(f'artifacts/IPA-Desktop-{version}-{rid}-native-sources.zip','w',zipfile.ZIP_DEFLATED) as z:
+rid=sys.argv[1];root=Path('artifacts/unix')
+with zipfile.ZipFile(root/'native-sources.zip','w',zipfile.ZIP_DEFLATED) as z:
  for folder,label in [(root/'source-archives','device-sources'),(root/'auth-source','ipatool'),(Path('Tools'),'Tools')]:
   for p in folder.rglob('*'):
    if p.is_file() and not any(x in p.parts for x in ('.git','__pycache__')):z.write(p,Path(label)/p.relative_to(folder))
