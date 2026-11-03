@@ -15,6 +15,7 @@ python Tools/AccountSafety/patch.py "$source_root"
 python Tools/AccountSafety/test_auth.py "$source_root"
 cmake -S "$source_root" -B "$build_root" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON
 cmake --build "$build_root" --parallel 2
+python Tools/AccountSafety/verify_cfg.py "$build_root" "$stage"
 cp "$build_root/ipatool.exe" "$stage/ipatool.exe"
 cp "$source_root/LICENSE" "$stage/LICENSES/ipatool-MIT.txt"
 pacman -Q > "$stage/msys2-packages.txt"

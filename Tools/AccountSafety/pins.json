@@ -1,10 +1,11 @@
 {
-  "revision": "d35bb00191f3371f579994cb016f61bf7f4a62ac",
-  "version": "1.2.0.2",
-  "tag": "ipatool-guard-v1.2.0.2",
+  "revision": "3d36465d614bea25fbfb6eed53fa51ac0f16bf5f",
+  "version": "1.2.1.1",
+  "tag": "ipatool-guard-v1.2.1.1",
   "files": {
     "main.cpp": "72ea80b5fea5e4af0cf9c078100c610d717c650c9b7ddf4126634c6d9aa5e5cd",
     "appstore.cpp": "800efde118950d5c2b047369fec10f6edab2568f2381e8b4871d74cb74efebbd",
-    "http_client.cpp": "6d845718af1079e96ca54fb3aebfd38311cb62fe175054b09b504e530444af9a"
+    "http_client.cpp": "6d845718af1079e96ca54fb3aebfd38311cb62fe175054b09b504e530444af9a",
+    "CMakeLists.txt": "576f520742ab6908c74334c66a9d03aca2f5dedf04ba9c80e464e360417f078b"
   }
 }

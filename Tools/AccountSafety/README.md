@@ -1,6 +1,6 @@
-# Guarded ipatool 1.2.0.2
+# Guarded ipatool 1.2.1.1
 
-Based on Sorvigolova/ipatool 1.2.0 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
+Based on Sorvigolova/ipatool 1.2.1 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
 
 - No silent login with a stored password. New sessions do not store the Apple password, and passwords from old session files are ignored.
 - A credential rejection stops the attempt immediately. Authentication transport failures are not retried.
@@ -12,4 +12,6 @@ Based on Sorvigolova/ipatool 1.2.0 at the immutable revision in `pins.json`. MIT
 
 The existing Windows release workflow builds this engine only when the pinned engine release is absent. It publishes a separate binary ZIP, complete patched source ZIP and license files, then builds/releases the GUI. Future GUI releases reuse this engine; no extra workflow or scheduled job is added.
 
-Version 1.2.0.2 rebuilds the same reviewed authentication patch with updated MinGW-w64 CRT/headers/pthreads (r569). `msys2-packages.txt` records the exact build environment. The safety profile and password retry policy are unchanged.
+Version 1.2.1.1 incorporates upstream commit `3d36465d614bea25fbfb6eed53fa51ac0f16bf5f` (Windows CFG fix). Authentication source files retain their reviewed hashes; `CMakeLists.txt` is also pinned before appending the offline fixture target. The safety profile and password retry policy are unchanged.
+
+The MinGW Unicorn build uses GCC setjmp/longjmp builtins to avoid the Windows CRT unwind/CFG termination when returning from JIT code. No Windows security setting is disabled. `cfg_smoke.cpp` links the exact same Unicorn target, launches a child with per-process CFG explicitly enabled, checks the effective policy, and exercises instruction-limit, hook-stop and invalid-instruction exits repeatedly without Apple traffic. `verify_cfg.py` checks the actual configured header and runs the fixture outside MSYS2 before packaging. Its result and header hash are included as `cfg-verification.txt`.
