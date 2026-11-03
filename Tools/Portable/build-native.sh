@@ -34,7 +34,9 @@ git -C "$source" fetch --depth=1 origin "$revision"
 git -C "$source" -c core.autocrlf=false checkout --detach FETCH_HEAD
 python3 Tools/AccountSafety/patch.py "$source"
 python3 Tools/AccountSafety/test_auth.py "$source"
-cmake -S "$source" -B artifacts/unix/auth-build -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+options=(-DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON)
+if [[ "$rid" == osx-* ]];then options+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DCMAKE_OSX_ARCHITECTURES="$(uname -m)");fi
+cmake -S "$source" -B artifacts/unix/auth-build -G 'Unix Makefiles' "${options[@]}"
 cmake --build artifacts/unix/auth-build --parallel 4
 cp artifacts/unix/auth-build/ipatool "$stage/ipatool"
 for name in idevice_id ideviceinfo ideviceinstaller idevicepair;do cp "$prefix/bin/$name" "$stage/$name";done
