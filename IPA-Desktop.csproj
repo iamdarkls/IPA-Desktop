@@ -10,7 +10,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/App.ico</ApplicationIcon>
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <Description>IPA Desktop: iPhone installation, downloads and operation queue with connection recovery</Description>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
@@ -19,11 +19,18 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-    <PackageReference Include="HarfBuzzSharp" Version="8.3.1.5" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.2.1.400" />
+    <PackageReference Include="SkiaSharp" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.154.0" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.400" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="14.2.1.400" />
+    <PackageReference Include="MicroCom.Runtime" Version="0.11.7" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
     <PackageReference Include="System.Windows.Extensions" Version="10.0.14" />
     <Compile Include="Source/**/*.cs" />
