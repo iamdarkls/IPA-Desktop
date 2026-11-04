@@ -50,7 +50,7 @@ internal static class PublishedSmoke
             desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);
             desktop.Model.Queue.Begin(2);desktop.Model.Queue.Measure(35,"fixture transfer");desktop.Model.Queue.Stop("Отменено",true);
             desktop.C<TabItem>("QueueTab").IsSelected=true;await Task.Delay(100);
-            if(!desktop.C<TabItem>("QueueTab").GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Name=="QueuePendingCount"&&x.Text=="1"))throw new Exception("Published queue counter binding failed.");
+            if(!desktop.C<TabItem>("QueueTab").GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Name=="PART_Count"&&x.Text=="1"))throw new Exception("Published queue counter binding failed.");
             var queue=desktop.C<DataGrid>("OperationQueue");
             if(!queue.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Queue two"))throw new Exception("Published queue row binding was trimmed.");
             desktop.Model.Queue.ResumeCommand.Execute(null);
