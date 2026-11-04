@@ -18,6 +18,8 @@ internal sealed class AvaloniaDesktopInteraction : IDesktopInteraction, IDisposa
     readonly Window window;
     Window journal;
     bool disposed;
+    BackgroundTasks ownerTasks;
+    CancellationToken Lifetime => ownerTasks?.Token ?? CancellationToken.None;
     public AvaloniaDesktopInteraction(Window window) => this.window = window;
     public void Post(Action action) => Dispatcher.UIThread.Post(() => { if (!disposed) action(); });
     public IDisposable Repeat(TimeSpan interval, Action tick) => new UiTimer(interval, tick);
@@ -30,6 +32,7 @@ internal sealed class AvaloniaDesktopInteraction : IDesktopInteraction, IDisposa
     static readonly string[] MenuNames = { "MoreAccount", "MoreSearch", "MoreDownloads", "MoreDevice", "MoreFiles", "MoreGui", "MoreEngine", "MoreTools", "MoreQueue" };
     public void BindMenus(DesktopViewModel model)
     {
+        ownerTasks = model.Tasks;
         foreach (var name in MenuNames)
             if (window.FindControl<Button>(name)?.Flyout is Flyout { Content: Control content }) content.DataContext = model;
     }
@@ -44,22 +47,30 @@ internal sealed class AvaloniaDesktopInteraction : IDesktopInteraction, IDisposa
         if (journal != null) { journal.Activate(); return; }
         journal = new JournalWindow(window, model); journal.Closed += (_, _) => journal = null; journal.Show(window);
     }
-    public Task ShowText(string title, string details) => AppDialogs.ShowText(window, title, details);
-    public Task<bool> Confirm(string title, string message) => AppDialogs.Confirm(window, title, message);
+    public Task ShowText(string title, string details) => ShowModal(AppDialogs.Text(window, title, details));
+    public Task<bool> Confirm(string title, string message) => AppDialogs.Confirm(window, title, message, Lifetime);
     public async Task<string> Login(IAppleLoginService service, CancellationToken cancellation)
     {
-        using var dialog = new AppleLoginWindow(window, service, cancellation);
-        return await dialog.Window.ShowDialog<bool>(window) ? dialog.SignedInEmail : null;
+        using var dialog = new AppleLoginWindow(window, service, cancellation, ownerTasks);
+        return await ShowModal<bool>(dialog.Window, cancellation) ? dialog.SignedInEmail : null;
     }
-    public async Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, AppVersions service, CancellationToken cancellation)
+    public async Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, IAppVersions service, CancellationToken cancellation)
     {
-        using var dialog = new AppVersionWindow(window, name, id, rows, service, cancellation);
-        return await dialog.Window.ShowDialog<bool>(window) ? dialog.SelectedIDs : null;
+        using var dialog = new AppVersionWindow(window, name, id, rows, service, cancellation, ownerTasks);
+        return await ShowModal<bool>(dialog.Window, cancellation) ? dialog.SelectedIDs : null;
     }
-    public Task<bool> EditSet(string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save) => AppSetEditor.Create(window, name, apps, save).ShowDialog<bool>(window);
+    public Task<bool> EditSet(string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save) => ShowModal<bool>(AppSetEditor.Create(window, name, apps, save));
     public void ShowLibrary(AppBrowserViewModel model) => new AppBrowserWindow(window, model).Show(window);
-    public Task ShowNetwork(NetworkSettingsViewModel model) => new NetworkSettingsWindow(window, model).ShowDialog(window);
-    public Task ShowIpa(LocalRow row) => AppDialogs.Ipa(window, row).ShowDialog(window);
+    public Task ShowNetwork(NetworkSettingsViewModel model) => ShowModal(new NetworkSettingsWindow(window, model));
+    public Task ShowIpa(LocalRow row) => ShowModal(AppDialogs.Ipa(window, row));
+    async Task<T> ShowModal<T>(Window dialog, CancellationToken cancellation = default)
+    {
+        var pending = dialog.ShowDialog<T>(window);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(Lifetime, cancellation);
+        using var registration = stop.Token.Register(() => Post(() => dialog.Close(default(T))));
+        return await pending;
+    }
+    Task ShowModal(Window dialog) => ShowModal<object>(dialog);
     public async Task<string[]> ImportFiles()
     {
         var selected = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

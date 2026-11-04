@@ -26,16 +26,14 @@ public sealed partial class DesktopViewModel
     }
     internal async Task<string> RequireAccountAsync(CancellationToken ct, string expected = null)
     {
-        var result = await engine.Tool(new[] { "auth", "info" }, ct, false); Engine.Ensure(result);
-        var data = Engine.Object(result.Output); var email = Convert.ToString(Engine.Get(data, "email"));
-        if (String.IsNullOrWhiteSpace(email) || !Object.Equals(Engine.Get(data, "success"), true)) throw new InvalidOperationException("Проверьте аккаунт и выполните вход перед продолжением.");
+        var email = await accounts.GetEmailAsync(ct);
         SetAccountIdentity(email); RegisterPrivate(email);
         if (expected != null && expected != AccountKey) throw new InvalidOperationException("Очередь создана для другого Apple Account. Войдите в исходный аккаунт или создайте новую очередь.");
         return email;
     }
     void ConfigureQueueStorage()
     {
-        queueStore = new QueueArchiveStore(engine.Root);
+        queueStore = new QueueArchiveStore(paths.Root);
         try { Queue.Restore(queueStore.Load(), (batch, keys) => _ = RunAsyncCommand(() => ResumeStoredBatch(batch, keys))); }
         catch (Exception error)
         {
@@ -65,13 +63,13 @@ public sealed partial class DesktopViewModel
             search.StartDownloads(seeds.Select(seed =>
             {
                 var parts = seed.Key.Split('@');
-                if (parts.Length != 2 || !AppSetStore.ValidId(parts[0]) || (parts[1] != "latest" && !AppSetStore.ValidId(parts[1]))) throw new InvalidDataException("Некорректная сохранённая загрузка.");
+                if (parts.Length != 2 || !AppSetRules.ValidId(parts[0]) || (parts[1] != "latest" && !AppSetRules.ValidId(parts[1]))) throw new InvalidDataException("Некорректная сохранённая загрузка.");
                 return new DownloadItem { ID = parts[0], VersionID = parts[1] == "latest" ? null : parts[1], Name = seed.Name };
             }).ToList(), false, batch);
         }
         else
         {
-            var available = await engine.LocalFiles.ListAsync(); var rows = new List<LocalRow>();
+            var available = await localApps.ListAsync(LifetimeToken); var rows = new List<LocalRow>();
             foreach (var seed in seeds)
             {
                 var row = available.FirstOrDefault(x => String.Equals(x.Path, seed.Key, StringComparison.OrdinalIgnoreCase));

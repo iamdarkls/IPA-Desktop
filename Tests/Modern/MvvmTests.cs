@@ -5,16 +5,17 @@ namespace IpaDesktop.Tests;
 
 public sealed class MvvmTests
 {
- [Fact] public void LocalFileTablesPreserveSelectionAcrossMetadataRefresh()
- {
-  var grid=new SelectionViewModel<LocalRow>();var old=new LocalRow{Path="/ipa/first.ipa",Version="1"};
-  grid.ReplacePreservingSelection(new[]{old,new LocalRow{Path="/ipa/gone.ipa"}}, x=>x.Path);
-  grid.SelectedItems.Add(old);
-  var refreshed=new LocalRow{Path=old.Path,Version="2"};
-  grid.ReplacePreservingSelection(new[]{refreshed}, x=>x.Path);Assert.Same(refreshed,Assert.Single(grid.SelectedItems.Cast<LocalRow>()));
-  grid.ReplacePreservingSelection(new[]{refreshed}, x=>x.Path);Assert.Single(grid.SelectedItems.Cast<LocalRow>());
-  grid.ReplacePreservingSelection(Array.Empty<LocalRow>(), x=>x.Path);Assert.Empty(grid.SelectedItems);
- }
+    [Fact]
+    public void LocalFileTablesPreserveSelectionAcrossMetadataRefresh()
+    {
+        var grid = new SelectionViewModel<LocalRow>(); var old = new LocalRow { Path = "/ipa/first.ipa", Version = "1" };
+        grid.ReplacePreservingSelection(new[] { old, new LocalRow { Path = "/ipa/gone.ipa" } }, x => x.Path);
+        grid.SelectedItems.Add(old);
+        var refreshed = new LocalRow { Path = old.Path, Version = "2" };
+        grid.ReplacePreservingSelection(new[] { refreshed }, x => x.Path); Assert.Same(refreshed, Assert.Single(grid.SelectedItems.Cast<LocalRow>()));
+        grid.ReplacePreservingSelection(new[] { refreshed }, x => x.Path); Assert.Single(grid.SelectedItems.Cast<LocalRow>());
+        grid.ReplacePreservingSelection(Array.Empty<LocalRow>(), x => x.Path); Assert.Empty(grid.SelectedItems);
+    }
 
     static Engine Backend(string root)
     {
@@ -24,7 +25,8 @@ public sealed class MvvmTests
         foreach (var name in new[] { "ipatool.exe", "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe" }) File.WriteAllText(Path.Combine(bins, RuntimePlatform.ToolName(name)), "fixture");
         return engine;
     }
-    [Fact] public void ViewModelsDoNotExposeOrStoreAvaloniaObjects()
+    [Fact]
+    public void ViewModelsDoNotExposeOrStoreAvaloniaObjects()
     {
         static bool UiType(Type type) => type.Namespace?.StartsWith("Avalonia", StringComparison.Ordinal) == true ||
             type.HasElementType && UiType(type.GetElementType()) || type.IsGenericType && type.GetGenericArguments().Any(UiType);
@@ -32,7 +34,12 @@ public sealed class MvvmTests
         foreach (var type in types)
         {
             Assert.False(UiType(type.BaseType), type.FullName);
-            foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) Assert.False(UiType(field.FieldType), type.Name + "." + field.Name);
+            foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                Assert.False(UiType(field.FieldType), type.Name + "." + field.Name);
+                Assert.NotEqual(typeof(Engine), field.FieldType); Assert.NotEqual(typeof(DesktopServices), field.FieldType);
+            }
+            foreach (var constructor in type.GetConstructors()) Assert.DoesNotContain(constructor.GetParameters(), p => p.ParameterType == typeof(Engine));
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
                 Assert.False(UiType(method.ReturnType), type.Name + "." + method.Name);
@@ -40,9 +47,10 @@ public sealed class MvvmTests
             }
         }
     }
-    [Fact] public async Task SearchSelectionAndCancellationWorkWithoutCreatingAWindow()
+    [Fact]
+    public async Task SearchSelectionAndCancellationWorkWithoutCreatingAWindow()
     {
-        using var folder = new TempFolder(); using var model = new DesktopViewModel(Backend(folder.Path), new NoWindowInteraction());
+        using var folder = new TempFolder(); using var model = new DesktopViewModel(Backend(folder.Path).CreateDesktopServices(), new NoWindowInteraction());
         model.Search.Query = "123"; await model.Search.SearchCommand.ExecuteAsync(); await model.ActiveOperation;
         Assert.Equal("123", Assert.Single(model.Search.Apps.Items).ID);
         await model.Search.AddChosenCommand.ExecuteAsync();
@@ -53,17 +61,19 @@ public sealed class MvvmTests
         Assert.False(model.IsBusy); Assert.True(model.Search.DownloadCommand.CanExecute(null));
         Assert.Single(model.Search.ChosenAppsOptions);
     }
-    [Fact] public async Task FailedNetworkSettingsValidationPreservesConfigurationAndSafetyState()
+    [Fact]
+    public async Task FailedNetworkSettingsValidationPreservesConfigurationAndSafetyState()
     {
         using var folder = new TempFolder(); var engine = Backend(folder.Path);
-        using var model = new DesktopViewModel(engine, new NoWindowInteraction());
+        using var model = new DesktopViewModel(engine.CreateDesktopServices(), new NoWindowInteraction());
         var before = engine.Settings.Copy(); var safety = engine.AccountRequests.SafetyStatus;
-        using var network = new NetworkSettingsViewModel(model, engine) { Mode = 2, Address = "not-a-proxy" };
+        using var network = new NetworkSettingsViewModel(model, engine.CreateDesktopServices().Settings, engine.Network) { Mode = 2, Address = "not-a-proxy" };
         await network.SaveCommand.ExecuteAsync();
         Assert.Equal(before.ProxyMode, engine.Settings.ProxyMode); Assert.Equal(before.ProxyUrl, engine.Settings.ProxyUrl);
         Assert.Equal(safety, engine.AccountRequests.SafetyStatus); Assert.NotEmpty(network.Status);
     }
-    [Fact] public async Task AsyncCommandRejectsReentryAndRoutesAnExceptionOnce()
+    [Fact]
+    public async Task AsyncCommandRejectsReentryAndRoutesAnExceptionOnce()
     {
         var gate = new TaskCompletionSource(); int calls = 0, errors = 0;
         var command = new OperationCommand(async _ => { calls++; await gate.Task; throw new IOException("fixture"); }, _ => errors++);
@@ -85,7 +95,7 @@ internal sealed class NoWindowInteraction : IDesktopInteraction
     public Task ShowText(string title, string details) => Task.CompletedTask;
     public Task<bool> Confirm(string title, string message) => Task.FromResult(false);
     public Task<string> Login(IAppleLoginService service, CancellationToken cancellation) => Task.FromResult<string>(null);
-    public Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, AppVersions service, CancellationToken cancellation) => Task.FromResult<IReadOnlyList<string>>(null);
+    public Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, IAppVersions service, CancellationToken cancellation) => Task.FromResult<IReadOnlyList<string>>(null);
     public Task<bool> EditSet(string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save) => Task.FromResult(false);
     public void ShowLibrary(AppBrowserViewModel model) => model.Dispose();
     public Task ShowNetwork(NetworkSettingsViewModel model) { model.Dispose(); return Task.CompletedTask; }

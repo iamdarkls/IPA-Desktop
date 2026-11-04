@@ -6,7 +6,7 @@ using System.Text;
 namespace IpaDesktop
 {
     /// <summary>Хранит наборы отдельно от настроек; проверяет формат, объединяет ID и мигрирует прежние записи.</summary>
-    public sealed class AppSetStore
+    public sealed class AppSetStore : IAppSets
     {
         readonly string file, folder;
         public AppSetStore(string root, string downloads)

@@ -36,6 +36,42 @@ public sealed class UiTests
   return engine;
  }
  static bool Busy(Desktop desktop)=>desktop.Model.IsBusy;
+    sealed class HeldNetwork : INetworkDiagnostics
+    {
+        public readonly TaskCompletionSource Cleanup = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken Token;
+        public async Task<string> DiagnoseAsync(CancellationToken cancellation)
+        {
+            Token = cancellation;
+            try { await Task.Delay(Timeout.Infinite, cancellation); return "unreachable"; }
+            finally { Cleanup.TrySetResult(); await Release.Task; }
+        }
+    }
+    [AvaloniaFact]
+    public async Task ClosingMainWindowCancelsChildProbeAndWaitsForItsCleanup()
+    {
+        using var folder = new TempFolder(); var network = new HeldNetwork();
+        var window = new MainWindow(); var interaction = new AvaloniaDesktopInteraction(window);
+        var services = Backend(folder.Path).CreateDesktopServices() with { Network = network };
+        var model = new DesktopViewModel(services, interaction); window.DataContext = model; interaction.BindMenus(model);
+        window.Closing += (_, e) => { if (!model.RequestClose()) e.Cancel = true; };
+        window.Closed += (_, _) => { model.Dispose(); interaction.Dispose(); }; window.Show();
+        try
+        {
+            var dialogCommand = model.Library.NetworkSettingsCommand.ExecuteAsync();
+            await Wait(() => window.OwnedWindows.OfType<NetworkSettingsWindow>().Any());
+            var dialog = window.OwnedWindows.OfType<NetworkSettingsWindow>().Single();
+            var settings = Assert.IsType<NetworkSettingsViewModel>(dialog.DataContext);
+            var probe = settings.TestCommand.ExecuteAsync(); await Wait(() => network.Token.CanBeCanceled);
+            window.Close(); await Wait(() => network.Cleanup.Task.IsCompleted);
+            Assert.True(model.IsClosing); Assert.True(window.IsVisible); Assert.True(network.Token.IsCancellationRequested);
+            Assert.False(model.Tasks.Completion.IsCompleted);
+            network.Release.SetResult(); await Wait(() => !window.IsVisible); await probe; await dialogCommand;
+            Assert.Equal(0, model.Tasks.PendingCount);
+        }
+        finally { network.Release.TrySetResult(); await model.ShutdownAsync(); window.Close(); }
+    }
  [AvaloniaFact] public async Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales()
  {
   using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;

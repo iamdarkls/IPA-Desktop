@@ -8,7 +8,10 @@ namespace IpaDesktop
     /// <summary>Управляет наборами в обеих вкладках: сохранением, выбором, предпросмотром и добавлением в очередь.</summary>
     public sealed partial class AppSetsViewModel : FeatureViewModel
     {
-        public AppSetsViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        readonly IAppSets appSetStore;
+        readonly ILocalApps localApps;
+        readonly IApplicationDownloads downloads;
+        public AppSetsViewModel(DesktopViewModel desktop, IAppSets sets, ILocalApps localApps, IApplicationDownloads downloads) : base(desktop) { appSetStore = sets; this.localApps = localApps; this.downloads = downloads; }
         internal void Initialize()
         {
             AppSets.SelectionChanged += delegate { Preview(); ApplyActions(); };
@@ -21,10 +24,10 @@ namespace IpaDesktop
                 var original = selected[0];
                 Work("Открытие набора…", async delegate (CancellationToken ct)
                 {
-                    var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveApps(original); }, ct);
+                    var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return appSetStore.ResolveApps(original); }, ct);
                     ct.ThrowIfCancellationRequested();
                     if (await desktop.Interaction.EditSet(original.Name, apps,
-                        (name, rows) => engine.AppSets.Update(original.Name, name, rows))) RefreshSets();
+                        (name, rows) => appSetStore.Update(original.Name, name, rows))) RefreshSets();
                 });
             });
             DeleteSetCommand = Command(DeleteSelected);
@@ -43,7 +46,7 @@ namespace IpaDesktop
                 var rows = desktop.SelectedDownloads();
                 if (name.Length == 0) throw new InvalidOperationException("Введите название нового набора или выберите существующий.");
                 if (rows.Count == 0) throw new InvalidOperationException("Добавьте приложения в выбранное в поиске.");
-                engine.AppSets.AddApps(name, rows.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
+                appSetStore.AddApps(name, rows.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
                 RefreshSets();
                 desktop.Search.SearchSet = name;
                 SetStatusMessage(status, "Набор «" + name + "» сохранён. Повторы по ID исключены.");
@@ -59,7 +62,7 @@ namespace IpaDesktop
             var name = desktop.Search.SearchSet;
             try
             {
-                var sets = engine.AppSets.Load();
+                var sets = appSetStore.Load();
                 list.Items = sets;
                 foreach (var set in sets.Where(x => selected.Contains(x.Name))) list.SelectedItems.Add(set);
                 if (list.SelectedItems.Count == 0 && sets.Count > 0) list.SelectedIndex = 0;
@@ -86,7 +89,7 @@ namespace IpaDesktop
             if (selected.Count == 0) return;
             Work("Добавление наборов…", async delegate (CancellationToken ct)
             {
-                var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return engine.AppSets.ResolveMany(selected); }, ct);
+                var apps = await Task.Run(delegate { ct.ThrowIfCancellationRequested(); return appSetStore.ResolveMany(selected); }, ct);
                 ct.ThrowIfCancellationRequested();
                 int added = desktop.AddSetApps(apps);
                 RefreshSets();
@@ -107,8 +110,8 @@ namespace IpaDesktop
             if (!await desktop.RunWorkAsync("Подготовка набора…", async ct =>
             {
                 account = await desktop.RequireAccountAsync(ct);
-                apps = await Task.Run(() => engine.AppSets.ResolveMany(sets), ct);
-                plan = AppSetInstallationPlan.Build(apps, await engine.LocalFiles.ListAsync(), account);
+                apps = await Task.Run(() => appSetStore.ResolveMany(sets), ct);
+                plan = AppSetInstallationPlan.Build(apps, await localApps.ListAsync(ct), account);
             })) return;
             if (!await desktop.Interaction.Confirm("Подготовка установки набора", phone.DisplayLabel + "\nApple Account: " + account + "\n\n" + plan.Preview + "\n\nИспользовать эти локальные версии и скачать недостающие? Перед установкой будет отдельное подтверждение.")) return;
             var expectedAccount = desktop.AccountKey;
@@ -123,7 +126,7 @@ namespace IpaDesktop
                         keys => _ = desktop.RunAsyncCommand(() => desktop.ResumeStoredBatch(batch, keys)), null, expectedAccount);
                     var result = await BatchRunner.Run(plan.Missing, async (app, token) =>
                     {
-                        var path = await engine.ApplicationDownloads.DownloadFileAsync(new DownloadItem { ID = app.ID, Name = app.Name }, token);
+                        var path = await downloads.DownloadFileAsync(new DownloadItem { ID = app.ID, Name = app.Name }, token);
                         if (!System.IO.File.Exists(path)) throw new System.IO.IOException("Движок не создал IPA для " + app.Name);
                     }, (app, index) => desktop.BeginQueue("Скачивание", index, plan.Missing.Count, app.Name), app => desktop.ReportItem(app.Name, null), (app, error) => desktop.ReportItem(app.Name, error), null, ct);
                     desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
@@ -133,7 +136,7 @@ namespace IpaDesktop
             if (!await desktop.RunWorkAsync("Проверка готовности набора…", async ct =>
             {
                 await desktop.RequireAccountAsync(ct, expectedAccount);
-                plan = AppSetInstallationPlan.Build(apps, await engine.LocalFiles.ListAsync(), account);
+                plan = AppSetInstallationPlan.Build(apps, await localApps.ListAsync(ct), account);
                 if (plan.Missing.Count > 0) throw new InvalidOperationException("Не все IPA найдены с метаданными исходного аккаунта. Автоматическая установка набора остановлена.");
             })) return;
             await desktop.StartSetInstallation(plan.Local, target);
@@ -142,7 +145,7 @@ namespace IpaDesktop
         {
             var selected = Selected();
             // Удаление только конфигурации, без изменения IPA на диске или приложений на телефоне.
-            engine.AppSets.DeleteMany(selected.Select(x => x.Name));
+            appSetStore.DeleteMany(selected.Select(x => x.Name));
             RefreshSets(); SetStatus = "Удалено наборов: " + selected.Count + ". IPA сохранены.";
         }
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>

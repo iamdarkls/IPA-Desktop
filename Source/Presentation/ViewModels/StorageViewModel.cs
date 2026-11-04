@@ -7,7 +7,8 @@ namespace IpaDesktop
     public sealed partial class StorageViewModel : FeatureViewModel
     {
         List<LocalRow> rows = new List<LocalRow>();
-        public StorageViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+
+        public StorageViewModel(DesktopViewModel desktop) : base(desktop) { }
         internal void Initialize()
         {
             RefreshStorageCommand = Command(desktop.RefreshFiles);

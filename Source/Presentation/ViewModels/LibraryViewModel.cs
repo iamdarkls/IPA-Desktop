@@ -9,12 +9,16 @@ namespace IpaDesktop;
 public sealed partial class LibraryViewModel : FeatureViewModel
 {
     static string Key(DeviceRow phone) => phone.ID + "|" + phone.Network;
-    public LibraryViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+    readonly IDeviceService devices;
+    readonly ILocalApps localApps;
+    readonly IPurchaseHistory purchases;
+    readonly IAccountProtection protection;
+    public LibraryViewModel(DesktopViewModel desktop, IDeviceService devices, ILocalApps localApps, IPurchaseHistory purchases, IAccountProtection protection) : base(desktop) { this.devices = devices; this.localApps = localApps; this.purchases = purchases; this.protection = protection; }
     internal void Initialize()
     {
         DeviceAppsCommand = Command(OpenInstalled);
         PurchaseHistoryCommand = AsyncCommand(OpenPurchases);
-        NetworkSettingsCommand = AsyncCommand(async () => await desktop.Interaction.ShowNetwork(new NetworkSettingsViewModel(desktop, engine)));
+        NetworkSettingsCommand = AsyncCommand(async () => await desktop.Interaction.ShowNetwork(desktop.CreateNetworkSettings()));
         desktop.Queue.CanVerify = row => row.Kind == "Установка" && row.State is QueueItemState.Uncertain or QueueItemState.Interrupted && desktop.CanVerifyPhone(row.Batch.TargetKey);
         desktop.Queue.VerifyRequested = row => _ = desktop.RunAsyncCommand(() => Verify(row));
     }
@@ -29,8 +33,8 @@ public sealed partial class LibraryViewModel : FeatureViewModel
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, browser.Token);
             try
             {
-                await engine.Devices.ValidateReadyAsync(phone, stop.Token);
-                var apps = await engine.Devices.ApplicationsAsync(phone, stop.Token);
+                await devices.ValidateReadyAsync(phone, stop.Token);
+                var apps = await devices.ApplicationsAsync(phone, stop.Token);
                 browser.SetRows(apps, "Приложений: " + apps.Count + ". Placeholder может быть сгруженным или устанавливаемым приложением; для их чтения нужен комплект 1.0.5+. Записи без App Store ID нельзя автоматически добавить в загрузку.");
             }
             catch (DeviceConnectionException error) { desktop.ReportDeviceFailure(phone, error); throw; }
@@ -51,7 +55,7 @@ public sealed partial class LibraryViewModel : FeatureViewModel
             {
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, browser.Token);
                 await desktop.RequireAccountAsync(stop.Token, account);
-                var apps = await engine.Purchases.LoadAsync(browser.SelectedYear, browser.AllYears, stop.Token);
+                var apps = await purchases.LoadAsync(browser.SelectedYear, browser.AllYears, stop.Token);
                 browser.SetRows(apps, "Записей: " + apps.Count + ". Доступность загрузки зависит от Apple. История этого аккаунта хранится только в открытом окне.");
             });
         });
@@ -63,12 +67,12 @@ public sealed partial class LibraryViewModel : FeatureViewModel
         var phone = Selected();
         await desktop.RunWorkAsync("Проверка результата на iPhone…", async ct =>
         {
-            var available = await engine.LocalFiles.ListAsync(); var file = available.FirstOrDefault(x => String.Equals(x.Path, row.Seed.Key, StringComparison.OrdinalIgnoreCase));
+            var available = await localApps.ListAsync(ct); var file = available.FirstOrDefault(x => String.Equals(x.Path, row.Seed.Key, StringComparison.OrdinalIgnoreCase));
             if (file == null) throw new IOException("Исходного IPA нет в папке программы. Без него результат нельзя достоверно сравнить.");
             var info = new FileInfo(file.Path);
             if (row.Seed.FileSize > 0 && (info.Length != row.Seed.FileSize || info.LastWriteTimeUtc.Ticks != row.Seed.ModifiedTicks)) throw new IOException("IPA изменился после создания очереди. Добавьте его заново.");
             var expected = IpaMetadata.ReadDetails(file.Path);
-            await engine.Devices.ValidateReadyAsync(phone, ct); var apps = await engine.Devices.ApplicationsAsync(phone, ct);
+            await devices.ValidateReadyAsync(phone, ct); var apps = await devices.ApplicationsAsync(phone, ct);
             var installed = apps.FirstOrDefault(x => String.Equals(x.BundleID, expected.BundleID, StringComparison.OrdinalIgnoreCase));
             var difference = DeviceApplications.Compare(expected, installed);
             if (difference != null) { await desktop.Interaction.ShowText("Проверка результата", difference + "\nОчередь не изменена."); return; }
@@ -79,7 +83,7 @@ public sealed partial class LibraryViewModel : FeatureViewModel
     public override void RefreshActions()
     {
         DeviceAppsEnabled = !busy && Selected() != null;
-        PurchaseHistoryEnabled = !busy && !engine.AccountRequests.RequiresLogin;
+        PurchaseHistoryEnabled = !busy && !protection.RequiresLogin;
         NetworkSettingsEnabled = !busy;
         desktop.ResetQueueHistoryEnabled = !busy;
     }

@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Ищет по кэшируемому каталогу IPA_Downloader; при сетевой ошибке использует локальную копию.</summary>
-    public sealed class AppCatalog
+    public sealed class AppCatalog : IAppCatalog
     {
         readonly SettingsStore store;
         readonly ToolLocator locator;

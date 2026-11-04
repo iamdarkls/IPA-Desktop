@@ -19,7 +19,7 @@ public sealed class Desktop
         Window = new MainWindow { Title = "IPA Desktop · " + AppInfo.Version };
         var interaction = new AvaloniaDesktopInteraction(Window);
         var engine = backend ?? new Engine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop"));
-        Model = new DesktopViewModel(engine, interaction);
+        Model = new DesktopViewModel(engine.CreateDesktopServices(), interaction);
         Window.DataContext = Model;
         interaction.BindMenus(Model);
         using (var icon = AssetLoader.Open(new Uri("avares://IPA-Desktop/Assets/App.ico"))) Window.Icon = new WindowIcon(icon);

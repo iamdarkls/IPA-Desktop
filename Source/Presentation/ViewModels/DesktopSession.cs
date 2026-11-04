@@ -8,11 +8,21 @@ using System.Threading.Tasks;
 
 namespace IpaDesktop;
 
-public sealed partial class DesktopViewModel : IDisposable
+public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
 {
-    readonly Engine engine;
+    readonly ISettingsStore settings;
+    readonly WorkspacePaths paths;
+    readonly IAccountSession accounts;
+    readonly IAccountProtection protection;
+    readonly ILocalApps localApps;
+    readonly INetworkDiagnostics network;
+    IDisposable eventSubscription;
     CancellationTokenSource cancellation;
-    bool setting, exitingForUpdate, closingAfterDeviceScan, disposed;
+    bool setting, exitingForUpdate, closingAfterTasks, disposed;
+    bool isClosing;
+    public bool IsClosing { get => isClosing; private set => Set(ref isClosing, value); }
+    public BackgroundTasks Tasks { get; }
+    public CancellationToken LifetimeToken => Tasks.Token;
     long lastProgress;
     IDisposable journalTimer;
     AccountViewModel account;
@@ -69,30 +79,29 @@ public sealed partial class DesktopViewModel : IDisposable
         foreach (var feature in Features) feature?.RefreshCommands();
         RefreshCommands();
     }
-    public async Task RunAsyncCommand(Func<Task> action)
-    { try { await action(); } catch (Exception error) { Error(error); } }
+    public Task RunAsyncCommand(Func<Task> action) => Tasks.Run(_ => action());
     OperationCommand Command(Action action) => new(_ => { Interaction.CloseMenus(); action(); return Task.CompletedTask; }, Error);
     OperationCommand AsyncCommand(Func<Task> action) => new(_ => { Interaction.CloseMenus(); return action(); }, Error);
     /// <summary>Отображает настройки, блокируя повторную реакцию обработчиков переключателей.</summary>
     internal void StateView()
     {
-        Updates.EngineVersion = "Движок: " + (engine.Settings.Version ?? "не установлен");
+        Updates.EngineVersion = "Движок: " + (settings.Settings.Version ?? "не установлен");
         setting = true;
-        Updates.CheckGuiUpdates = engine.Settings.CheckGuiUpdates;
-        Updates.SoundsEnabled = engine.Settings.SoundsEnabled;
-        Updates.AutoUpdate = engine.Settings.AutoUpdate;
-        Updates.AutoUpdateDeviceTools = engine.Settings.AutoUpdateDeviceTools;
-        Updates.DeviceToolsVersion = (engine.Settings.DeviceSource == EngineUpdater.DeviceRepository ? "Наш комплект: " : "Прежний комплект: ") + (engine.Settings.DeviceVersion ?? (engine.Settings.Source == null ? engine.Settings.Version : null) ?? "не установлен");
+        Updates.CheckGuiUpdates = settings.Settings.CheckGuiUpdates;
+        Updates.SoundsEnabled = settings.Settings.SoundsEnabled;
+        Updates.AutoUpdate = settings.Settings.AutoUpdate;
+        Updates.AutoUpdateDeviceTools = settings.Settings.AutoUpdateDeviceTools;
+        Updates.DeviceToolsVersion = (settings.Settings.DeviceSource == EngineUpdater.DeviceRepository ? "Наш комплект: " : "Прежний комплект: ") + (settings.Settings.DeviceVersion ?? (settings.Settings.Source == null ? settings.Settings.Version : null) ?? "не установлен");
         setting = false;
     }
     /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
     internal void Work(string title, Func<CancellationToken, Task> action) => _ = RunWorkAsync(title, action);
     internal Task<bool> RunWorkAsync(string title, Func<CancellationToken, Task> action)
     {
-        if (IsBusy) return Task.FromResult(false);
-        var pending = RunWorkCoreAsync(title, action); ActiveOperation = pending; return pending;
+        if (IsBusy || IsClosing) return Task.FromResult(false);
+        var pending = Tasks.Run(ct => RunWorkCoreAsync(title, action, ct)); ActiveOperation = pending; return pending;
     }
-    async Task<bool> RunWorkCoreAsync(string title, Func<CancellationToken, Task> action)
+    async Task<bool> RunWorkCoreAsync(string title, Func<CancellationToken, Task> action, CancellationToken lifetime)
     {
         if (IsBusy) return false;
         bool succeeded = false;
@@ -100,13 +109,13 @@ public sealed partial class DesktopViewModel : IDisposable
         ConnectionNoticeVisible = false;
         queueProgress.Reset();
         OperationDetail = "";
-        cancellation = new CancellationTokenSource();
+        cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         Indeterminate = true;
         Status = title;
-        Log(title);
-        ApplyActions();
         try
         {
+            Log(title);
+            ApplyActions();
             await files.PauseDeviceDetectionAsync();
             await action(cancellation.Token);
             Status = "Готово";
@@ -144,28 +153,33 @@ public sealed partial class DesktopViewModel : IDisposable
         }
         return succeeded;
     }
-    public DesktopViewModel(Engine backend, IDesktopInteraction interaction) : this()
+    public DesktopViewModel(DesktopServices services, IDesktopInteraction interaction) : this()
     {
-        engine = backend ?? throw new ArgumentNullException(nameof(backend));
+        ArgumentNullException.ThrowIfNull(services);
+        settings = services.Settings; paths = services.Paths; accounts = services.Accounts;
+        protection = services.Protection; localApps = services.LocalApps; network = services.Network;
         Interaction = interaction ?? throw new ArgumentNullException(nameof(interaction));
         CancelRequested = () => cancellation?.Cancel();
         JournalRequested = ShowJournal;
         ExportRequested = () => _ = RunAsyncCommand(ExportDiagnostics);
-        account = new(this, engine); search = new(this, engine); files = new(this, engine);
-        updates = new(this, engine); storage = new(this, engine); appSets = new(this, engine); library = new(this, engine);
+        account = new(this, services.Accounts, services.Protection, services.Login);
+        search = new(this, services.Tools, services.Catalog, services.Versions, services.Downloads, services.Protection);
+        files = new(this, services.Settings, services.Devices, services.LocalApps, services.AppleSupport);
+        updates = new(this, services.Settings, services.ToolUpdates, services.GuiUpdates);
+        storage = new(this); appSets = new(this, services.AppSets, services.LocalApps, services.Downloads);
+        library = new(this, services.Devices, services.LocalApps, services.Purchases, services.Protection);
         Features = new FeatureViewModel[] { account, search, files, updates, appSets, storage, library };
-        engine.Log = Log;
-        engine.Progress = value =>
+        eventSubscription = Tasks.Own(services.Events.Subscribe(Log, value =>
         {
             long now = Stopwatch.GetTimestamp();
             if (value < 100 && (now - lastProgress) / (double)Stopwatch.Frequency < 0.15) return;
             lastProgress = now;
-            Interaction.Post(() => { if (!disposed) { Indeterminate = false; Progress = value; } });
-        };
+            Interaction.Post(() => { if (!disposed && !IsClosing) { Indeterminate = false; Progress = value; } });
+        }));
         account.Initialize(); search.Initialize(); files.Initialize(); files.InitializeDeviceCommands();
         updates.Initialize(); storage.Initialize(); appSets.Initialize(); library.Initialize();
         Queue.CanResumeBatch = batch => batch.Kind == "Скачивание"
-            ? !engine.AccountRequests.RequiresLogin && AccountKey != null && batch.AccountKey == AccountKey
+            ? !protection.RequiresLogin && AccountKey != null && batch.AccountKey == AccountKey
             : files.CanResume(batch.TargetKey);
         ConfigureQueueStorage();
         Updates.GuiVersionStatus = "Установлена версия " + AppInfo.Version;
@@ -175,24 +189,25 @@ public sealed partial class DesktopViewModel : IDisposable
         DismissNoticeCommand = Command(() => OperationNoticeVisible = false);
         NoticeRetryCommand = AsyncCommand(() => !IsBusy && noticeRetry != null ? noticeRetry() : Task.CompletedTask);
         ExportDiagnosticsCommand = AsyncCommand(ExportDiagnostics);
-        OpenFolderCommand = Command(() => SystemIntegration.Open(engine.Downloads));
-        journalTimer = Interaction.Repeat(TimeSpan.FromMilliseconds(150), () =>
+        OpenFolderCommand = Command(() => SystemIntegration.Open(paths.Downloads));
+        journalTimer = Tasks.Own(Interaction.Repeat(TimeSpan.FromMilliseconds(150), () =>
         {
             FlushJournal(); if (IsBusy) RenderQueue();
             if (IsBusy && DateTime.UtcNow - lastQueueSave > TimeSpan.FromSeconds(2)) SaveQueue();
-        });
+        }));
         foreach (var feature in Features) feature.ConfigureCommands();
         ConfigureCommands(); ApplyActions();
     }
+    internal NetworkSettingsViewModel CreateNetworkSettings() => new(this, settings, network);
     public void Opened(bool checkAtStartup)
     {
-        Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + engine.Downloads);
+        Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + paths.Downloads);
         if (!checkAtStartup) return;
         files.StartDeviceDetection();
         Work("Проверка движка и сохранённого входа…", async delegate (CancellationToken ct)
         {
             await files.CheckSupport(ct);
-            if (engine.Settings.CheckGuiUpdates)
+            if (settings.Settings.CheckGuiUpdates)
             {
                 try
                 {
@@ -208,7 +223,7 @@ public sealed partial class DesktopViewModel : IDisposable
                     Log("Проверка IPA Desktop: " + e.Message);
                 }
             }
-            if (engine.Settings.AutoUpdate)
+            if (settings.Settings.AutoUpdate)
             {
                 try
                 {
@@ -223,7 +238,7 @@ public sealed partial class DesktopViewModel : IDisposable
                     Log("Не удалось обновить движок: " + e.Message);
                 }
             }
-            if (engine.Settings.AutoUpdateDeviceTools)
+            if (settings.Settings.AutoUpdateDeviceTools)
             {
                 try { await updates.UpdateDevices(ct, true); }
                 catch (OperationCanceledException)
@@ -233,7 +248,7 @@ public sealed partial class DesktopViewModel : IDisposable
                 }
                 catch (Exception e) { Log("Не удалось обновить инструменты для iPhone: " + e.Message); }
             }
-            if (!String.IsNullOrEmpty(engine.Settings.Current))
+            if (!String.IsNullOrEmpty(settings.Settings.Current))
             {
                 try
                 {
@@ -250,22 +265,36 @@ public sealed partial class DesktopViewModel : IDisposable
             }
         });
     }
+    public Task ShutdownAsync()
+    {
+        if (!IsClosing)
+        {
+            IsClosing = true; files?.StopDeviceDetection();
+            CancelCommand.Refresh(); ShowJournalCommand.Refresh(); ExportCommand.Refresh();
+            Queue.SetBusy(true); Device.SetBusy(true); ApplyActions();
+        }
+        return Tasks.StopAsync();
+    }
     public bool RequestClose()
     {
         if (IsBusy) { Status = "Сначала отмените текущую операцию и дождитесь её завершения."; return false; }
-        if (!closingAfterDeviceScan && files.IsDetecting)
+        var pending = ShutdownAsync();
+        if (pending.IsCompleted) return true;
+        if (!closingAfterTasks)
         {
-            closingAfterDeviceScan = true; files.StopDeviceDetection();
-            Interaction.Post(() => _ = RunAsyncCommand(async () => { await files.PauseDeviceDetectionAsync(); Interaction.Close(); }));
-            return false;
+            closingAfterTasks = true;
+            Interaction.Post(() => _ = CloseAfterShutdown(pending));
         }
-        return true;
+        return false;
+    }
+    async Task CloseAfterShutdown(Task pending)
+    {
+        await pending; SaveQueue(); Interaction.Close();
     }
     public void Dispose()
     {
         if (disposed) return;
-        disposed = true; journalTimer?.Dispose(); files?.StopDeviceDetection(); SaveQueue();
-        cancellation?.Cancel();
-        if (engine != null) { engine.Log = delegate { }; engine.Progress = delegate { }; }
+        disposed = true; _ = ShutdownAsync(); SaveQueue();
     }
+    public async ValueTask DisposeAsync() { await ShutdownAsync(); Dispose(); }
 }

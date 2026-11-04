@@ -16,7 +16,7 @@ public interface IDesktopInteraction
     Task ShowText(string title, string details);
     Task<bool> Confirm(string title, string message);
     Task<string> Login(IAppleLoginService service, CancellationToken cancellation);
-    Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, AppVersions service, CancellationToken cancellation);
+    Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, IAppVersions service, CancellationToken cancellation);
     Task<bool> EditSet(string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save);
     void ShowLibrary(AppBrowserViewModel model);
     Task ShowNetwork(NetworkSettingsViewModel model);

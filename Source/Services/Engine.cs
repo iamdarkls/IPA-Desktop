@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Фасад и точка сборки сервисов; сохраняет совместимый API для portable-сборок и проверок.</summary>
-    public sealed class Engine
+    public sealed partial class Engine
     {
         readonly SettingsStore settings;
         readonly IProcessRunner runner;

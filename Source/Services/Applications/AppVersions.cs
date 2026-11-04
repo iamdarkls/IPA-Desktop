@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace IpaDesktop
 {
     /// <summary>Получает список быстро, а дорогие сведения — только для выбранных пользователем версий.</summary>
-    public sealed class AppVersions
+    public sealed class AppVersions : IAppVersions
     {
         readonly IAppToolClient tool;
         public AppVersions(IAppToolClient tool) { this.tool = tool; }

@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Загружает state.json и сохраняет его атомарно; используется сервисами установки и отката.</summary>
-    public sealed class SettingsStore
+    public sealed class SettingsStore : ISettingsStore
     {
         public string Root
         {

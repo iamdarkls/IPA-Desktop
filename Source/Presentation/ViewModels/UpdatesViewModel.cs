@@ -13,22 +13,25 @@ namespace IpaDesktop
     public sealed partial class UpdatesViewModel : FeatureViewModel
     {
         Release guiRelease;
-        public UpdatesViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        readonly ISettingsStore settings;
+        readonly IToolUpdates toolUpdates;
+        readonly IGuiUpdates guiUpdates;
+        public UpdatesViewModel(DesktopViewModel desktop, ISettingsStore settings, IToolUpdates toolUpdates, IGuiUpdates guiUpdates) : base(desktop) { this.settings = settings; this.toolUpdates = toolUpdates; this.guiUpdates = guiUpdates; }
         internal void Initialize()
         {
-            CheckGuiUpdates = engine.Settings.CheckGuiUpdates;
+            CheckGuiUpdates = settings.Settings.CheckGuiUpdates;
             PropertyChanged += (_, change) =>
             {
                 if (setting || change.PropertyName is not (nameof(SoundsEnabled) or nameof(CheckGuiUpdates) or nameof(AutoUpdate) or nameof(AutoUpdateDeviceTools))) return;
                 if (busy) { StateView(); return; }
-                var previous = engine.Settings.Copy();
+                var previous = settings.Settings.Copy();
                 try
                 {
-                    engine.Settings.SoundsEnabled = SoundsEnabled; engine.Settings.CheckGuiUpdates = CheckGuiUpdates;
-                    engine.Settings.AutoUpdate = AutoUpdate; engine.Settings.AutoUpdateDeviceTools = AutoUpdateDeviceTools;
-                    engine.Save();
+                    settings.Settings.SoundsEnabled = SoundsEnabled; settings.Settings.CheckGuiUpdates = CheckGuiUpdates;
+                    settings.Settings.AutoUpdate = AutoUpdate; settings.Settings.AutoUpdateDeviceTools = AutoUpdateDeviceTools;
+                    settings.Save();
                 }
-                catch (Exception error) { engine.Settings = previous; StateView(); Error(error); }
+                catch (Exception error) { settings.Settings = previous; StateView(); Error(error); }
             };
             CheckGuiUpdateCommand = Command(delegate
             {
@@ -40,7 +43,7 @@ namespace IpaDesktop
                 if (!await desktop.Interaction.Confirm("Обновление программы", "Скачать и установить IPA Desktop " + guiRelease.tag_name + "? Программа перезапустится. IPA и настройки сохранятся.")) return;
                 Work("Скачивание обновления IPA Desktop…", async delegate (CancellationToken ct)
                 {
-                    string stage = await GuiUpdater.Prepare(guiRelease, ct, delegate (double value)
+                    string stage = await guiUpdates.Prepare(guiRelease, ct, delegate (double value)
                     {
                         desktop.Interaction.Post(new Action(delegate
                         {
@@ -49,7 +52,7 @@ namespace IpaDesktop
                         }));
                     });
                     ct.ThrowIfCancellationRequested();
-                    GuiUpdater.Launch(stage);
+                    guiUpdates.Launch(stage);
                     desktop.RequestRestart();
                 });
             });
@@ -68,7 +71,7 @@ namespace IpaDesktop
             RollbackDevicesCommand = AsyncCommand(async delegate
             {
                 if (!await desktop.Interaction.Confirm("Откат инструментов", "Вернуть предыдущий комплект для iPhone и отключить его автообновление?")) return;
-                try { engine.RollbackDeviceTools(); StateView(); ApplyActions(); }
+                try { toolUpdates.RollbackDeviceTools(); StateView(); ApplyActions(); }
                 catch (Exception e) { Error(e); }
             });
             OpenDeviceReleasesCommand = Command(delegate
@@ -83,7 +86,7 @@ namespace IpaDesktop
             {
                 if (await desktop.Interaction.Confirm("Откат", "Вернуть предыдущий движок и отключить автообновление?"))
                 {
-                    engine.Rollback();
+                    toolUpdates.Rollback();
                     StateView();
                 }
             });
@@ -94,37 +97,37 @@ namespace IpaDesktop
         {
             AutoUpdateEnabled = AutoUpdateDeviceToolsEnabled = CheckGuiUpdatesEnabled = !busy;
             InstallGuiUpdateEnabled = !busy && guiRelease != null;
-            RollbackDevicesEnabled = !busy && !String.IsNullOrEmpty(engine.Settings.PreviousDeviceCurrent);
+            RollbackDevicesEnabled = !busy && !String.IsNullOrEmpty(settings.Settings.PreviousDeviceCurrent);
         }
         public async Task Update(CancellationToken ct, bool startup)
         {
             if (!RuntimePlatform.Windows) { Log("На этой системе движок обновляется вместе с IPA Desktop."); await CheckGui(ct); return; }
-            var release = await engine.Check(ct);
-            if (engine.Settings.Source == EngineUpdater.SourceRepository && String.Equals(release.tag_name, engine.Settings.Version, StringComparison.Ordinal) && !String.IsNullOrEmpty(engine.Settings.DeviceCurrent))
+            var release = await toolUpdates.Check(ct);
+            if (settings.Settings.Source == EngineUpdater.SourceRepository && String.Equals(release.tag_name, settings.Settings.Version, StringComparison.Ordinal) && !String.IsNullOrEmpty(settings.Settings.DeviceCurrent))
             {
                 Log("Установлен актуальный релиз " + release.tag_name);
                 return;
             }
             if (!startup && !await desktop.Interaction.Confirm("Обновление движка", "Установить официальный релиз " + release.tag_name + "? Текущая версия будет сохранена для отката.")) return;
-            await engine.Install(release, ct);
+            await toolUpdates.Install(release, ct);
             if (startup) Log("Автоматическое обновление завершено.");
         }
         public async Task UpdateDevices(CancellationToken ct, bool startup)
         {
             if (!RuntimePlatform.Windows) { Log("На этой системе инструменты iPhone обновляются вместе с IPA Desktop."); await CheckGui(ct); return; }
-            var release = await engine.CheckDeviceTools(ct);
-            if (engine.DeviceToolsCurrent(release))
+            var release = await toolUpdates.CheckDeviceTools(ct);
+            if (toolUpdates.DeviceToolsCurrent(release))
             {
                 Log("Наш комплект для iPhone актуален: " + release.tag_name);
                 return;
             }
             if (!startup && !await desktop.Interaction.Confirm("Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.")) return;
-            await engine.InstallDeviceTools(release, ct);
+            await toolUpdates.InstallDeviceTools(release, ct);
         }
         public async Task CheckGui(CancellationToken ct)
         {
-            guiRelease = await GuiUpdater.Check(ct);
-            string text = guiRelease == null ? "Установлена актуальная версия " + GuiUpdater.CurrentVersion : "Доступна версия " + guiRelease.tag_name;
+            guiRelease = await guiUpdates.Check(ct);
+            string text = guiRelease == null ? "Установлена актуальная версия " + AppInfo.Version : "Доступна версия " + guiRelease.tag_name;
             GuiVersionStatus = text;
             InstallGuiUpdateLabel = guiRelease == null ? "Установить обновление" : "Обновить до " + guiRelease.tag_name;
             UpdateNotice = guiRelease == null ? "" : text + " — вкладка «Настройки»";

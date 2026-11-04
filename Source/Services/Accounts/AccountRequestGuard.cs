@@ -12,7 +12,7 @@ public sealed class AppleAccountException : IOException
 }
 
 /// <summary>One ipatool profile per OS user: serialize requests across portable copies, persist pauses without account data.</summary>
-public sealed class AccountRequestGuard
+public sealed class AccountRequestGuard : IAccountProtection
 {
     readonly string folder;
     readonly Func<DateTimeOffset> clock;

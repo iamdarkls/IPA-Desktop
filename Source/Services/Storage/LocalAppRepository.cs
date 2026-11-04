@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Импорт, просмотр и удаление локальных IPA с проверкой путей и кэшем метаданных.</summary>
-    public sealed class LocalAppRepository
+    public sealed class LocalAppRepository : ILocalApps
     {
         readonly string folder;
         readonly object gate = new object();
@@ -24,15 +24,17 @@ namespace IpaDesktop
             this.folder = Path.GetFullPath(folder);
         }
         /// <summary>Сканирует IPA вне UI-потока, обновляя кэш только для изменившихся файлов.</summary>
-        public Task<List<LocalRow>> ListAsync()
+        public Task<List<LocalRow>> ListAsync(CancellationToken cancellation = default)
         {
             return Task.Run(delegate
             {
+                cancellation.ThrowIfCancellationRequested();
                 lock (gate)
                 {
                 var rows = new List<LocalRow>();
                 foreach (var path in Directory.GetFiles(folder, "*.ipa"))
                 {
+                    cancellation.ThrowIfCancellationRequested();
                     try
                     {
                         var file = new FileInfo(path);
@@ -54,7 +56,7 @@ namespace IpaDesktop
                 foreach (var missing in metadataCache.Keys.Where(x => !present.Contains(x)).ToArray()) metadataCache.Remove(missing);
                 return rows.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
                 }
-            });
+            }, cancellation);
         }
         /// <summary>Копирует выбранные IPA в рабочую папку без перезаписи существующих файлов.</summary>
         public Task ImportAsync(IEnumerable<string> paths, CancellationToken ct)

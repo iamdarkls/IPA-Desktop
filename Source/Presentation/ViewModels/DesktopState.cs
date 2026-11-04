@@ -45,13 +45,13 @@ public sealed partial class DesktopViewModel
     public string OperationNoticeBorder { get => noticeBorder; set => Set(ref noticeBorder, value); }
     public void ConfigureCommands()
     {
-        ShowLastReportCommand?.SetAvailability(() => ShowLastReportEnabled);
-        NoticeDetailsCommand?.SetAvailability(() => lastReport != null);
-        DismissNoticeCommand?.SetAvailability(() => true);
-        NoticeRetryCommand?.SetAvailability(() => !IsBusy && NoticeRetryEnabled);
-        ExportDiagnosticsCommand?.SetAvailability(() => true);
-        OpenFolderCommand?.SetAvailability(() => true);
-        ResetQueueHistoryCommand?.SetAvailability(() => !IsBusy && ResetQueueHistoryEnabled);
+        ShowLastReportCommand?.SetAvailability(() => !IsClosing && ShowLastReportEnabled);
+        NoticeDetailsCommand?.SetAvailability(() => !IsClosing && lastReport != null);
+        DismissNoticeCommand?.SetAvailability(() => !IsClosing && true);
+        NoticeRetryCommand?.SetAvailability(() => !IsClosing && !IsBusy && NoticeRetryEnabled);
+        ExportDiagnosticsCommand?.SetAvailability(() => !IsClosing && true);
+        OpenFolderCommand?.SetAvailability(() => !IsClosing && true);
+        ResetQueueHistoryCommand?.SetAvailability(() => !IsClosing && !IsBusy && ResetQueueHistoryEnabled);
     }
     public void RefreshCommands()
     {

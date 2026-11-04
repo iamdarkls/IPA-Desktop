@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace IpaDesktop;
 
-public sealed class PurchaseHistory
+public sealed class PurchaseHistory : IPurchaseHistory
 {
     readonly IAppToolClient client;
     public PurchaseHistory(IAppToolClient client) => this.client=client;

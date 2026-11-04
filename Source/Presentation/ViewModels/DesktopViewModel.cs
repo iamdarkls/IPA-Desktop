@@ -25,7 +25,7 @@ public sealed partial class DesktopViewModel : ObservableObject
         set
         {
             if (!Set(ref busy, value)) return;
-            Device.SetBusy(value); Queue.SetBusy(value); CancelCommand.Refresh();
+            Device.SetBusy(value || IsClosing); Queue.SetBusy(value || IsClosing); CancelCommand.Refresh();
         }
     }
     public string JournalText { get => journal; private set => Set(ref journal, value); }
@@ -37,9 +37,10 @@ public sealed partial class DesktopViewModel : ObservableObject
     public DelegateCommand ExportCommand { get; }
     public DesktopViewModel()
     {
+        Tasks = new(error => { if (!IsClosing) Error(error); });
         CancelCommand = new(() => CancelRequested?.Invoke(), () => IsBusy);
-        ShowJournalCommand = new(() => JournalRequested?.Invoke());
-        ExportCommand = new(() => ExportRequested?.Invoke());
+        ShowJournalCommand = new(() => JournalRequested?.Invoke(), () => !IsClosing);
+        ExportCommand = new(() => ExportRequested?.Invoke(), () => !IsClosing);
     }
     public void AppendJournal(string text)
     {

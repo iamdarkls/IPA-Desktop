@@ -15,12 +15,12 @@ public interface ILoginInput
     void FocusPassword();
     void FocusCode();
 }
-public sealed class AppleLoginViewModel : ObservableObject, IDisposable
+public sealed class AppleLoginViewModel : ObservableObject, IDisposable, IAsyncDisposable
 {
     readonly IAppleLoginService service;
     readonly ILoginInput input;
     readonly Action<Action> post;
-    readonly CancellationTokenSource lifetime;
+    readonly BackgroundTasks tasks;
     CancellationTokenSource operation;
     TaskCompletionSource<SecureString> codeSource;
     string email = "", status = "Введите данные для входа.";
@@ -40,10 +40,10 @@ public sealed class AppleLoginViewModel : ObservableObject, IDisposable
     public DelegateCommand CancelCommand { get; }
     public Task Attempt { get; private set; } = Task.CompletedTask;
     public event Action<bool?> CloseRequested;
-    public AppleLoginViewModel(IAppleLoginService service, ILoginInput input, Action<Action> post, CancellationToken cancellation)
+    public AppleLoginViewModel(IAppleLoginService service, ILoginInput input, Action<Action> post, CancellationToken cancellation, BackgroundTasks owner = null)
     {
         this.service = service; this.input = input; this.post = post;
-        lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        tasks = owner?.CreateChild(_ => Status = "Не удалось завершить вход.", cancellation) ?? new BackgroundTasks(_ => Status = "Не удалось завершить вход.", cancellation);
         SubmitCommand = new(Submit, () => submitEnabled);
         CancelCommand = new(RequestCancel, () => cancelEnabled);
     }
@@ -63,13 +63,13 @@ public sealed class AppleLoginViewModel : ObservableObject, IDisposable
             if (!codeSource.TrySetResult(code)) code.Dispose();
             return;
         }
-        Attempt = Login();
+        Attempt = tasks.Run(_ => Login());
     }
     async Task Login()
     {
         using var password = input.TakePassword();
         if (String.IsNullOrWhiteSpace(Email) || password.Length == 0) { Status = "Введите Apple Account и пароль."; return; }
-        loading = true; submitEnabled = false; operation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        loading = true; submitEnabled = false; operation = CancellationTokenSource.CreateLinkedTokenSource(tasks.Token);
         Status = "Связываемся с Apple…"; Refresh();
         bool success = false;
         try { SignedInEmail = await service.LoginAsync(Email.Trim(), password, RequestCode, operation.Token); success = true; }
@@ -84,7 +84,7 @@ public sealed class AppleLoginViewModel : ObservableObject, IDisposable
             codeVisible = false; submitEnabled = true; Refresh(); input.FocusPassword();
         }
         if (success) CloseRequested?.Invoke(true);
-        else if (closing || lifetime.IsCancellationRequested) CloseRequested?.Invoke(null);
+        else if (closing || tasks.IsStopping) CloseRequested?.Invoke(null);
     }
     async Task<SecureString> RequestCode(CancellationToken cancellation)
     {
@@ -113,5 +113,6 @@ public sealed class AppleLoginViewModel : ObservableObject, IDisposable
         closing = true; submitEnabled = cancelEnabled = false; Status = "Останавливаем вход…"; Refresh(); operation?.Cancel();
     }
     public bool RequestClose() { if (!loading) return true; RequestCancel(); return false; }
-    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); input.Clear(); }
+    public void Dispose() { tasks.Dispose(); input.Clear(); }
+    public async ValueTask DisposeAsync() { Dispose(); await tasks.StopAsync(); }
 }

@@ -7,17 +7,17 @@ using System.Threading.Tasks;
 
 namespace IpaDesktop;
 
-public sealed class AppVersionViewModel : ObservableObject, IDisposable
+public sealed class AppVersionViewModel : ObservableObject, IDisposable, IAsyncDisposable
 {
-    readonly AppVersions service;
+    readonly IAppVersions service;
     readonly string appId;
-    readonly CancellationTokenSource lifetime;
+    readonly BackgroundTasks tasks;
     CancellationTokenSource operation;
     string manual = "", status;
     bool loading, closing;
     public string Manual { get => manual; set => Set(ref manual, value); }
     public string Status { get => status; private set => Set(ref status, value); }
-    public bool IsEnabled => !loading;
+    public bool IsEnabled => !loading && !tasks.IsStopping;
     public string CancelLabel => loading ? "Отменить запрос" : "Закрыть";
     public SelectionViewModel<AppVersionRow> Versions { get; } = new();
     public IReadOnlyList<string> SelectedIDs { get; private set; } = Array.Empty<string>();
@@ -26,9 +26,9 @@ public sealed class AppVersionViewModel : ObservableObject, IDisposable
     public OperationCommand AddCommand { get; }
     public DelegateCommand CancelCommand { get; }
     public event Action<bool?> CloseRequested;
-    public AppVersionViewModel(string appId, List<AppVersionRow> rows, AppVersions service, CancellationToken cancellation)
+    public AppVersionViewModel(string appId, List<AppVersionRow> rows, IAppVersions service, CancellationToken cancellation, BackgroundTasks owner = null)
     {
-        this.appId = appId; this.service = service; lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        this.appId = appId; this.service = service; tasks = owner?.CreateChild(error => Status = error.Message, cancellation) ?? new BackgroundTasks(error => Status = error.Message, cancellation);
         Versions.Items = new ObservableCollection<AppVersionRow>(rows);
         Status = "Версий: " + rows.Count + ". Можно ввести известный ID вручную; доступность проверит Apple.";
         InsertCommand = new(_ =>
@@ -39,11 +39,11 @@ public sealed class AppVersionViewModel : ObservableObject, IDisposable
             Manual = ""; Status = "Добавлено ID: " + ids.Count + ". Можно запросить сведения или добавить в очередь.";
             return Task.CompletedTask;
         }, error => Status = error.Message);
-        DetailsCommand = new(async _ =>
+        DetailsCommand = new(_ => tasks.Run(async cancellation =>
         {
             var selected = Versions.SelectedItems.ToArray();
             if (selected.Length > 20) { Status = "Выберите не более 20 версий для одного запроса сведений."; return; }
-            loading = true; operation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); Refresh();
+            loading = true; operation = CancellationTokenSource.CreateLinkedTokenSource(tasks.Token); Refresh();
             try
             {
                 for (int i = 0; i < selected.Length; i++)
@@ -58,7 +58,7 @@ public sealed class AppVersionViewModel : ObservableObject, IDisposable
             }
             catch (OperationCanceledException) { Status = "Запрос отменён. Полученные сведения сохранены в таблице."; }
             finally { loading = false; operation.Dispose(); operation = null; Refresh(); if (closing) CloseRequested?.Invoke(null); }
-        }, error => Status = error.Message);
+        }), error => Status = error.Message);
         AddCommand = new(_ => { SelectedIDs = Versions.SelectedItems.Select(x => x.ID).ToArray(); CloseRequested?.Invoke(true); return Task.CompletedTask; }, error => Status = error.Message);
         CancelCommand = new(() => { if (loading) operation?.Cancel(); else CloseRequested?.Invoke(null); });
         InsertCommand.SetAvailability(() => !loading);
@@ -68,5 +68,6 @@ public sealed class AppVersionViewModel : ObservableObject, IDisposable
     }
     void Refresh() { Changed(nameof(IsEnabled)); Changed(nameof(CancelLabel)); InsertCommand.Refresh(); DetailsCommand.Refresh(); AddCommand.Refresh(); }
     public bool RequestClose() { if (!loading) return true; closing = true; operation?.Cancel(); return false; }
-    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+    public void Dispose() { tasks.Dispose(); }
+    public async ValueTask DisposeAsync() => await tasks.StopAsync();
 }

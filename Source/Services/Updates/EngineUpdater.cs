@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Проверяет, устанавливает и откатывает ipatool и отдельный комплект libimobiledevice.</summary>
-    public sealed class EngineUpdater
+    public sealed class EngineUpdater : IToolUpdates
     {
         public const string SourceRepository = AppInfo.Repository;
         public const string GuardedEngineTag = "ipatool-guard-v1.2.1.1";

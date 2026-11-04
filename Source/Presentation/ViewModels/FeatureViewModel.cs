@@ -7,10 +7,9 @@ namespace IpaDesktop;
 public abstract class FeatureViewModel : ObservableObject
 {
     protected readonly DesktopViewModel desktop;
-    protected readonly Engine engine;
-    protected bool busy => desktop.IsBusy;
+    protected bool busy => desktop.IsBusy || desktop.IsClosing;
     protected bool setting => desktop.IsUpdatingSettings;
-    protected FeatureViewModel(DesktopViewModel desktop, Engine engine) { this.desktop = desktop; this.engine = engine; }
+    protected FeatureViewModel(DesktopViewModel desktop) => this.desktop = desktop;
     protected OperationCommand Command(Action action) => new(async _ =>
     {
         desktop.Interaction.CloseMenus();

@@ -14,7 +14,7 @@ using System.IO.Compression;
 namespace IpaDesktop
 {
     /// <summary>Загружает IPA под текущей сессией ipatool в уникальный файл, исключая перезапись чужой копии.</summary>
-    public sealed class ApplicationDownloads
+    public sealed class ApplicationDownloads : IApplicationDownloads
     {
         readonly IAppToolClient tools;
         readonly string folder;

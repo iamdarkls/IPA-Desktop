@@ -68,7 +68,7 @@ namespace IpaDesktop
         {
             queueProgress.Complete(success, failed);
             RenderQueue();
-            completionSound.Notify(engine.Settings.SoundsEnabled, success, failed);
+            completionSound.Notify(settings.Settings.SoundsEnabled, success, failed);
             if (activeReport != null) { lastReport = activeReport; RenderNotice(); }
         }
         /// <summary>Отрисовывает снимок прогресса в UI-потоке без прямого доступа фоновых процессов к Avalonia.</summary>
@@ -104,7 +104,7 @@ namespace IpaDesktop
             var email = Account.AccountLabel;
             if (email?.Contains("@") == true) privateValues.Add(email);
             foreach (var device in Files.DeviceList.Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
-            var report = DiagnosticReport.Create(JournalText, engine.Settings.Version ?? "not installed", engine.Settings.DeviceVersion ?? "not installed", privateValues);
+            var report = DiagnosticReport.Create(JournalText, settings.Settings.Version ?? "not installed", settings.Settings.DeviceVersion ?? "not installed", privateValues);
             if (!await Interaction.ExportText("IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt", report)) return;
             Log("Отчёт диагностики сохранён.");
         }

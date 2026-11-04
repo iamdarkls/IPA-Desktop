@@ -13,23 +13,26 @@ namespace IpaDesktop
     public sealed partial class AccountViewModel : FeatureViewModel
     {
         bool signedIn;
-        public AccountViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        readonly IAccountSession accounts;
+        readonly IAccountProtection protection;
+        readonly IAppleLoginService login;
+        public AccountViewModel(DesktopViewModel desktop, IAccountSession accounts, IAccountProtection protection, IAppleLoginService login) : base(desktop) { this.accounts = accounts; this.protection = protection; this.login = login; }
         internal void Initialize()
         {
             AccountSafetyReviewCommand = AsyncCommand(async delegate
             {
-                string detail = engine.AccountRequests.SafetyStatus;
-                if (!engine.AccountRequests.SafetyStopped) { await desktop.Interaction.Confirm("Ограничения входа", String.IsNullOrEmpty(detail) ? "Активной защитной паузы нет. Это не проверка состояния аккаунта у Apple." : detail); return; }
+                string detail = protection.SafetyStatus;
+                if (!protection.SafetyStopped) { await desktop.Interaction.Confirm("Ограничения входа", String.IsNullOrEmpty(detail) ? "Активной защитной паузы нет. Это не проверка состояния аккаунта у Apple." : detail); return; }
                 if (!await desktop.Interaction.Confirm("Возобновление после блокировки",
                     "Вы восстановили доступ через Apple на доверенном устройстве и разобрали причину блокировки?\n\nПродолжение снимает только ручной запрет IPA Desktop. Паузы и общий счётчик ошибок сохранятся. Это не подтверждает снятие ограничений Apple или сети.")) return;
-                engine.AccountRequests.AcknowledgeRecovery(CancellationToken.None);
+                protection.AcknowledgeRecovery(CancellationToken.None);
                 ApplyActions();
             });
             LoginCommand = Command(delegate
             {
                 Work("Вход в Apple Account…", async delegate (CancellationToken ct)
                 {
-                    var email = await desktop.Interaction.Login(engine.AppleLogin, ct);
+                    var email = await desktop.Interaction.Login(login, ct);
                     if (email == null) throw new OperationCanceledException();
                     signedIn = true; desktop.SetAccountIdentity(email); desktop.RegisterPrivate(email);
                     AccountLabel = email; Log("Вход в Apple Account подтверждён.");
@@ -44,10 +47,7 @@ namespace IpaDesktop
                 if (!await desktop.Interaction.Confirm("Выход", "Выйти из текущей сессии ipatool?")) return;
                 Work("Выход…", async delegate (CancellationToken ct)
                 {
-                    Engine.Ensure(await engine.Tool(new[]
-                    {
-                        "auth", "revoke"
-                    }, ct, false));
+                    await accounts.RevokeAsync(ct);
                     signedIn = false;
                     desktop.SetAccountIdentity(null);
                     AccountLabel = "Вход не выполнен";
@@ -57,10 +57,10 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
-            bool needsLogin = engine.AccountRequests.RequiresLogin;
+            bool needsLogin = protection.RequiresLogin;
             AccountSafetyReviewEnabled = !busy;
-            var safety = engine.AccountRequests.SafetyStatus;
-            AccountSafetyReviewVisible = !String.IsNullOrEmpty(safety) || engine.AccountRequests.SafetyStopped;
+            var safety = protection.SafetyStatus;
+            AccountSafetyReviewVisible = !String.IsNullOrEmpty(safety) || protection.SafetyStopped;
             AccountSafetyStatus = safety;
             AccountSafetyStatusVisible = !String.IsNullOrEmpty(safety);
             LoginEnabled = !busy && (!signedIn || needsLogin);
@@ -70,16 +70,8 @@ namespace IpaDesktop
         /// <summary>Запрашивает актуальный auth info и обновляет состояние входа только по успешному ответу.</summary>
         public async Task Account(CancellationToken ct)
         {
-            var r = await engine.Tool(new[]
-            {
-                "auth", "info"
-            }, ct, false);
-            signedIn = false;
-            AccountLabel = "Вход не выполнен";
-            Engine.Ensure(r);
-            var data = Engine.Object(r.Output);
-            var email = Convert.ToString(Engine.Get(data, "email"));
-            if (String.IsNullOrWhiteSpace(email) || !Object.Equals(Engine.Get(data, "success"), true)) throw new Exception("Не удалось подтвердить сохранённый вход в аккаунт.");
+            signedIn = false; AccountLabel = "Вход не выполнен";
+            var email = await accounts.GetEmailAsync(ct);
             desktop.RegisterPrivate(email);
             desktop.SetAccountIdentity(email);
             signedIn = true;

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace IpaDesktop
 {
     /// <summary>Преобразует снимок служб и реестра в понятный статус готовности компонентов Apple.</summary>
-    public sealed class AppleSupportService
+    public sealed class AppleSupportService : IAppleSupport
     {
         readonly IAppleSupportProbe probe;
 

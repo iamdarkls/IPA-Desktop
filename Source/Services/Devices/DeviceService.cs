@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace IpaDesktop
 {
     /// <summary>Фасад инструментов iPhone. Обнаружение, команды и установка разделены и доступны для независимых проверок.</summary>
-    public sealed class DeviceService
+    public sealed class DeviceService : IDeviceService
     {
         readonly DeviceReadiness readiness;
         readonly DeviceCommandClient client; readonly DeviceDiscovery discovery; readonly DeviceInstallation installation;

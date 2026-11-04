@@ -41,7 +41,7 @@ namespace IpaDesktop
         {
             try
             {
-                await engine.Devices.EnsureReadyAsync(device, ShowConnection, ct); blockedConnections.Remove(ConnectionKey(device));
+                await deviceService.EnsureReadyAsync(device, ShowConnection, ct); blockedConnections.Remove(ConnectionKey(device));
                 ShowConnection(new("iPhone готов к установке", "Доверие подтверждено. Устройство: " + device.DisplayLabel, false, true));
             }
             catch (OperationCanceledException) { blockedConnections.Add(ConnectionKey(device)); throw; }
@@ -67,7 +67,11 @@ namespace IpaDesktop
                 return account == null ? null : account.Key;
             }
         }
-        public FilesViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        readonly ISettingsStore settings;
+        readonly IDeviceService deviceService;
+        readonly ILocalApps localApps;
+        readonly IAppleSupport support;
+        public FilesViewModel(DesktopViewModel desktop, ISettingsStore settings, IDeviceService devices, ILocalApps localApps, IAppleSupport support) : base(desktop) { this.settings = settings; deviceService = devices; this.localApps = localApps; this.support = support; }
         internal void Initialize()
         {
             FileAccount.SelectionChanged += delegate
@@ -126,7 +130,7 @@ namespace IpaDesktop
                 if (device == null) return;
                 Work("Сведения об iPhone…", async delegate (CancellationToken ct)
                 {
-                    var details = await engine.Devices.DetailsAsync(device, ct);
+                    var details = await deviceService.DetailsAsync(device, ct);
                     ct.ThrowIfCancellationRequested();
                     await desktop.Interaction.ShowText("Об iPhone", details);
                 });
@@ -137,7 +141,7 @@ namespace IpaDesktop
             {
                 var paths = await desktop.Interaction.ImportFiles();
                 if (paths.Length == 0) return;
-                Work("Добавление IPA…", ct => engine.LocalFiles.ImportAsync(paths, ct));
+                Work("Добавление IPA…", ct => localApps.ImportAsync(paths, ct));
             });
             CheckAppleSupportCommand = Command(delegate
             {
@@ -186,7 +190,7 @@ namespace IpaDesktop
         {
             if (deviceClosed) return;
             deviceMonitoring = true;
-            deviceTimer ??= desktop.Interaction.Repeat(TimeSpan.FromSeconds(3), () => _ = desktop.RunAsyncCommand(RefreshDevicesAsync));
+            deviceTimer ??= desktop.Tasks.Own(desktop.Interaction.Repeat(TimeSpan.FromSeconds(3), () => _ = desktop.RunAsyncCommand(RefreshDevicesAsync)));
         }
         internal void StopDeviceDetection()
         {
@@ -209,16 +213,19 @@ namespace IpaDesktop
         internal Task RefreshDevicesAsync()
         {
             if (deviceClosed || busy || IsDetecting) return deviceScan;
-            if (String.IsNullOrEmpty(engine.Settings.DeviceCurrent ?? engine.Settings.Current))
+            if (String.IsNullOrEmpty(settings.Settings.DeviceCurrent ?? settings.Settings.Current))
             {
                 ApplyDevices(new List<DeviceRow>());
                 desktop.Device.SetState(PhoneStatus.Disconnected, "Установите инструменты iPhone в настройках.");
                 return Task.FromResult(true);
             }
-            var stop = new CancellationTokenSource();
-            stop.CancelAfter(TimeSpan.FromSeconds(25));
-            deviceScanCancellation = stop;
-            deviceScan = DetectDevicesAsync(SearchWifi == true, deviceGeneration, stop);
+            var wifi = SearchWifi; var generation = deviceGeneration;
+            deviceScan = desktop.Tasks.Run(cancellation =>
+            {
+                var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+                stop.CancelAfter(TimeSpan.FromSeconds(25)); deviceScanCancellation = stop;
+                return DetectDevicesAsync(wifi, generation, stop);
+            });
             return deviceScan;
         }
         async Task DetectDevicesAsync(bool wifi, int generation, CancellationTokenSource stop)
@@ -226,7 +233,7 @@ namespace IpaDesktop
             try
             {
                 var warnings = new List<string>();
-                var devices = await engine.Devices.FindAsync(wifi, stop.Token, warnings.Add);
+                var devices = await deviceService.FindAsync(wifi, stop.Token, warnings.Add);
                 if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                 ApplyDevices(devices);
                 ShowDeviceWarning(String.Join(Environment.NewLine, warnings));
@@ -235,7 +242,7 @@ namespace IpaDesktop
                 {
                     try
                     {
-                        await engine.Devices.ValidateReadyAsync(selected, stop.Token);
+                        await deviceService.ValidateReadyAsync(selected, stop.Token);
                         if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                         verifiedConnections.Add(ConnectionKey(selected));
                         desktop.Device.SetState(PhoneStatus.Ready, "Доверие и связь с выбранным iPhone проверены.");
@@ -253,7 +260,7 @@ namespace IpaDesktop
                 {
                     try
                     {
-                        await engine.Devices.ValidateReadyAsync(selected, stop.Token);
+                        await deviceService.ValidateReadyAsync(selected, stop.Token);
                         if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                         blockedConnections.Remove(ConnectionKey(selected));
                         ShowConnection(new("Связь с iPhone восстановлена", "Очередь сохранена. Можно запустить оставшиеся IPA или повторить ошибки; успешные установки не повторяются.", false, true));
@@ -336,7 +343,7 @@ namespace IpaDesktop
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();
-                        try { engine.LocalFiles.Delete(row.Path); removed++; Log("Перемещено в корзину: " + row.DisplayName); }
+                        try { localApps.Delete(row.Path); removed++; Log("Перемещено в корзину: " + row.DisplayName); }
                         catch (OperationCanceledException) { throw; }
                         catch (Exception e) { failures.Add(row.DisplayName + ": " + e.Message); }
                     }
@@ -368,7 +375,7 @@ namespace IpaDesktop
                 try
                 {
                     var result = await BatchRunner.Run(rows,
-                        (row, token) => engine.Devices.InstallAsync(device, row, ShowConnection, token),
+                        (row, token) => deviceService.InstallAsync(device, row, ShowConnection, token),
                         (row, index) => { desktop.BeginQueue("Установка", index, rows.Count, row.DisplayName); Log("Установка " + row.DisplayName); },
                         row => { desktop.ReportItem(row.DisplayName, null); installChosen.Remove(row.Path); failedInstalls.Remove(row.Path); RefreshInstallChosen(); },
                         (row, error) => { desktop.ReportItem(row.DisplayName, error); failedInstalls.Add(row); Log("Ошибка установки " + row.DisplayName + ": " + error.Message); },
@@ -396,7 +403,7 @@ namespace IpaDesktop
         public async Task CheckSupport(CancellationToken cancellation)
         {
             if (!RuntimePlatform.Windows) CheckAppleSupportLabel = "Проверить подключение";
-            appleSupport = await engine.AppleSupport.CheckAsync(cancellation);
+            appleSupport = await support.CheckAsync(cancellation);
             desktop.Device.SetSupportReport(appleSupport.Message, appleSupport.Details);
             Log(appleSupport.Message + ". " + appleSupport.Details);
         }
@@ -468,13 +475,13 @@ namespace IpaDesktop
         }
         int filesGeneration;
         /// <summary>Применяет только последний результат сканирования, сохраняя выделение по пути файла.</summary>
-        public async Task RefreshFilesAsync()
+        public Task RefreshFilesAsync() => desktop.Tasks.Run(async cancellation =>
         {
             int generation = ++filesGeneration;
             try
             {
-                var rows = await engine.LocalFiles.ListAsync();
-                if (generation != filesGeneration) return;
+                var rows = await localApps.ListAsync(cancellation);
+                if (cancellation.IsCancellationRequested || desktop.IsClosing || generation != filesGeneration) return;
                 allFiles = rows;
                 var key = AccountKey;
                 var accounts = LocalFileAccounts.Choices(rows);
@@ -490,10 +497,11 @@ namespace IpaDesktop
                 installChosen.Reconcile(rows);
                 ApplyFileFilter();
             }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             catch (Exception e)
             {
-                if (generation == filesGeneration) Log("Не удалось обновить список IPA: " + e.Message);
+                if (!desktop.IsClosing && generation == filesGeneration) Log("Не удалось обновить список IPA: " + e.Message);
             }
-        }
+        });
     }
 }

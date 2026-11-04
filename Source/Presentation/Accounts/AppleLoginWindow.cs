@@ -26,7 +26,7 @@ namespace IpaDesktop
         public string SignedInEmail => Model.SignedInEmail;
         public AppleLoginViewModel Model { get; private set; }
         readonly StackPanel credentials, codePanel;
-        public AppleLoginWindow(Window owner, IAppleLoginService service, CancellationToken ct)
+        public AppleLoginWindow(Window owner, IAppleLoginService service, CancellationToken ct, BackgroundTasks ownerTasks = null)
         {
             Window = AppDialogs.Create(owner, "Вход в Apple Account", 560, 580);
             Window.MinWidth = 480; Window.MinHeight = 480;
@@ -55,11 +55,11 @@ namespace IpaDesktop
             CancelButton = AppDialogs.Action("Отмена", IconKind.Close); CancelButton.Margin = new Thickness(0);
             actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);
             Window.Content = layout;
-            var names = new NameScope(); NameScope.SetNameScope(Window,names);
-            names.Register("AppleLoginEmail",EmailBox); names.Register("AppleLoginPassword",PasswordBox);
-            names.Register("AppleLoginCode",CodeBox); names.Register("AppleLoginSubmit",SubmitButton);
-            names.Register("AppleLoginCancel",CancelButton); names.Register("AppleLoginStatus",Status);
-            Model = new AppleLoginViewModel(service, new SecretInput(this), action => Dispatcher.UIThread.Post(action), ct);
+            var names = new NameScope(); NameScope.SetNameScope(Window, names);
+            names.Register("AppleLoginEmail", EmailBox); names.Register("AppleLoginPassword", PasswordBox);
+            names.Register("AppleLoginCode", CodeBox); names.Register("AppleLoginSubmit", SubmitButton);
+            names.Register("AppleLoginCancel", CancelButton); names.Register("AppleLoginStatus", Status);
+            Model = new AppleLoginViewModel(service, new SecretInput(this), action => Dispatcher.UIThread.Post(action), ct, ownerTasks);
             Window.DataContext = Model;
             ViewBindings.Bind(EmailBox, TextBox.TextProperty, nameof(Model.Email), true);
             ViewBindings.Bind(Status, TextBlock.TextProperty, nameof(Model.Status));
@@ -68,8 +68,8 @@ namespace IpaDesktop
             ViewBindings.Bind(codePanel, Control.IsVisibleProperty, nameof(Model.CodeVisible));
             ViewBindings.Bind(CodeBox, Control.IsEnabledProperty, nameof(Model.CodeEnabled));
             ViewBindings.Bind(SubmitButton, ContentControl.ContentProperty, nameof(Model.SubmitLabel));
-            ViewBindings.Bind(SubmitButton,Control.IsEnabledProperty,nameof(Model.SubmitEnabled));
-            ViewBindings.Bind(CancelButton,Control.IsEnabledProperty,nameof(Model.CancelEnabled));
+            ViewBindings.Bind(SubmitButton, Control.IsEnabledProperty, nameof(Model.SubmitEnabled));
+            ViewBindings.Bind(CancelButton, Control.IsEnabledProperty, nameof(Model.CancelEnabled));
             SubmitButton.Command = Model.SubmitCommand; CancelButton.Command = Model.CancelCommand;
             Model.CloseRequested += result => { if (result == true) Window.Close(true); else Window.Close(); };
             Window.Opened += (_, _) => EmailBox.Focus();
@@ -80,9 +80,17 @@ namespace IpaDesktop
         static TextBlock Note(string text, double top) { return new TextBlock { Text = text, FontSize = 12, Foreground = Brush("#9BACBF"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) }; }
         static TextBox SecretBox(int limit)
         {
-            var box = new TextBox { MaxLength = limit, PasswordChar = '●', MinHeight = 38,
-                Padding = new Thickness(10,6), Margin = new Thickness(0,6,0,0),
-                Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C") };
+            var box = new TextBox
+            {
+                MaxLength = limit,
+                PasswordChar = '●',
+                MinHeight = 38,
+                Padding = new Thickness(10, 6),
+                Margin = new Thickness(0, 6, 0, 0),
+                Background = Brush("#1C293B"),
+                Foreground = Brush("#EDF1F8"),
+                BorderBrush = Brush("#34445C")
+            };
             return box;
         }
         sealed class SecretInput : ILoginInput

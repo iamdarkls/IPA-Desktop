@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace IpaDesktop;
 
 /// <summary>One route for native authentication/download commands and network diagnostics. Never changes process-global variables.</summary>
-public sealed class ProxyConfiguration
+public sealed class ProxyConfiguration : INetworkDiagnostics
 {
     readonly Func<State> settings;
     public ProxyConfiguration(Func<State> settings) => this.settings = settings;

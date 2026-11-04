@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 namespace IpaDesktop;
 
-public sealed class AppBrowserViewModel : ObservableObject, IDisposable
+public sealed class AppBrowserViewModel : ObservableObject, IDisposable, IAsyncDisposable
 {
     readonly DesktopViewModel owner;
     readonly Func<bool> contextValid;
-    readonly CancellationTokenSource lifetime = new();
+    readonly BackgroundTasks tasks;
     List<LibraryApp> rows = new();
     string query = "", status = "";
     int period, year = DateTime.Now.Year;
@@ -31,10 +31,11 @@ public sealed class AppBrowserViewModel : ObservableObject, IDisposable
     public Action<IReadOnlyList<LibraryApp>> AddRequested { get; set; }
     public OperationCommand ReloadCommand { get; }
     public OperationCommand AddCommand { get; }
-    public CancellationToken Token => lifetime.Token;
+    public CancellationToken Token => tasks.Token;
     public AppBrowserViewModel(DesktopViewModel owner, string title, bool purchases, Func<bool> contextValid)
     {
-        this.owner = owner; this.contextValid = contextValid; Title = title; Purchases = purchases;
+        this.owner = owner; this.contextValid = contextValid;
+        tasks = owner.Tasks.CreateChild(owner.Error); Title = title; Purchases = purchases;
         ReloadCommand = new(_ => { ReloadRequested?.Invoke(); return Task.CompletedTask; }, owner.Error);
         AddCommand = new(_ => { AddRequested?.Invoke(Apps.SelectedItems.ToArray()); return Task.CompletedTask; }, owner.Error);
         ReloadCommand.SetAvailability(() => IsEnabled);
@@ -48,13 +49,14 @@ public sealed class AppBrowserViewModel : ObservableObject, IDisposable
         if (!contextValid()) { rows.Clear(); Apps.Items = Array.Empty<LibraryApp>(); Status = "Аккаунт или выбранный iPhone изменился. Откройте список заново."; }
         Refresh();
     }
-    void Refresh() { IsEnabled = !owner.IsBusy && contextValid(); ReloadCommand.Refresh(); AddCommand.Refresh(); }
-    public void SetRows(List<LibraryApp> value, string message) { rows = value; Status = message; Filter(); }
+    void Refresh() { IsEnabled = !owner.IsBusy && !tasks.IsStopping && contextValid(); ReloadCommand.Refresh(); AddCommand.Refresh(); }
+    public void SetRows(List<LibraryApp> value, string message) { if (tasks.IsStopping) return; rows = value; Status = message; Filter(); }
     void Filter()
     {
         var text = Query?.Trim() ?? "";
         Apps.Items = rows.Where(x => (x.Name ?? "").Contains(text, StringComparison.OrdinalIgnoreCase) || (x.ID ?? "").Contains(text, StringComparison.OrdinalIgnoreCase) || (x.BundleID ?? "").Contains(text, StringComparison.OrdinalIgnoreCase)).ToArray();
         Refresh();
     }
-    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); owner.PropertyChanged -= ContextChanged; owner.Device.PropertyChanged -= ContextChanged; }
+    public void Dispose() { tasks.Dispose(); owner.PropertyChanged -= ContextChanged; owner.Device.PropertyChanged -= ContextChanged; }
+    public async ValueTask DisposeAsync() { Dispose(); await tasks.StopAsync(); }
 }

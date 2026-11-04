@@ -20,7 +20,12 @@ namespace IpaDesktop
         public OperationCommand RemoveChosenCommand { get; private set; }
         string versionApp;
         List<DownloadItem> lastDownloads = new List<DownloadItem>();
-        public SearchViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        readonly IAppToolClient tools;
+        readonly IAppCatalog catalog;
+        readonly IAppVersions versions;
+        readonly IApplicationDownloads downloads;
+        readonly IAccountProtection protection;
+        public SearchViewModel(DesktopViewModel desktop, IAppToolClient tools, IAppCatalog catalog, IAppVersions versions, IApplicationDownloads downloads, IAccountProtection protection) : base(desktop) { this.tools = tools; this.catalog = catalog; this.versions = versions; this.downloads = downloads; this.protection = protection; }
         internal void Initialize()
         {
             VersionList.Items.Add("Последняя версия");
@@ -50,19 +55,19 @@ namespace IpaDesktop
                     }
                     else
                     {
-                        var local = await engine.CatalogSearch(query, ct);
+                        var local = await catalog.SearchAsync(query, ct);
                         if (!searchSession.IsCurrent(request)) return;
                         Apps.Items = local;
                         Log("Найдено в каталогах: " + local.Count);
                         try
                         {
-                            var r = await engine.Tool(new[]
+                            var r = await tools.RunAsync(new[]
                             {
                                 "search", query, "--limit", "10"
                             }, ct, false);
-                            Engine.Ensure(r);
+                            ToolResponse.Ensure(r);
                             if (!searchSession.IsCurrent(request)) return;
-                            Apps.Items = Engine.MergeApps(local, Engine.ParseApps(r.Output));
+                            Apps.Items = ToolResponse.MergeApps(local, ToolResponse.ParseApps(r.Output));
                         }
                         catch (OperationCanceledException)
                         {
@@ -93,12 +98,12 @@ namespace IpaDesktop
                 string id = selected[0].ID;
                 Work("Получение доступных версий…", async delegate (CancellationToken ct)
                 {
-                    var r = await engine.Tool(new[]
+                    var r = await tools.RunAsync(new[]
                     {
                         "list-versions", "-i", id
                     }, ct, false);
-                    Engine.Ensure(r);
-                    var values = Engine.Get(Engine.Object(r.Output), "externalVersionIdentifiers") as object[];
+                    ToolResponse.Ensure(r);
+                    var values = ToolResponse.Get(ToolResponse.Object(r.Output), "externalVersionIdentifiers") as object[];
                     if (values == null) throw new Exception("Список версий не получен: формат ответа не поддерживается.");
                     if (SelectedApps().Count != 1 || SelectedApps()[0].ID != id) throw new Exception("Выбор приложения изменился. Повторите запрос версий.");
                     var combo = VersionList;
@@ -122,11 +127,11 @@ namespace IpaDesktop
                 Work("Получение списка версий…", async ct =>
                 {
                     var rows = new List<AppVersionRow>();
-                    try { rows = await engine.AppVersions.ListAsync(app.ID, ct); }
+                    try { rows = await versions.ListAsync(app.ID, ct); }
                     catch (OperationCanceledException) { throw; }
                     catch (Exception e) { Log("Список версий недоступен: " + e.Message + ". Можно указать известный ID вручную."); }
                     ct.ThrowIfCancellationRequested();
-                    var selected = await desktop.Interaction.SelectVersions(app.Name, app.ID, rows, engine.AppVersions, ct);
+                    var selected = await desktop.Interaction.SelectVersions(app.Name, app.ID, rows, versions, ct);
                     if (selected != null) { foreach (var id in selected) chosen.AddVariant(app, id); RefreshChosen(); }
                 });
             });
@@ -142,22 +147,22 @@ namespace IpaDesktop
                 {
                     if (version == null)
                     {
-                        var list = await engine.Tool(new[]
+                        var list = await tools.RunAsync(new[]
                         {
                             "list-versions", "-i", row.ID
                         }, ct, false);
-                        Engine.Ensure(list);
-                        var ids = Engine.VersionIds(list.Output);
+                        ToolResponse.Ensure(list);
+                        var ids = ToolResponse.VersionIds(list.Output);
                         if (ids.Count == 0) throw new Exception("Движок не вернул доступных версий приложения.");
                         version = ids[ids.Count - 1];
                         Log("Последняя доступная версия: ID " + version);
                     }
-                    var r = await engine.Tool(new[]
+                    var r = await tools.RunAsync(new[]
                     {
                         "get-version-metadata", "-i", row.ID, "--external-version-id", version
                     }, ct, false);
-                    Engine.Ensure(r);
-                    var data = Engine.Object(r.Output);
+                    ToolResponse.Ensure(r);
+                    var data = ToolResponse.Object(r.Output);
                     await desktop.Interaction.ShowText("Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
                         ToolResponse.VersionMetadataText(data) + Environment.NewLine + "ID версии: " + version + Environment.NewLine + "App Store ID: " + row.ID);
                 });
@@ -223,7 +228,7 @@ namespace IpaDesktop
                     row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account · " + DesktopViewModel.AccountHint(accountEmail),
                     keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch, desktop.AccountKey);
                 var result = await BatchRunner.Run(rows,
-                    (row, token) => engine.ApplicationDownloads.DownloadAsync(row, token),
+                    (row, token) => downloads.DownloadAsync(row, token),
                     (row, index) => { desktop.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
                     row =>
                     {
@@ -246,13 +251,13 @@ namespace IpaDesktop
         public override void RefreshActions()
         {
             SearchEmptyVisible = Apps.Items == null || !Apps.Items.Cast<object>().Any();
-            RetryDownloadsEnabled = !busy && failedDownloads.Count > 0 && !engine.AccountRequests.RequiresLogin;
+            RetryDownloadsEnabled = !busy && failedDownloads.Count > 0 && !protection.RequiresLogin;
             RetryDownloadsLabel = "Повторить ошибки (" + failedDownloads.Count + ")";
             RetryDownloadsTip = String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label));
             ForgetDownloadErrorsEnabled = !busy && failedDownloads.Count > 0;
             AddChosenEnabled = !busy && Apps.SelectedItems.Count > 0;
             ClearChosenEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
-            DownloadEnabled = !busy && chosen.Count > 0 && !engine.AccountRequests.RequiresLogin;
+            DownloadEnabled = !busy && chosen.Count > 0 && !protection.RequiresLogin;
             ChosenAppsEnabled = !busy;
             VersionTableEnabled = !busy && Apps.SelectedItems.Count == 1;
             VersionInfoEnabled = !busy && Apps.SelectedItems.Count == 1;
