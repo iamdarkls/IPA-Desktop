@@ -25,9 +25,8 @@ namespace IpaDesktop
         internal void Show(List<LocalRow> available)
         {
             var grid = C<DataGrid>("StorageFiles");
-            var selected = new HashSet<string>(grid.SelectedItems.Cast<LocalRow>().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
-            rows = available; grid.ItemsSource = rows;
-            foreach (var row in rows) if (selected.Contains(row.Path)) grid.SelectedItems.Add(row);
+            rows = available;
+            LocalFileGrid.Show(grid, rows);
             C<TextBlock>("StorageSummary").Text = "IPA: " + rows.Count + " · занято: " + StorageAnalysis.Bytes(rows.Sum(x => x.Bytes)) + " · старых версий: " + rows.Count(x => x.IsOld) + " (" + StorageAnalysis.Bytes(rows.Where(x => x.IsOld).Sum(x => x.Bytes)) + ")";
         }
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>

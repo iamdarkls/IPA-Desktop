@@ -458,10 +458,8 @@ namespace IpaDesktop
         void ApplyFileFilter()
         {
             var grid = C<DataGrid>("Files");
-            var selected = new HashSet<string>(grid.SelectedItems.Cast<LocalRow>().Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
             visibleFiles = allFiles.Where(x => LocalFileAccounts.Matches(x, AccountKey)).ToList();
-            grid.ItemsSource = visibleFiles;
-            foreach (var row in visibleFiles) if (selected.Contains(row.Path)) grid.SelectedItems.Add(row);
+            LocalFileGrid.Show(grid, visibleFiles);
             C<TextBlock>("FilesSummary").Text = "Показано: " + visibleFiles.Count + " из " + allFiles.Count + " · " + StorageAnalysis.Bytes(visibleFiles.Sum(x => x.Bytes));
             C<TextBlock>("FilesEmpty").IsVisible = visibleFiles.Count == 0;
             RefreshInstallChosen();

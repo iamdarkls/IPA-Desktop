@@ -103,19 +103,9 @@ public sealed class ActionIcon : AvaloniaObject
         var kind = change.GetNewValue<IconKind>();
         var template = kind == IconKind.None ? null : new FuncDataTemplate<object>((content, _) =>
         {
-            var icon = new AppIcon { Kind = kind };
-            icon.Bind(AppIcon.ForegroundProperty, control.GetObservable(TemplatedControl.ForegroundProperty));
-            return new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    icon,
-                    new TextBlock { Text = content?.ToString(), VerticalAlignment = VerticalAlignment.Center }
-                }
-            };
+            var label = new IconLabel { Kind = kind, Text = content?.ToString() };
+            label.Bind(TemplatedControl.ForegroundProperty, control.GetObservable(TemplatedControl.ForegroundProperty));
+            return label;
         });
         if (control is TabItem tab) tab.HeaderTemplate = template;
         else control.ContentTemplate = template;

@@ -3,6 +3,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -34,6 +36,59 @@ public sealed class UiTests
   return engine;
  }
  static bool Busy(Desktop desktop)=>(bool)typeof(Desktop).GetProperty("IsBusy",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(desktop);
+ [AvaloniaFact] public async Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales()
+ {
+  using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;
+  var content=(Control)window.Content;window.Content=null;var scaled=new LayoutTransformControl { Child=content };window.Content=scaled;window.Show();
+  try
+  {
+   var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
+   desktop.Model.Queue.Start("Скачивание",Enumerable.Range(1,1234).Select(i=>new QueueSeed(i+"@latest","App "+i,"Последняя")),null,"Fixture",_=>{});
+   foreach(var scale in new[]{1.0,1.25,1.5,2.0})
+   {
+    scaled.LayoutTransform=new ScaleTransform(scale,scale);window.Width=940*scale;window.Height=720*scale;
+    foreach(var tab in tabs.Items.Cast<TabItem>())
+    {
+     tab.IsSelected=true;await Task.Delay(20);
+     var label=tab.GetVisualDescendants().OfType<IconLabel>().Single();
+     var indicator=tab.GetVisualDescendants().OfType<Border>().Single(x=>x.Name=="PART_SelectedPipe");
+     var labelOrigin=label.TranslatePoint(default,tab).Value;
+     var lineOrigin=indicator.TranslatePoint(default,tab).Value;
+     Assert.True(labelOrigin.Y+label.Bounds.Height<=lineOrigin.Y-4,$"Header overlaps underline: {tab.Name}, scale {scale}");
+     var count=label.GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="PART_Count");
+     if(label.HasCount)
+     {
+      Assert.Equal("1234",count.Text);
+      var badge=(Border)count.Parent;var badgeOrigin=badge.TranslatePoint(default,tab).Value;
+      Assert.True(badgeOrigin.Y+badge.Bounds.Height<=lineOrigin.Y-4,"Badge overlaps underline");
+      Assert.True(count.Bounds.Width>=count.DesiredSize.Width,"Counter truncated");
+     }
+     var origin=tab.TranslatePoint(default,window).Value;
+     Assert.True(origin.X+tab.Bounds.Width*scale<=window.ClientSize.Width+1,"Navigation clipped");
+    }
+    tabs.SelectedIndex=2;await Task.Delay(20);
+    var snapshots=Environment.GetEnvironmentVariable("IPA_UI_SNAPSHOTS");
+    if(!String.IsNullOrEmpty(snapshots))
+    {
+     Directory.CreateDirectory(snapshots);using var frame=window.CaptureRenderedFrame();
+     frame.Save(Path.Combine(snapshots,$"navigation-{scale:0.00}.png"),Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+    }
+   }
+   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(20);
+   Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
+  }
+  finally{window.Close();}
+ }
+ [AvaloniaFact] public void LocalFileTablesPreserveSelectionAcrossMetadataRefresh()
+ {
+  var grid=new DataGrid();var old=new LocalRow{Path="/ipa/first.ipa",Version="1"};
+  LocalFileGrid.Show(grid,new[]{old,new LocalRow{Path="/ipa/gone.ipa"}});
+  grid.SelectedItems.Add(old);
+  var refreshed=new LocalRow{Path=old.Path,Version="2"};
+  LocalFileGrid.Show(grid,new[]{refreshed});Assert.Same(refreshed,Assert.Single(grid.SelectedItems.Cast<LocalRow>()));
+  LocalFileGrid.Show(grid,new[]{refreshed});Assert.Single(grid.SelectedItems.Cast<LocalRow>());
+  LocalFileGrid.Show(grid,Array.Empty<LocalRow>());Assert.Empty(grid.SelectedItems);
+ }
  [AvaloniaFact] public async Task QueueSetsAndMinimumLayoutRemainUsable()
  {
   using var folder=new TempFolder();var backend=Backend(folder.Path);var desktop=new Desktop(backend,false);var window=desktop.Window;window.Show();
@@ -85,7 +140,7 @@ public sealed class UiTests
    }
    desktop.Model.Queue.Start("Скачивание",Enumerable.Range(1,1234).Select(i=>new QueueSeed(i+"@latest","App "+i,"Последняя")),null,"Fixture",_=>{});
    await Task.Delay(50);
-   var count=window.GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="QueuePendingCount");
+   var count=Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="PART_Count");
    Assert.Equal("1234",count.Text);
    var queueTab=Find<TabItem>(window,"QueueTab");var countOrigin=count.TranslatePoint(default,queueTab).Value;
    Assert.True(countOrigin.X>=0&&countOrigin.X+count.Bounds.Width<=queueTab.Bounds.Width,"Queue count clipped");
