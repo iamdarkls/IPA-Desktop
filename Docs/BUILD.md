@@ -2,6 +2,8 @@
 
 Поддерживаемые RID, runner и имена архивов перечислены в `Tools/Portable/platforms.json`. Локально и в GitHub Actions используется одна точка входа:
 
+Apple Silicon собирается на `macos-26`: задания на `macos-15` неоднократно отменялись до выделения runner. Intel остаётся на `macos-15-intel`. Смена образа требует пересборки нативных инструментов: старый кеш с другим ImageVersion не используется.
+
 ```sh
 python Scripts/desktop.py test --rid linux-x64
 python Scripts/desktop.py package --rid linux-x64
