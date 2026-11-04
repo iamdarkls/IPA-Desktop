@@ -2,7 +2,7 @@
 
 Поддерживаемые RID, runner и имена архивов перечислены в `Tools/Portable/platforms.json`. Локально и в GitHub Actions используется одна точка входа:
 
-Apple Silicon собирается на `macos-26`: задания на `macos-15` неоднократно отменялись до выделения runner. Intel остаётся на `macos-15-intel`. Смена образа требует пересборки нативных инструментов: старый кеш с другим ImageVersion не используется.
+Обе архитектуры macOS собираются на macOS 15, чтобы не повышать требования нативных библиотек из-за новой ОС сборки. Если задание отменено до старта с сообщением `The job was not acquired by Runner of type hosted even after multiple attempts`, проверьте annotations: GitHub может сообщать о нехватке runner Apple Silicon (`capacity constraints`). В этом случае повторяют неуспешные задания после освобождения мощностей, сохраняя проверки всех платформ перед публикацией.
 
 ```sh
 python Scripts/desktop.py test --rid linux-x64

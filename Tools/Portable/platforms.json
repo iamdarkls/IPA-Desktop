@@ -1,6 +1,6 @@
 {
   "win-x64": {"runner": "windows-2022", "suffix": "Windows"},
   "linux-x64": {"runner": "ubuntu-24.04", "suffix": "Linux-x64"},
-  "osx-arm64": {"runner": "macos-26", "suffix": "macOS-arm64"},
+  "osx-arm64": {"runner": "macos-15", "suffix": "macOS-arm64"},
   "osx-x64": {"runner": "macos-15-intel", "suffix": "macOS-x64"}
 }
