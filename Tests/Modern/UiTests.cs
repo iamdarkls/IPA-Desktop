@@ -22,6 +22,11 @@ public sealed class UiTests
   if(button.Command != null) button.Command.Execute(button.CommandParameter);
   else button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
  }
+ static Task ClickAsync(Window window,string name)
+ {
+  var button=Find<Button>(window,name);
+  return Assert.IsType<OperationCommand>(button.Command).ExecuteAsync(button.CommandParameter);
+ }
  static async Task Wait(Func<bool> condition)
  {
   var time=Stopwatch.StartNew();
@@ -206,15 +211,15 @@ public sealed class UiTests
  [AvaloniaFact] public async Task RestartedDownloadQueueWaitsForOriginalAccountAndRestoresItsResumeAction()
  {
   using var folder=new TempFolder();var runner=new RecordingProcessRunner();var engine=Backend(folder.Path,runner);
-  var first=new Desktop(engine,false);first.Window.Show();Click(first.Window,"AccountInfo");await Wait(()=>!Busy(first));
+  var first=new Desktop(engine,false);first.Window.Show();await ClickAsync(first.Window,"AccountInfo");
   first.Model.Queue.Start("Скачивание",new[]{new QueueSeed("123@latest","Restored app","Последняя")},null,"Account",_=>throw new Exception("Old callback must not survive"),accountKey:first.Model.AccountKey);
   first.Model.Queue.Begin(1);first.Window.Close();
   var second=new Desktop(engine,false);var window=second.Window;window.Show();
   try
   {
    Assert.Equal(QueueItemState.Interrupted,Assert.Single(second.Model.Queue.Items).State);Assert.False(second.Model.Queue.ResumeCommand.CanExecute(null));
-   runner.SessionEmail="other@example.com";Click(window,"AccountInfo");await Wait(()=>!Busy(second));Assert.False(second.Model.Queue.ResumeCommand.CanExecute(null));
-   runner.SessionEmail="test@example.com";Click(window,"AccountInfo");await Wait(()=>!Busy(second));Assert.True(second.Model.Queue.ResumeCommand.CanExecute(null));
+   runner.SessionEmail="other@example.com";await ClickAsync(window,"AccountInfo");Assert.False(second.Model.Queue.ResumeCommand.CanExecute(null));
+   runner.SessionEmail="test@example.com";await ClickAsync(window,"AccountInfo");Assert.True(second.Model.Queue.ResumeCommand.CanExecute(null));
    second.Model.Queue.ResumeCommand.Execute(null);await Wait(()=>!Busy(second));Assert.Equal(QueueItemState.Succeeded,second.Model.Queue.Items.Single().State);
    Assert.Contains(runner.Calls,x=>x.Length>0&&x[0]=="download");
   }
