@@ -16,47 +16,47 @@
           <Image x:Name="BrandIcon" Width="40" Height="40" Margin="0,0,12,0" />
           <TextBlock Text="IPA Desktop" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center" />
           <Border Background="#23354E" CornerRadius="6" Padding="8,4" Margin="12,0,0,0" VerticalAlignment="Center">
-            <TextBlock x:Name="GuiVersionBadge" Foreground="#AFCDF7" FontSize="12" />
+            <TextBlock x:Name="GuiVersionBadge" Foreground="#AFCDF7" FontSize="12" Text="{CompiledBinding GuiVersionBadge}" />
           </Border>
         </StackPanel>
         <TextBlock Text="Поиск, загрузка и установка приложений для iPhone" Foreground="{DynamicResource MutedBrush}" Margin="0,4,0,12">
           </TextBlock>
       </StackPanel>
       <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-        <TextBlock x:Name="EngineVersion" Text="Движок не установлен" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Right" />
-        <TextBlock x:Name="AccountLabel" Text="Аккаунт не проверен" MaxWidth="340" TextWrapping="Wrap" TextAlignment="Right" Margin="0,6,0,0" Foreground="{DynamicResource MutedBrush}" />
+        <TextBlock x:Name="EngineVersion" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Right" Text="{CompiledBinding Updates.EngineVersion}" />
+        <TextBlock x:Name="AccountLabel" MaxWidth="340" TextWrapping="Wrap" TextAlignment="Right" Margin="0,6,0,0" Foreground="{DynamicResource MutedBrush}" Text="{CompiledBinding Account.AccountLabel}" />
       </StackPanel>
     </Grid>
     <StackPanel Grid.Row="1">
-      <TextBlock x:Name="UpdateNotice" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,0,8" IsVisible="False" />
+      <TextBlock x:Name="UpdateNotice" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,0,8" Text="{CompiledBinding Updates.UpdateNotice}" IsVisible="{CompiledBinding Updates.UpdateNoticeVisible}" />
       <WrapPanel x:Name="AccountActions">
-        <Button x:Name="Login" ui:ActionIcon.Kind="User" Content="Войти в Apple Account" Classes="primary" />
-        <Button x:Name="OpenFolder" ui:ActionIcon.Kind="Folder" Content="Папка IPA" />
+        <Button x:Name="Login" ui:ActionIcon.Kind="User" Content="Войти в Apple Account" Classes="primary" IsEnabled="{CompiledBinding Account.LoginEnabled}" Command="{CompiledBinding Account.LoginCommand}" />
+        <Button x:Name="OpenFolder" ui:ActionIcon.Kind="Folder" Content="Папка IPA" Command="{CompiledBinding OpenFolderCommand}" />
         <Button x:Name="ShowJournal" Content="Журнал" ui:ActionIcon.Kind="Journal" Command="{CompiledBinding ShowJournalCommand}" />
         <Button x:Name="MoreAccount" Content="Ещё" ui:ActionIcon.Kind="List">
           <Button.Flyout>
             <Flyout Placement="BottomEdgeAlignedRight">
               <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                <Button x:Name="AccountInfo" ui:ActionIcon.Kind="Shield" Content="Проверить аккаунт" Classes="menu-action" />
-                <Button x:Name="Logout" ui:ActionIcon.Kind="Logout" Content="Выйти" Classes="menu-action" />
-                <Button x:Name="ShowLastReport" ui:ActionIcon.Kind="Report" Content="Итог операции" IsEnabled="False" Classes="menu-action" />
-                <Button x:Name="ExportDiagnostics" ui:ActionIcon.Kind="Export" Content="Экспорт диагностики…" Classes="menu-action" />
-                <Button x:Name="PurchaseHistory" Content="История покупок" ui:ActionIcon.Kind="History" Classes="menu-action" />
+                <Button x:Name="AccountInfo" ui:ActionIcon.Kind="Shield" Content="Проверить аккаунт" Classes="menu-action" Command="{CompiledBinding Account.AccountInfoCommand}" />
+                <Button x:Name="Logout" ui:ActionIcon.Kind="Logout" Content="Выйти" Classes="menu-action" IsEnabled="{CompiledBinding Account.LogoutEnabled}" Command="{CompiledBinding Account.LogoutCommand}" />
+                <Button x:Name="ShowLastReport" ui:ActionIcon.Kind="Report" Content="Итог операции" Classes="menu-action" IsEnabled="{CompiledBinding ShowLastReportEnabled}" Command="{CompiledBinding ShowLastReportCommand}" />
+                <Button x:Name="ExportDiagnostics" ui:ActionIcon.Kind="Export" Content="Экспорт диагностики…" Classes="menu-action" Command="{CompiledBinding ExportDiagnosticsCommand}" />
+                <Button x:Name="PurchaseHistory" Content="История покупок" ui:ActionIcon.Kind="History" Classes="menu-action" IsEnabled="{CompiledBinding Library.PurchaseHistoryEnabled}" Command="{CompiledBinding Library.PurchaseHistoryCommand}" />
               </StackPanel>
             </Flyout>
           </Button.Flyout>
         </Button>
-        <Button x:Name="AccountSafetyReview" ui:ActionIcon.Kind="Shield" IsVisible="False" Content="Ограничения входа" />
+        <Button x:Name="AccountSafetyReview" ui:ActionIcon.Kind="Shield" Content="Ограничения входа" IsVisible="{CompiledBinding Account.AccountSafetyReviewVisible}" IsEnabled="{CompiledBinding Account.AccountSafetyReviewEnabled}" Command="{CompiledBinding Account.AccountSafetyReviewCommand}" />
       </WrapPanel>
-      <TextBlock x:Name="AccountSafetyStatus" IsVisible="False" TextWrapping="Wrap" Foreground="#EAC58C" Margin="0,6,0,8" />
-      <Border x:Name="ConnectionNotice" Classes="connection-card" IsVisible="False" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10">
+      <TextBlock x:Name="AccountSafetyStatus" TextWrapping="Wrap" Foreground="#EAC58C" Margin="0,6,0,8" Text="{CompiledBinding Account.AccountSafetyStatus}" IsVisible="{CompiledBinding Account.AccountSafetyStatusVisible}" />
+      <Border x:Name="ConnectionNotice" Classes="connection-card" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10" IsVisible="{CompiledBinding ConnectionNoticeVisible}">
         <StackPanel Spacing="5">
-          <TextBlock x:Name="ConnectionTitle" FontWeight="SemiBold" Foreground="#B8DCFF" />
-          <TextBlock x:Name="ConnectionMessage" TextWrapping="Wrap" Foreground="#C3D1E1" FontSize="13" />
+          <TextBlock x:Name="ConnectionTitle" FontWeight="SemiBold" Foreground="#B8DCFF" Text="{CompiledBinding ConnectionTitle}" />
+          <TextBlock x:Name="ConnectionMessage" TextWrapping="Wrap" Foreground="#C3D1E1" FontSize="13" Text="{CompiledBinding ConnectionMessage}" />
         </StackPanel>
       </Border>
     </StackPanel>
-    <TabControl Classes="navigation" Grid.Row="2" Margin="0,8,0,8">
+    <TabControl SelectedIndex="{CompiledBinding SelectedTab, Mode=TwoWay}" Classes="navigation" Grid.Row="2" Margin="0,8,0,8">
       <TabItem x:Name="SearchTab" Header="Поиск" ui:ActionIcon.Kind="Search">
         <Grid Margin="16,12">
           <Grid.RowDefinitions>
@@ -70,34 +70,38 @@
               <ColumnDefinition />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="Query" Padding="12,6" VerticalContentAlignment="Center" PlaceholderText="Название приложения или App Store ID" ToolTip.Tip="Название или числовой App Store ID" />
-            <Button x:Name="Search" ui:ActionIcon.Kind="Search" Content="Найти" Classes="primary" Grid.Column="1" Margin="10,0,0,0" />
+            <TextBox x:Name="Query" Padding="12,6" VerticalContentAlignment="Center" PlaceholderText="Название приложения или App Store ID" ToolTip.Tip="Название или числовой App Store ID" Text="{CompiledBinding Search.Query, Mode=TwoWay}">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Enter" Command="{CompiledBinding Search.SearchCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <Button x:Name="Search" ui:ActionIcon.Kind="Search" Content="Найти" Classes="primary" Grid.Column="1" Margin="10,0,0,0" IsEnabled="{CompiledBinding Search.SearchEnabled}" Command="{CompiledBinding Search.SearchCommand}" />
           </Grid>
           <Border x:Name="AppsFrame" Classes="table-frame" Grid.Row="1" Margin="0,2,0,4">
-            <DataGrid x:Name="Apps" SelectionMode="Extended">
+            <DataGrid x:Name="Apps" SelectionMode="Extended" ItemsSource="{CompiledBinding Search.Apps.Items}" IsEnabled="{CompiledBinding Search.Apps.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Search.Apps.SelectedItems}" ui:RowClickSelection.Command="{CompiledBinding Search.AddRowCommand}">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />
                 <DataGridTextColumn Header="App Store ID" Binding="{Binding ID}" Width="180" />
               </DataGrid.Columns>
             </DataGrid>
           </Border>
-          <TextBlock x:Name="SearchEmpty" Grid.Row="1" Margin="20,32,20,4" Text="Найдите приложение по названию или App Store ID" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+          <TextBlock x:Name="SearchEmpty" Grid.Row="1" Margin="20,32,20,4" Text="Найдите приложение по названию или App Store ID" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" IsVisible="{CompiledBinding Search.SearchEmptyVisible}">
             </TextBlock>
           <WrapPanel Grid.Row="2" Margin="0,8,0,0">
-            <Button x:Name="Versions" ui:ActionIcon.Kind="History" Content="Версии" />
-            <ComboBox x:Name="VersionList" Width="170" Margin="0,0,8,8" />
-            <Button x:Name="AddChosen" ui:ActionIcon.Kind="Plus" Content="Добавить" ToolTip.Tip="Добавить выделенные строки и выбранную версию. Можно также добавлять двойным кликом по строке." />
+            <Button x:Name="Versions" ui:ActionIcon.Kind="History" Content="Версии" Command="{CompiledBinding Search.VersionsCommand}" />
+            <ComboBox x:Name="VersionList" Width="170" Margin="0,0,8,8" ItemsSource="{CompiledBinding Search.VersionList.Items}" IsEnabled="{CompiledBinding Search.VersionList.IsEnabled}" SelectedItem="{CompiledBinding Search.VersionList.SelectedItem, Mode=TwoWay}" />
+            <Button x:Name="AddChosen" ui:ActionIcon.Kind="Plus" Content="Добавить" ToolTip.Tip="Добавить выделенные строки и выбранную версию. Можно также добавлять двойным кликом по строке." IsEnabled="{CompiledBinding Search.AddChosenEnabled}" Command="{CompiledBinding Search.AddChosenCommand}" />
             <Button x:Name="MoreSearch" Content="Ещё" ui:ActionIcon.Kind="List">
               <Button.Flyout>
                 <Flyout Placement="BottomEdgeAlignedRight">
                   <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                    <Button x:Name="VersionTable" ui:ActionIcon.Kind="List" Content="Все версии…" Classes="menu-action" />
-                    <Button x:Name="VersionInfo" ui:ActionIcon.Kind="Info" Content="Сведения" Classes="menu-action" />
+                    <Button x:Name="VersionTable" ui:ActionIcon.Kind="List" Content="Все версии…" Classes="menu-action" IsEnabled="{CompiledBinding Search.VersionTableEnabled}" Command="{CompiledBinding Search.VersionTableCommand}" />
+                    <Button x:Name="VersionInfo" ui:ActionIcon.Kind="Info" Content="Сведения" Classes="menu-action" IsEnabled="{CompiledBinding Search.VersionInfoEnabled}" Command="{CompiledBinding Search.VersionInfoCommand}" />
                   </StackPanel>
                 </Flyout>
               </Button.Flyout>
             </Button>
-            <Button x:Name="Download" ui:ActionIcon.Kind="Download" Content="Скачать (0)" Classes="primary" />
+            <Button x:Name="Download" ui:ActionIcon.Kind="Download" Classes="primary" IsEnabled="{CompiledBinding Search.DownloadEnabled}" Content="{CompiledBinding Search.DownloadLabel}" Command="{CompiledBinding Search.DownloadCommand}" />
           </WrapPanel>
           <Border Grid.Row="3" Classes="selection-card">
             <Grid>
@@ -111,17 +115,17 @@
                   <Button.Flyout>
                     <Flyout Placement="BottomEdgeAlignedRight">
                       <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                        <Button x:Name="RetryDownloads" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Content="Повторить ошибки (0)" Padding="8,3" FontSize="12" />
-                        <Button x:Name="ForgetDownloadErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" />
+                        <Button x:Name="RetryDownloads" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Padding="8,3" FontSize="12" IsEnabled="{CompiledBinding Search.RetryDownloadsEnabled}" Content="{CompiledBinding Search.RetryDownloadsLabel}" ToolTip.Tip="{CompiledBinding Search.RetryDownloadsTip}" Command="{CompiledBinding Search.RetryDownloadsCommand}" />
+                        <Button x:Name="ForgetDownloadErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной загрузки" IsEnabled="{CompiledBinding Search.ForgetDownloadErrorsEnabled}" Command="{CompiledBinding Search.ForgetDownloadErrorsCommand}" />
                       </StackPanel>
                     </Flyout>
                   </Button.Flyout>
                 </Button>
-                <Button x:Name="ClearChosen" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <TextBlock x:Name="ChosenCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — добавить в выбранное" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+                <Button x:Name="ClearChosen" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" IsEnabled="{CompiledBinding Search.ClearChosenEnabled}" Command="{CompiledBinding Search.ClearChosenCommand}" />
+                <TextBlock x:Name="ChosenCount" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" Text="{CompiledBinding Search.ChosenCount}" />
               </DockPanel>
-              <ScrollViewer x:Name="SearchSelection" IsVisible="False" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48">
-                <ItemsControl x:Name="ChosenApps">
+              <ScrollViewer x:Name="SearchSelection" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48" IsVisible="{CompiledBinding Search.SearchSelectionVisible}">
+                <ItemsControl x:Name="ChosenApps" IsEnabled="{CompiledBinding Search.ChosenAppsEnabled}" ItemsSource="{CompiledBinding Search.ChosenAppsOptions}" ui:SelectionRemove.Command="{CompiledBinding Search.RemoveChosenCommand}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Orientation="Horizontal" />
@@ -141,9 +145,9 @@
               </ScrollViewer>
               <DockPanel Grid.Row="2" Margin="0,6,0,0" LastChildFill="True">
                 <TextBlock Text="Набор" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" Margin="0,0,8,0" />
-                <AutoCompleteBox x:Name="SearchSet" MinWidth="180" Width="210" Margin="0,0,8,0" ToolTip.Tip="Выберите набор или введите название нового" MinimumPrefixLength="0" FilterMode="Contains" />
-                <Button x:Name="AddToSet" ui:ActionIcon.Kind="Layers" Content="Добавить в набор" Padding="10,6" Margin="0,0,8,0" />
-                <TextBlock x:Name="SearchSetStatus" Text="Выберите набор или введите новое название" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <AutoCompleteBox x:Name="SearchSet" ItemsSource="{CompiledBinding Search.SearchSetOptions}" MinWidth="180" Width="210" Margin="0,0,8,0" ToolTip.Tip="Выберите набор или введите название нового" MinimumPrefixLength="0" FilterMode="Contains" Text="{CompiledBinding Search.SearchSet, Mode=TwoWay}" IsEnabled="{CompiledBinding Search.SearchSetEnabled}" />
+                <Button x:Name="AddToSet" ui:ActionIcon.Kind="Layers" Content="Добавить в набор" Padding="10,6" Margin="0,0,8,0" IsEnabled="{CompiledBinding AppSets.AddToSetEnabled}" Command="{CompiledBinding AppSets.AddToSetCommand}" />
+                <TextBlock x:Name="SearchSetStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" VerticalAlignment="Center" Text="{CompiledBinding Search.SearchSetStatus}" />
               </DockPanel>
             </Grid>
           </Border>
@@ -163,43 +167,43 @@
                 <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="10">
                   <ui:AppIcon Kind="Phone" Width="20" Height="20" Foreground="{DynamicResource AccentTextBrush}" />
                   <TextBlock Text="{CompiledBinding Device.Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                  <TextBlock x:Name="WifiStatus" Text="USB" Foreground="#8BADD0" FontSize="12" VerticalAlignment="Center" />
-                  <CheckBox x:Name="SearchWifi" Content="Искать по Wi-Fi" FontSize="12" Margin="6,0,0,0" ToolTip.Tip="Искать по USB и Wi-Fi; установка использует выбранное подключение" />
+                  <TextBlock x:Name="WifiStatus" Foreground="#8BADD0" FontSize="12" VerticalAlignment="Center" Text="{CompiledBinding Files.WifiStatus}" />
+                  <CheckBox x:Name="SearchWifi" Content="Искать по Wi-Fi" FontSize="12" Margin="6,0,0,0" ToolTip.Tip="Искать по USB и Wi-Fi; установка использует выбранное подключение" IsEnabled="{CompiledBinding Files.SearchWifiEnabled}" IsChecked="{CompiledBinding Files.SearchWifi, Mode=TwoWay}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                   <Button x:Name="MoreDevice" Content="Ещё" ui:ActionIcon.Kind="List">
                     <Button.Flyout>
                       <Flyout Placement="BottomEdgeAlignedRight">
                         <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                          <Button x:Name="DeviceInfo" ui:ActionIcon.Kind="Info" Classes="compact menu-action" Content="Об устройстве" />
-                          <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact menu-action" Content="Как подключить по Wi-Fi" />
-                          <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact menu-action" Content="Проверить драйвер" />
-                          <Button x:Name="OpenAppleSupportHelp" ui:ActionIcon.Kind="Help" Classes="compact menu-action" Content="Помощь Apple" />
+                          <Button x:Name="DeviceInfo" ui:ActionIcon.Kind="Info" Classes="compact menu-action" Content="Об устройстве" IsEnabled="{CompiledBinding Files.DeviceInfoEnabled}" Command="{CompiledBinding Files.DeviceInfoCommand}" />
+                          <Button x:Name="WifiHelp" ui:ActionIcon.Kind="Wifi" Classes="compact menu-action" Content="Как подключить по Wi-Fi" IsEnabled="{CompiledBinding Files.WifiHelpEnabled}" Command="{CompiledBinding Files.WifiHelpCommand}" />
+                          <Button x:Name="CheckAppleSupport" ui:ActionIcon.Kind="Shield" Classes="compact menu-action" Content="{CompiledBinding Files.CheckAppleSupportLabel}" Command="{CompiledBinding Files.CheckAppleSupportCommand}" />
+                          <Button x:Name="OpenAppleSupportHelp" ui:ActionIcon.Kind="Help" Classes="compact menu-action" Content="Помощь Apple" Command="{CompiledBinding Files.OpenAppleSupportHelpCommand}" />
                           <TextBlock x:Name="AppleSupportStatus" Text="{CompiledBinding Device.SupportMessage}" ToolTip.Tip="{CompiledBinding Device.SupportDetails}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="8,6" />
                         </StackPanel>
                       </Flyout>
                     </Button.Flyout>
                   </Button>
                 </StackPanel>
-                <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" />
-                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="2" Grid.ColumnSpan="3" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" />
+                <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
+                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="2" Grid.ColumnSpan="3" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding Files.DeviceDetectionStatusTip}" />
                 <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                  <Button x:Name="DeviceApps" Content="Приложения на iPhone" ui:ActionIcon.Kind="Layers" Margin="0" />
+                  <Button x:Name="DeviceApps" Content="Приложения на iPhone" ui:ActionIcon.Kind="Layers" Margin="0" IsEnabled="{CompiledBinding Library.DeviceAppsEnabled}" Command="{CompiledBinding Library.DeviceAppsCommand}" />
                   <Button x:Name="CheckConnection" ui:ActionIcon.Kind="Link" Content="{CompiledBinding Device.ActionText}" Command="{CompiledBinding Device.CheckCommand}" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />
                 </StackPanel>
               </Grid>
             </Border>
             <DockPanel Classes="control-row" Margin="0,0,0,6" LastChildFill="True">
-              <Button x:Name="ImportFile" ui:ActionIcon.Kind="Import" Classes="compact" Content="Добавить IPA…" DockPanel.Dock="Right" Margin="8,0,0,0" />
-              <Button x:Name="SelectAllFiles" ui:ActionIcon.Kind="Check" Content="Выбрать все (0)" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip.Tip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся." />
+              <Button x:Name="ImportFile" ui:ActionIcon.Kind="Import" Classes="compact" Content="Добавить IPA…" DockPanel.Dock="Right" Margin="8,0,0,0" Command="{CompiledBinding Files.ImportFileCommand}" />
+              <Button x:Name="SelectAllFiles" ui:ActionIcon.Kind="Check" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip.Tip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся." IsEnabled="{CompiledBinding Files.SelectAllFilesEnabled}" Content="{CompiledBinding Files.SelectAllFilesLabel}" Command="{CompiledBinding Files.SelectAllFilesCommand}" />
               <TextBlock Text="Apple Account" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
-              <ComboBox x:Name="FileAccount" FontSize="12" DockPanel.Dock="Left" Width="220" MaxDropDownHeight="280" Margin="0,0,12,0" DisplayMemberBinding="{Binding Label}" ToolTip.Tip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу." />
-              <TextBlock x:Name="FilesSummary" Text="Чтение файлов…" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+              <ComboBox x:Name="FileAccount" FontSize="12" DockPanel.Dock="Left" Width="220" MaxDropDownHeight="280" Margin="0,0,12,0" DisplayMemberBinding="{Binding Label}" ToolTip.Tip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу." ItemsSource="{CompiledBinding Files.FileAccount.Items}" IsEnabled="{CompiledBinding Files.FileAccount.IsEnabled}" SelectedItem="{CompiledBinding Files.FileAccount.SelectedItem, Mode=TwoWay}" />
+              <TextBlock x:Name="FilesSummary" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Text="{CompiledBinding Files.FilesSummary}" />
             </DockPanel>
           </StackPanel>
           <Grid Grid.Row="1" Margin="0,6,0,12" ClipToBounds="True">
             <Border x:Name="FilesFrame" Classes="table-frame">
-              <DataGrid x:Name="Files" SelectionMode="Extended">
+              <DataGrid x:Name="Files" SelectionMode="Extended" ItemsSource="{CompiledBinding Files.Files.Items}" IsEnabled="{CompiledBinding Files.Files.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Files.Files.SelectedItems}" ui:RowClickSelection.Command="{CompiledBinding Files.AddRowCommand}">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="*" MinWidth="140" />
                   <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="90" />
@@ -208,7 +212,7 @@
                 </DataGrid.Columns>
               </DataGrid>
             </Border>
-            <TextBlock x:Name="FilesEmpty" IsHitTestVisible="False" Text="IPA пока нет. Скачайте приложения или нажмите «Добавить IPA…»." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Margin="24,32,24,4" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" IsVisible="False" />
+            <TextBlock x:Name="FilesEmpty" IsHitTestVisible="False" Text="IPA пока нет. Скачайте приложения или нажмите «Добавить IPA…»." TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Margin="24,32,24,4" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" IsVisible="{CompiledBinding Files.FilesEmptyVisible}" />
           </Grid>
           <Border Grid.Row="3" Classes="selection-card">
             <Grid>
@@ -222,19 +226,19 @@
                   <Button.Flyout>
                     <Flyout Placement="BottomEdgeAlignedRight">
                       <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                        <Button x:Name="RefreshFiles" ui:ActionIcon.Kind="Refresh" Classes="compact menu-action" Content="Обновить" />
-                        <Button x:Name="FileInfo" ui:ActionIcon.Kind="Info" Content="Об IPA…" Classes="menu-action" />
-                        <Button x:Name="RetryInstalls" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Content="Повторить ошибки (0)" Padding="8,3" FontSize="12" />
-                        <Button x:Name="ForgetInstallErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" />
+                        <Button x:Name="RefreshFiles" ui:ActionIcon.Kind="Refresh" Classes="compact menu-action" Content="Обновить" Command="{CompiledBinding Files.RefreshFilesCommand}" />
+                        <Button x:Name="FileInfo" ui:ActionIcon.Kind="Info" Content="Об IPA…" Classes="menu-action" IsEnabled="{CompiledBinding Files.FileInfoEnabled}" Command="{CompiledBinding Files.FileInfoCommand}" />
+                        <Button x:Name="RetryInstalls" ui:ActionIcon.Kind="Refresh" Classes="toolbar menu-action" Padding="8,3" FontSize="12" IsEnabled="{CompiledBinding Files.RetryInstallsEnabled}" Content="{CompiledBinding Files.RetryInstallsLabel}" ToolTip.Tip="{CompiledBinding Files.RetryInstallsTip}" Command="{CompiledBinding Files.RetryInstallsCommand}" />
+                        <Button x:Name="ForgetInstallErrors" ui:ActionIcon.Kind="Close" Classes="toolbar menu-action" Content="Сбросить ошибки" Padding="8,3" FontSize="12" ToolTip.Tip="Убрать сохранённые ошибки без повторной установки" IsEnabled="{CompiledBinding Files.ForgetInstallErrorsEnabled}" Command="{CompiledBinding Files.ForgetInstallErrorsCommand}" />
                       </StackPanel>
                     </Flyout>
                   </Button.Flyout>
                 </Button>
-                <Button x:Name="ClearInstall" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" />
-                <TextBlock x:Name="InstallCount" TextTrimming="CharacterEllipsis" Text="Двойной клик — выбрать IPA" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+                <Button x:Name="ClearInstall" ui:ActionIcon.Kind="Clear" Classes="toolbar" Content="Очистить" DockPanel.Dock="Right" Padding="8,3" Margin="8,0,0,0" FontSize="12" IsEnabled="{CompiledBinding Files.ClearInstallEnabled}" Command="{CompiledBinding Files.ClearInstallCommand}" />
+                <TextBlock x:Name="InstallCount" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" Text="{CompiledBinding Files.InstallCount}" ToolTip.Tip="{CompiledBinding Files.InstallCountTip}" />
               </DockPanel>
-              <ScrollViewer x:Name="InstallSelection" IsVisible="False" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48">
-                <ItemsControl x:Name="ChosenFiles">
+              <ScrollViewer x:Name="InstallSelection" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,5,0,0" Height="48" IsVisible="{CompiledBinding Files.InstallSelectionVisible}">
+                <ItemsControl x:Name="ChosenFiles" IsEnabled="{CompiledBinding Files.ChosenFilesEnabled}" ItemsSource="{CompiledBinding Files.ChosenFilesOptions}" ui:SelectionRemove.Command="{CompiledBinding Files.RemoveChosenCommand}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Orientation="Horizontal" />
@@ -254,10 +258,10 @@
               </ScrollViewer>
               <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="AddInstall" Margin="0" ui:ActionIcon.Kind="Plus" Content="Выбрать" ToolTip.Tip="Двойной клик по файлу также добавляет его в выбранное." />
-                <Button x:Name="InstallFiles" ui:ActionIcon.Kind="Phone" Content="Установить (0)" Classes="primary" Margin="0" />
+                <Button x:Name="AddInstall" Margin="0" ui:ActionIcon.Kind="Plus" Content="Выбрать" ToolTip.Tip="Двойной клик по файлу также добавляет его в выбранное." IsEnabled="{CompiledBinding Files.AddInstallEnabled}" Command="{CompiledBinding Files.AddInstallCommand}" />
+                <Button x:Name="InstallFiles" ui:ActionIcon.Kind="Phone" Classes="primary" Margin="0" IsEnabled="{CompiledBinding Files.InstallFilesEnabled}" Content="{CompiledBinding Files.InstallFilesLabel}" Command="{CompiledBinding Files.InstallFilesCommand}" />
                 </StackPanel>
-                <Button x:Name="DeleteFiles" Grid.Column="1" ui:ActionIcon.Kind="Trash" Content="В корзину (0)" Classes="danger" Margin="16,0,0,0" ToolTip.Tip="Переместить выбранные внизу IPA в корзину. Приложения на iPhone сохранятся." />
+                <Button x:Name="DeleteFiles" Grid.Column="1" ui:ActionIcon.Kind="Trash" Classes="danger" Margin="16,0,0,0" ToolTip.Tip="Переместить выбранные внизу IPA в корзину. Приложения на iPhone сохранятся." IsEnabled="{CompiledBinding Files.DeleteFilesEnabled}" Content="{CompiledBinding Files.DeleteFilesLabel}" Command="{CompiledBinding Files.DeleteFilesCommand}" />
               </Grid>
             </Grid>
           </Border>
@@ -279,7 +283,7 @@
                 <Button.Flyout>
                   <Flyout>
                     <StackPanel>
-                      <Button x:Name="ResetQueueHistory" Content="Сбросить историю…" ui:ActionIcon.Kind="Trash" Classes="menu-action" />
+                      <Button x:Name="ResetQueueHistory" Content="Сбросить историю…" ui:ActionIcon.Kind="Trash" Classes="menu-action" IsEnabled="{CompiledBinding ResetQueueHistoryEnabled}" Command="{CompiledBinding ResetQueueHistoryCommand}" />
                     </StackPanel>
                   </Flyout>
                 </Button.Flyout>
@@ -337,9 +341,9 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel>
                 <TextBlock Text="Наборы приложений" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock x:Name="SetsCount" Text="Наборов пока нет" Foreground="{DynamicResource AccentTextBrush}" Margin="0,6,0,8" />
+                <TextBlock x:Name="SetsCount" Foreground="{DynamicResource AccentTextBrush}" Margin="0,6,0,8" Text="{CompiledBinding AppSets.SetsCount}" />
                 <TextBlock Text="Отметьте несколько наборов. Приложения объединятся в одной очереди без повторов." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,12" />
-                <ListBox x:Name="AppSets" SelectionMode="Multiple,Toggle" Height="156" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox x:Name="AppSets" SelectionMode="Multiple,Toggle" Height="156" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ItemsSource="{CompiledBinding AppSets.AppSets.Items}" IsEnabled="{CompiledBinding AppSets.AppSets.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding AppSets.AppSets.SelectedItems}">
                   <ListBox.ItemTemplate>
                     <DataTemplate>
                       <DockPanel>
@@ -349,16 +353,16 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
-                <TextBlock x:Name="SetPreview" Text="Отметьте один или несколько наборов." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,12" MaxHeight="85" TextTrimming="CharacterEllipsis" />
-                <Button x:Name="InstallSet" Content="Установить наборы…" ui:ActionIcon.Kind="Phone" Classes="primary" />
-                <Button x:Name="UseSet" ui:ActionIcon.Kind="Download" Content="В очередь скачивания (0)" Classes="primary" Margin="0,0,0,8" />
-                <Button x:Name="EditSet" ui:ActionIcon.Kind="Edit" Content="Редактировать набор…" Margin="0,0,0,8" />
-                <Button x:Name="DeleteSet" ui:ActionIcon.Kind="Trash" Content="Удалить наборы (0)" Classes="danger" Margin="0,0,0,12" />
+                <TextBlock x:Name="SetPreview" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,12" MaxHeight="85" TextTrimming="CharacterEllipsis" Text="{CompiledBinding AppSets.SetPreview}" />
+                <Button x:Name="InstallSet" Content="Установить наборы…" ui:ActionIcon.Kind="Phone" Classes="primary" IsEnabled="{CompiledBinding AppSets.InstallSetEnabled}" Command="{CompiledBinding AppSets.InstallSetCommand}" />
+                <Button x:Name="UseSet" ui:ActionIcon.Kind="Download" Classes="primary" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.UseSetEnabled}" Content="{CompiledBinding AppSets.UseSetLabel}" Command="{CompiledBinding AppSets.UseSetCommand}" />
+                <Button x:Name="EditSet" ui:ActionIcon.Kind="Edit" Content="Редактировать набор…" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.EditSetEnabled}" Command="{CompiledBinding AppSets.EditSetCommand}" />
+                <Button x:Name="DeleteSet" ui:ActionIcon.Kind="Trash" Classes="danger" Margin="0,0,0,12" IsEnabled="{CompiledBinding AppSets.DeleteSetEnabled}" Content="{CompiledBinding AppSets.DeleteSetLabel}" Command="{CompiledBinding AppSets.DeleteSetCommand}" />
                 <Border Background="#26374D" Height="1" Margin="0,0,0,12" />
                 <TextBlock Text="Сохранить выбор из поиска" FontWeight="SemiBold" Margin="0,0,0,8" />
-                <TextBox x:Name="SetName" MaxLength="64" Height="38" Margin="0,0,0,8" ToolTip.Tip="Название нового или существующего набора" />
-                <Button x:Name="SaveSet" ui:ActionIcon.Kind="Save" Content="Сохранить из поиска" Margin="0,0,0,8" ToolTip.Tip="Дополнить набор выбранными приложениями или списком последней загрузки" />
-                <TextBlock x:Name="SetStatus" Text="Наборы хранят только ID. Скачивание выполняется под текущим Apple Account." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" />
+                <TextBox x:Name="SetName" MaxLength="64" Height="38" Margin="0,0,0,8" ToolTip.Tip="Название нового или существующего набора" Text="{CompiledBinding AppSets.SetName, Mode=TwoWay}" IsEnabled="{CompiledBinding AppSets.SetNameEnabled}" />
+                <Button x:Name="SaveSet" ui:ActionIcon.Kind="Save" Content="Сохранить из поиска" Margin="0,0,0,8" ToolTip.Tip="Дополнить набор выбранными приложениями или списком последней загрузки" IsEnabled="{CompiledBinding AppSets.SaveSetEnabled}" Command="{CompiledBinding AppSets.SaveSetCommand}" />
+                <TextBlock x:Name="SetStatus" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Text="{CompiledBinding AppSets.SetStatus}" />
               </StackPanel>
             </ScrollViewer>
           </Border>
@@ -369,16 +373,16 @@
             </Grid.RowDefinitions>
             <StackPanel>
               <TextBlock Text="Хранилище IPA" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8" />
-              <TextBlock x:Name="StorageSummary" Text="Подсчёт файлов…" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8" />
+              <TextBlock x:Name="StorageSummary" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8" Text="{CompiledBinding Storage.StorageSummary}" />
               <WrapPanel>
-                <Button x:Name="RefreshStorage" ui:ActionIcon.Kind="Refresh" Content="Обновить" />
-                <Button x:Name="SelectOld" ui:ActionIcon.Kind="History" Content="Выделить старые версии" />
-                <Button x:Name="DeleteStorage" ui:ActionIcon.Kind="Trash" Content="Удалить выбранные копии" Classes="danger" />
+                <Button x:Name="RefreshStorage" ui:ActionIcon.Kind="Refresh" Content="Обновить" Command="{CompiledBinding Storage.RefreshStorageCommand}" />
+                <Button x:Name="SelectOld" ui:ActionIcon.Kind="History" Content="Выделить старые версии" IsEnabled="{CompiledBinding Storage.SelectOldEnabled}" Command="{CompiledBinding Storage.SelectOldCommand}" />
+                <Button x:Name="DeleteStorage" ui:ActionIcon.Kind="Trash" Content="Удалить выбранные копии" Classes="danger" IsEnabled="{CompiledBinding Storage.DeleteStorageEnabled}" Command="{CompiledBinding Storage.DeleteStorageCommand}" />
               </WrapPanel>
               <TextBlock Text="Старые версии определяются по версии приложения, отдельно для каждого Apple Account. Удаление — в корзину, после подтверждения." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
             </StackPanel>
             <Border x:Name="StorageFrame" Classes="table-frame" Grid.Row="1" Margin="0,8,0,0">
-              <DataGrid x:Name="StorageFiles" SelectionMode="Extended">
+              <DataGrid x:Name="StorageFiles" SelectionMode="Extended" ItemsSource="{CompiledBinding Storage.StorageFiles.Items}" IsEnabled="{CompiledBinding Storage.StorageFiles.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Storage.StorageFiles.SelectedItems}">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="2*" MinWidth="120" />
                   <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="72" />
@@ -398,30 +402,30 @@
               <Border Classes="card" Padding="20" Margin="0,0,0,20">
                 <StackPanel Spacing="10">
                   <TextBlock Text="Сеть и прокси" FontSize="20" FontWeight="SemiBold" />
-                  <Button x:Name="NetworkSettings" Content="Настроить подключение" ui:ActionIcon.Kind="Link" />
+                  <Button x:Name="NetworkSettings" Content="Настроить подключение" ui:ActionIcon.Kind="Link" IsEnabled="{CompiledBinding Library.NetworkSettingsEnabled}" Command="{CompiledBinding Library.NetworkSettingsCommand}" />
                   <TextBlock Text="Один маршрут для входа и загрузок. Проверка сети не отправляет пароль и не сбрасывает паузы Apple Account." FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
                 </StackPanel>
               </Border>
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">
                 <StackPanel>
                   <TextBlock Text="Уведомления" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                  <CheckBox x:Name="SoundsEnabled" Content="Звуковой сигнал после успешного скачивания и установки" Foreground="{DynamicResource TextBrush}" />
+                  <CheckBox x:Name="SoundsEnabled" Content="Звуковой сигнал после успешного скачивания и установки" Foreground="{DynamicResource TextBrush}" IsChecked="{CompiledBinding Updates.SoundsEnabled, Mode=TwoWay}" />
                   <TextBlock Text="Один сигнал после завершения всей очереди без ошибок. Используется системный звук Windows." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="12" />
                 </StackPanel>
               </Border>
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,24">
                 <StackPanel>
                   <TextBlock Text="IPA Desktop" FontSize="22" FontWeight="SemiBold" />
-                  <TextBlock x:Name="GuiVersionStatus" Text="Проверка версии…" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,14" />
-                  <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
+                  <TextBlock x:Name="GuiVersionStatus" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,14" Text="{CompiledBinding Updates.GuiVersionStatus}" />
+                  <CheckBox x:Name="CheckGuiUpdates" Content="Проверять новые версии программы при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" IsEnabled="{CompiledBinding Updates.CheckGuiUpdatesEnabled}" IsChecked="{CompiledBinding Updates.CheckGuiUpdates, Mode=TwoWay}" />
                   <WrapPanel>
-                    <Button x:Name="CheckGuiUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить версию" />
-                    <Button x:Name="InstallGuiUpdate" ui:ActionIcon.Kind="Download" Content="Установить обновление" IsEnabled="False" Classes="primary" />
+                    <Button x:Name="CheckGuiUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить версию" Command="{CompiledBinding Updates.CheckGuiUpdateCommand}" />
+                    <Button x:Name="InstallGuiUpdate" ui:ActionIcon.Kind="Download" Classes="primary" IsEnabled="{CompiledBinding Updates.InstallGuiUpdateEnabled}" Content="{CompiledBinding Updates.InstallGuiUpdateLabel}" Command="{CompiledBinding Updates.InstallGuiUpdateCommand}" />
                     <Button x:Name="MoreGui" Content="Ещё" ui:ActionIcon.Kind="List">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight">
                           <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                            <Button x:Name="OpenGuiReleases" ui:ActionIcon.Kind="External" Content="Все версии" Classes="menu-action" />
+                            <Button x:Name="OpenGuiReleases" ui:ActionIcon.Kind="External" Content="Все версии" Classes="menu-action" Command="{CompiledBinding Updates.OpenGuiReleasesCommand}" />
                           </StackPanel>
                         </Flyout>
                       </Button.Flyout>
@@ -434,15 +438,15 @@
                 <StackPanel>
                   <TextBlock Text="Движок ipatool" FontSize="20" FontWeight="SemiBold" />
                   <TextBlock Text="Защищённая сборка IPA Desktop на основе Sorvigolova / ipatool" Foreground="{DynamicResource AccentTextBrush}" Margin="0,12,0,24" />
-                  <CheckBox x:Name="AutoUpdate" Foreground="{DynamicResource TextBrush}" Content="Проверять и устанавливать новые релизы при запуске" Margin="0,0,0,20" />
+                  <CheckBox x:Name="AutoUpdate" Foreground="{DynamicResource TextBrush}" Content="Проверять и устанавливать новые релизы при запуске" Margin="0,0,0,20" IsEnabled="{CompiledBinding Updates.AutoUpdateEnabled}" IsChecked="{CompiledBinding Updates.AutoUpdate, Mode=TwoWay}" />
                   <WrapPanel>
-                    <Button x:Name="CheckUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить обновления" Classes="primary" />
+                    <Button x:Name="CheckUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить обновления" Classes="primary" Command="{CompiledBinding Updates.CheckUpdateCommand}" />
                     <Button x:Name="MoreEngine" Content="Ещё" ui:ActionIcon.Kind="List">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight">
                           <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                            <Button x:Name="Rollback" ui:ActionIcon.Kind="History" Content="Откатить движок" Classes="menu-action" />
-                            <Button x:Name="OpenRelease" ui:ActionIcon.Kind="External" Content="Открыть релизы на GitHub" Classes="menu-action" />
+                            <Button x:Name="Rollback" ui:ActionIcon.Kind="History" Content="Откатить движок" Classes="menu-action" Command="{CompiledBinding Updates.RollbackCommand}" />
+                            <Button x:Name="OpenRelease" ui:ActionIcon.Kind="External" Content="Открыть релизы на GitHub" Classes="menu-action" Command="{CompiledBinding Updates.OpenReleaseCommand}" />
                           </StackPanel>
                         </Flyout>
                       </Button.Flyout>
@@ -454,17 +458,17 @@
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20">
                 <StackPanel>
                   <TextBlock Text="Инструменты для iPhone" FontSize="20" FontWeight="SemiBold" />
-                  <TextBlock x:Name="DeviceToolsVersion" Text="Комплект не установлен" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,12" />
+                  <TextBlock x:Name="DeviceToolsVersion" Foreground="{DynamicResource AccentTextBrush}" Margin="0,8,0,12" Text="{CompiledBinding Updates.DeviceToolsVersion}" />
                   <TextBlock Text="Источник: iamdarkls / IPA-Desktop · наша сборка libimobiledevice и ideviceinstaller" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,16" />
-                  <CheckBox x:Name="AutoUpdateDeviceTools" Content="Проверять и обновлять инструменты при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" />
+                  <CheckBox x:Name="AutoUpdateDeviceTools" Content="Проверять и обновлять инструменты при запуске" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,16" IsEnabled="{CompiledBinding Updates.AutoUpdateDeviceToolsEnabled}" IsChecked="{CompiledBinding Updates.AutoUpdateDeviceTools, Mode=TwoWay}" />
                   <WrapPanel>
-                    <Button x:Name="CheckDeviceUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить инструменты" Classes="primary" />
+                    <Button x:Name="CheckDeviceUpdate" ui:ActionIcon.Kind="Refresh" Content="Проверить инструменты" Classes="primary" Command="{CompiledBinding Updates.CheckDeviceUpdateCommand}" />
                     <Button x:Name="MoreTools" Content="Ещё" ui:ActionIcon.Kind="List">
                       <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight">
                           <StackPanel Spacing="4" MinWidth="240" MaxWidth="340">
-                            <Button x:Name="RollbackDevices" ui:ActionIcon.Kind="History" Content="Откатить комплект" Classes="menu-action" />
-                            <Button x:Name="OpenDeviceReleases" ui:ActionIcon.Kind="External" Content="Релизы комплекта" Classes="menu-action" />
+                            <Button x:Name="RollbackDevices" ui:ActionIcon.Kind="History" Content="Откатить комплект" Classes="menu-action" IsEnabled="{CompiledBinding Updates.RollbackDevicesEnabled}" Command="{CompiledBinding Updates.RollbackDevicesCommand}" />
+                            <Button x:Name="OpenDeviceReleases" ui:ActionIcon.Kind="External" Content="Релизы комплекта" Classes="menu-action" Command="{CompiledBinding Updates.OpenDeviceReleasesCommand}" />
                           </StackPanel>
                         </Flyout>
                       </Button.Flyout>
@@ -479,15 +483,15 @@
       </TabItem>
     </TabControl>
     <StackPanel Grid.Row="3">
-      <Border x:Name="OperationNotice" Background="#38232C" BorderBrush="#D36B7B" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="False">
+      <Border x:Name="OperationNotice" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="{CompiledBinding OperationNoticeVisible}" Background="{CompiledBinding OperationNoticeBackground}" BorderBrush="{CompiledBinding OperationNoticeBorder}">
         <DockPanel>
-          <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" />
-          <Button x:Name="NoticeDetails" ui:ActionIcon.Kind="Info" Classes="toolbar" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
-          <Button x:Name="NoticeRetry" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="Повторить ошибки" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" />
+          <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" Command="{CompiledBinding DismissNoticeCommand}" />
+          <Button x:Name="NoticeDetails" ui:ActionIcon.Kind="Info" Classes="toolbar" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" Command="{CompiledBinding NoticeDetailsCommand}" />
+          <Button x:Name="NoticeRetry" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="Повторить ошибки" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" IsVisible="{CompiledBinding NoticeRetryVisible}" IsEnabled="{CompiledBinding NoticeRetryEnabled}" Command="{CompiledBinding NoticeRetryCommand}" />
           <StackPanel Spacing="4">
-            <TextBlock x:Name="NoticeText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="13" />
-            <TextBlock x:Name="NoticeCause" FontSize="12" TextWrapping="Wrap" Foreground="#C7CFDC" />
-            <TextBlock x:Name="NoticeRemedy" FontSize="12" TextWrapping="Wrap" Foreground="#E4EBF6" />
+            <TextBlock x:Name="NoticeText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="13" Text="{CompiledBinding NoticeText}" ToolTip.Tip="{CompiledBinding NoticeTextTip}" />
+            <TextBlock x:Name="NoticeCause" FontSize="12" TextWrapping="Wrap" Foreground="#C7CFDC" Text="{CompiledBinding NoticeCause}" IsVisible="{CompiledBinding NoticeCauseVisible}" />
+            <TextBlock x:Name="NoticeRemedy" FontSize="12" TextWrapping="Wrap" Foreground="#E4EBF6" Text="{CompiledBinding NoticeRemedy}" IsVisible="{CompiledBinding NoticeRemedyVisible}" />
           </StackPanel>
         </DockPanel>
       </Border>

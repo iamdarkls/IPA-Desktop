@@ -31,9 +31,9 @@ internal static class PublishedSmoke
             var release=JsonCodec.Deserialize<Release>("{\"tag_name\":\"v1.0.0\",\"assets\":[{\"name\":\"fixture\",\"size\":10}]}");
             if(release.assets.Length!=1 || release.assets[0].size!=10)throw new Exception("Release JSON metadata was trimmed.");
             desktop.C<TextBox>("Query").Text="123";
-            desktop.C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            desktop.Model.Search.SearchCommand.Execute(null);
             await Task.Delay(100);
-            desktop.C<Button>("AddChosen").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            desktop.Model.Search.AddChosenCommand.Execute(null);
             if(desktop.C<ItemsControl>("ChosenApps").ItemCount!=1)throw new Exception("Published search/selection flow failed.");
             await Task.Delay(50);
             var download=desktop.C<Button>("Download");

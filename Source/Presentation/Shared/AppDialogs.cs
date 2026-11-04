@@ -35,13 +35,12 @@ public static class AppDialogs
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,14,0,0) };
         var copy = Action("Копировать", IconKind.Layers);
         var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-        copy.Click += async delegate
-        {
-            try { if (dialog.Clipboard != null) await dialog.Clipboard.SetTextAsync(text.Text ?? ""); status.Text = "Скопировано"; }
-            catch (Exception) { status.Text = "Выделите текст и нажмите Ctrl+C."; }
-        };
-        var close = Action("Закрыть", IconKind.Close); close.IsCancel = true;
-        close.Click += delegate { dialog.Close(); };
+        var model = new TextDialogViewModel(details, value => dialog.Clipboard?.SetTextAsync(value) ?? Task.CompletedTask);
+        dialog.DataContext = model;
+        ViewBindings.Bind(status,TextBlock.TextProperty,nameof(model.Status));
+        copy.Command = model.CopyCommand;
+        var close = Action("Закрыть", IconKind.Close); close.IsCancel = true; close.Command = model.CloseCommand;
+        model.CloseRequested += () => dialog.Close();
         actions.Children.Add(copy); actions.Children.Add(close); actions.Children.Add(status);
         Grid.SetRow(actions,1); layout.Children.Add(actions); dialog.Content = layout;
         return dialog;
@@ -55,7 +54,9 @@ public static class AppDialogs
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var no = Action("Отмена", IconKind.Close); no.IsCancel = true; no.IsDefault = true;
         var yes = Action("Продолжить", IconKind.Check, primary: true);
-        no.Click += delegate { dialog.Close(false); }; yes.Click += delegate { dialog.Close(true); };
+        var model = new ConfirmationViewModel(message); dialog.DataContext = model;
+        no.Command = model.CancelCommand; yes.Command = model.AcceptCommand;
+        model.CloseRequested += result => dialog.Close(result);
         actions.Children.Add(no); actions.Children.Add(yes); Grid.SetRow(actions,1); layout.Children.Add(actions); dialog.Content=layout;
         return await dialog.ShowDialog<bool>(owner);
     }

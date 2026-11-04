@@ -15,15 +15,16 @@ namespace IpaDesktop
     {
         public static Window Create(Window owner, string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save)
         {
-            var draft = new ObservableCollection<AppRow>(apps.Select(x => new AppRow { ID = x.ID, Name = x.Name }));
+            var model = new AppSetEditorViewModel(name, apps, save);
             var dialog = AppDialogs.Create(owner, "Редактирование набора", 680, 580);
+            dialog.DataContext = model;
             var grid = new Grid { Margin = new Thickness(18) };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition());
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var title = new TextBox { Text = name, MaxLength = 64, Margin = new Thickness(0, 0, 0, 12) };
             title.Name = "DraftName"; grid.Children.Add(title);
-            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = draft, DisplayMemberBinding = new Avalonia.Data.Binding("Name") };
+            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = model.Apps.Items, DisplayMemberBinding = new Avalonia.Data.Binding("Name") };
             list.Name = "DraftApps";
             Grid.SetRow(list, 1); grid.Children.Add(list);
             var bottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
@@ -32,19 +33,14 @@ namespace IpaDesktop
             status.Foreground = Avalonia.Media.Brushes.Salmon;
             var buttons = new WrapPanel();
             var remove = AppDialogs.Action("Убрать отмеченные", IconKind.Trash); remove.Name = "DraftRemove";
-            remove.Click += delegate { foreach (var item in list.SelectedItems.Cast<AppRow>().ToArray()) draft.Remove(item); };
+            remove.Command = model.RemoveCommand;
             var apply = AppDialogs.Action("Сохранить", IconKind.Save, primary: true); apply.Name = "DraftSave";
-            apply.Click += delegate
-            {
-                try
-                {
-                    save(title.Text.Trim(), draft.ToArray());
-                    dialog.Close(true);
-                }
-                catch (Exception e) { status.Text = e.Message; }
-            };
-            var cancel = AppDialogs.Action("Отмена", IconKind.Close); cancel.IsCancel = true;
-            cancel.Click += delegate { dialog.Close(); };
+            apply.Command = model.SaveCommand;
+            var cancel = AppDialogs.Action("Отмена", IconKind.Close); cancel.IsCancel = true; cancel.Command = model.CancelCommand;
+            SelectionBinding.SetItems(list, model.Apps.SelectedItems);
+            ViewBindings.Bind(title, TextBox.TextProperty, nameof(model.Name), true);
+            ViewBindings.Bind(status, TextBlock.TextProperty, nameof(model.Status));
+            model.CloseRequested += result => dialog.Close(result);
             buttons.Children.Add(remove); buttons.Children.Add(apply); buttons.Children.Add(cancel);
             bottom.Children.Add(hint); bottom.Children.Add(status); bottom.Children.Add(buttons);
             Grid.SetRow(bottom, 2); grid.Children.Add(bottom);

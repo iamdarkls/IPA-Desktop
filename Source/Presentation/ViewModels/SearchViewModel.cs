@@ -6,59 +6,53 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Interactivity;
-using Avalonia.Layout;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Threading;
-using Microsoft.Win32;
 
 namespace IpaDesktop
 {
     /// <summary>Поиск, выбор версий и очередь скачивания; сохраняет снимки ошибок и последнего пакета.</summary>
-    public sealed class SearchController : WindowController
+    public sealed partial class SearchViewModel : FeatureViewModel
+
     {
         readonly DownloadSelection chosen = new DownloadSelection();
         readonly SearchSession searchSession = new SearchSession();
         readonly DownloadSelection failedDownloads = new DownloadSelection();
+        public OperationCommand AddRowCommand { get; private set; }
+        public OperationCommand RemoveChosenCommand { get; private set; }
         string versionApp;
         List<DownloadItem> lastDownloads = new List<DownloadItem>();
-        public SearchController(Desktop view, Engine engine) : base(view, engine)
+        public SearchViewModel(DesktopViewModel desktop, Engine engine) : base(desktop, engine) { }
+        internal void Initialize()
         {
-            C<ComboBox>("VersionList").Items.Add("Последняя версия");
-            C<ComboBox>("VersionList").SelectedIndex = 0;
-            C<TextBox>("Query").PropertyChanged += delegate(object sender, AvaloniaPropertyChangedEventArgs change)
+            VersionList.Items.Add("Последняя версия");
+            VersionList.SelectedIndex = 0;
+            PropertyChanged += (_, change) =>
             {
-                if (change.Property != TextBox.TextProperty) return;
-                searchSession.Change(C<TextBox>("Query").Text);
-                if (String.IsNullOrWhiteSpace(C<TextBox>("Query").Text))
-                {
-                    C<DataGrid>("Apps").ItemsSource = null;
-                    ApplyActions();
-                }
+                if (change.PropertyName != nameof(Query)) return;
+                searchSession.Change(Query);
+                if (String.IsNullOrWhiteSpace(Query)) { Apps.Items = null; ApplyActions(); }
             };
-            On("Search", delegate
+            SearchCommand = Command(delegate
             {
-                string query = (C<TextBox>("Query").Text ?? "").Trim();
+                string query = (Query ?? "").Trim();
                 if (query.Length == 0) return;
                 int request = searchSession.Revision;
-                Work("Поиск приложений…", async delegate(CancellationToken ct)
+                Work("Поиск приложений…", async delegate (CancellationToken ct)
                 {
                     if (query.All(Char.IsDigit))
                     {
-                        if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").ItemsSource = new[]
+                        if (searchSession.IsCurrent(request)) Apps.Items = new[]
                         {
                             new AppRow
                             {
                                 Name = "Приложение по ID " + query, ID = query
                             }
                         };
-                    } else
+                    }
+                    else
                     {
                         var local = await engine.CatalogSearch(query, ct);
                         if (!searchSession.IsCurrent(request)) return;
-                        C<DataGrid>("Apps").ItemsSource = local;
+                        Apps.Items = local;
                         Log("Найдено в каталогах: " + local.Count);
                         try
                         {
@@ -68,38 +62,36 @@ namespace IpaDesktop
                             }, ct, false);
                             Engine.Ensure(r);
                             if (!searchSession.IsCurrent(request)) return;
-                            C<DataGrid>("Apps").ItemsSource = Engine.MergeApps(local, Engine.ParseApps(r.Output));
-                        } catch (OperationCanceledException)
+                            Apps.Items = Engine.MergeApps(local, Engine.ParseApps(r.Output));
+                        }
+                        catch (OperationCanceledException)
                         {
                             throw;
-                        } catch (Exception e)
+                        }
+                        catch (Exception e)
                         {
                             if (!searchSession.IsCurrent(request)) return;
                             if (local.Count == 0) throw;
                             Log("App Store: " + e.Message + ". Показаны результаты каталога.");
                         }
                     }
-                    if (searchSession.IsCurrent(request)) C<DataGrid>("Apps").SelectedIndex = 0;
+                    if (searchSession.IsCurrent(request)) Apps.SelectedIndex = 0;
                 });
             });
-            C<TextBox>("Query").KeyDown += delegate(object sender, Avalonia.Input.KeyEventArgs e)
-            {
-                if (e.Key == Avalonia.Input.Key.Enter && C<Button>("Search").IsEnabled) C<Button>("Search").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            };
-            C<DataGrid>("Apps").SelectionChanged += delegate
+            Apps.SelectionChanged += delegate
             {
                 versionApp = null;
-                C<ComboBox>("VersionList").Items.Clear();
-                C<ComboBox>("VersionList").Items.Add("Последняя версия");
-                C<ComboBox>("VersionList").SelectedIndex = 0;
+                VersionList.Items.Clear();
+                VersionList.Items.Add("Последняя версия");
+                VersionList.SelectedIndex = 0;
                 ApplyActions();
             };
-            On("Versions", delegate
+            VersionsCommand = Command(delegate
             {
                 var selected = SelectedApps();
                 if (selected.Count != 1) throw new Exception("Для списка версий выберите одно приложение.");
                 string id = selected[0].ID;
-                Work("Получение доступных версий…", async delegate(CancellationToken ct)
+                Work("Получение доступных версий…", async delegate (CancellationToken ct)
                 {
                     var r = await engine.Tool(new[]
                     {
@@ -109,7 +101,7 @@ namespace IpaDesktop
                     var values = Engine.Get(Engine.Object(r.Output), "externalVersionIdentifiers") as object[];
                     if (values == null) throw new Exception("Список версий не получен: формат ответа не поддерживается.");
                     if (SelectedApps().Count != 1 || SelectedApps()[0].ID != id) throw new Exception("Выбор приложения изменился. Повторите запрос версий.");
-                    var combo = C<ComboBox>("VersionList");
+                    var combo = VersionList;
                     combo.Items.Clear();
                     combo.Items.Add("Последняя версия");
                     foreach (var v in values.Reverse())
@@ -122,7 +114,7 @@ namespace IpaDesktop
                     Log("Версий: " + values.Length + ". В списке отображаются идентификаторы Apple.");
                 });
             });
-            On("VersionTable", delegate
+            VersionTableCommand = Command(delegate
             {
                 var apps = SelectedApps();
                 if (apps.Count != 1) throw new Exception("Для таблицы версий выберите одно приложение.");
@@ -134,25 +126,19 @@ namespace IpaDesktop
                     catch (OperationCanceledException) { throw; }
                     catch (Exception e) { Log("Список версий недоступен: " + e.Message + ". Можно указать известный ID вручную."); }
                     ct.ThrowIfCancellationRequested();
-                    using (var dialog = new AppVersionWindow(w, app.Name, app.ID, rows, engine.AppVersions, ct))
-                    {
-                        if (await dialog.Window.ShowDialog<bool>(w))
-                        {
-                            foreach (var id in dialog.SelectedIDs) chosen.AddVariant(app, id);
-                            RefreshChosen();
-                        }
-                    }
+                    var selected = await desktop.Interaction.SelectVersions(app.Name, app.ID, rows, engine.AppVersions, ct);
+                    if (selected != null) { foreach (var id in selected) chosen.AddVariant(app, id); RefreshChosen(); }
                 });
             });
-            On("VersionInfo", delegate
+            VersionInfoCommand = Command(delegate
             {
                 var selected = SelectedApps();
                 if (selected.Count != 1) throw new Exception("Выберите одно приложение.");
                 var row = selected[0];
-                var combo = C<ComboBox>("VersionList");
+                var combo = VersionList;
                 string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
                 if (version != null && row.ID != versionApp) throw new Exception("Обновите список версий выбранного приложения.");
-                Work("Получение сведений о версии…", async delegate(CancellationToken ct)
+                Work("Получение сведений о версии…", async delegate (CancellationToken ct)
                 {
                     if (version == null)
                     {
@@ -172,43 +158,42 @@ namespace IpaDesktop
                     }, ct, false);
                     Engine.Ensure(r);
                     var data = Engine.Object(r.Output);
-                    await AppDialogs.ShowText(w, "Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
+                    await desktop.Interaction.ShowText("Сведения о версии", row.Name + Environment.NewLine + Environment.NewLine +
                         ToolResponse.VersionMetadataText(data) + Environment.NewLine + "ID версии: " + version + Environment.NewLine + "App Store ID: " + row.ID);
                 });
             });
-            RowClickSelection.Attach(C<DataGrid>("Apps"), delegate(object item)
+            AddRowCommand = new OperationCommand(item =>
             {
-                if (busy) return;
+                if (busy) return Task.CompletedTask;
                 var row = item as AppRow;
-                if (row == null || chosen.Snapshot().Any(x => x.ID == row.ID)) return;
-                var combo = C<ComboBox>("VersionList");
+                if (row == null || chosen.Snapshot().Any(x => x.ID == row.ID)) return Task.CompletedTask;
+                var combo = VersionList;
                 chosen.AddVariant(row, combo.SelectedIndex > 0 && versionApp == row.ID ? Convert.ToString(combo.SelectedItem) : null);
-                RefreshChosen();
-            });
-            On("AddChosen", delegate
+                RefreshChosen(); return Task.CompletedTask;
+            }, Error);
+            AddChosenCommand = Command(delegate
             {
                 var rows = SelectedApps();
-                var combo = C<ComboBox>("VersionList");
+                var combo = VersionList;
                 string version = combo.SelectedIndex > 0 ? Convert.ToString(combo.SelectedItem) : null;
                 if (version != null && (rows.Count != 1 || rows[0].ID != versionApp)) throw new Exception("Для конкретной версии выберите одно приложение и обновите список версий.");
                 foreach (var row in rows) chosen.AddVariant(row, version);
                 RefreshChosen();
             });
-            On("ClearChosen", delegate
+            ClearChosenCommand = Command(delegate
             {
                 chosen.Clear();
                 lastDownloads.Clear();
                 RefreshChosen();
             });
-            SelectionRemove.Attach(C<ItemsControl>("ChosenApps"), delegate(string id)
+            RemoveChosenCommand = new OperationCommand(key =>
             {
-                if (busy) return;
-                chosen.RemoveKey(id);
-                RefreshChosen();
-            });
-            On("Download", delegate { StartDownloads(chosen.Snapshot()); });
-            On("RetryDownloads", delegate { StartDownloads(failedDownloads.Snapshot(), false); });
-            On("ForgetDownloadErrors", delegate { failedDownloads.Clear(); ApplyActions(); });
+                if (!busy) { chosen.RemoveKey(Convert.ToString(key)); RefreshChosen(); }
+                return Task.CompletedTask;
+            }, Error);
+            DownloadCommand = Command(delegate { StartDownloads(chosen.Snapshot()); });
+            RetryDownloadsCommand = Command(delegate { StartDownloads(failedDownloads.Snapshot(), false); });
+            ForgetDownloadErrorsCommand = Command(delegate { failedDownloads.Clear(); ApplyActions(); });
 
         }
         /// <summary>Возвращает текущий выбор, а при пустой очереди — независимый снимок последнего пакета.</summary>
@@ -221,7 +206,7 @@ namespace IpaDesktop
         {
             int added = chosen.AddMissing(apps);
             RefreshChosen();
-            C<TabItem>("SearchTab").IsSelected = true;
+            desktop.SelectedTab = 0;
             return added;
         }
         /// <summary>Запускает пакет и обновляет отдельные списки успешных и неудачных запросов.</summary>
@@ -229,62 +214,62 @@ namespace IpaDesktop
         {
             if (rows.Count == 0) throw new Exception("Добавьте приложения в выбранное.");
             if (remember) lastDownloads = rows.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();
-            Work("Скачивание IPA…", async delegate(CancellationToken ct)
+            Work("Скачивание IPA…", async delegate (CancellationToken ct)
             {
-                var accountEmail=await view.RequireAccountAsync(ct,resumeBatch?.AccountKey);
-                view.StartReport("Скачивание", rows.Count, delegate { StartDownloads(failedDownloads.Snapshot(), false); });
+                var accountEmail = await desktop.RequireAccountAsync(ct, resumeBatch?.AccountKey);
+                desktop.StartReport("Скачивание", rows.Count, async () => { StartDownloads(failedDownloads.Snapshot(), false); await desktop.ActiveOperation; });
                 QueueBatchViewModel batch = null;
-                batch = view.Model.Queue.Start("Скачивание", rows.Select(row => new QueueSeed(row.Key, row.Name,
-                    row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account · "+Desktop.AccountHint(accountEmail),
-                    keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch, view.Model.AccountKey);
+                batch = desktop.Queue.Start("Скачивание", rows.Select(row => new QueueSeed(row.Key, row.Name,
+                    row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account · " + DesktopViewModel.AccountHint(accountEmail),
+                    keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch, desktop.AccountKey);
                 var result = await BatchRunner.Run(rows,
                     (row, token) => engine.ApplicationDownloads.DownloadAsync(row, token),
-                    (row, index) => { view.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
+                    (row, index) => { desktop.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
                     row =>
                     {
-                        view.ReportItem(row.Name, null);
+                        desktop.ReportItem(row.Name, null);
                         chosen.RemoveKey(row.Key);
                         failedDownloads.RemoveKey(row.Key);
                         RefreshChosen();
                     },
                     (row, error) =>
                     {
-                        view.ReportItem(row.Name, error);
+                        desktop.ReportItem(row.Name, error);
                         failedDownloads.AddVariant(new AppRow { ID = row.ID, Name = row.Name }, row.VersionID);
                         Log("Не удалось скачать " + row.Name + ": " + error.Message);
                     }, RefreshLocalFiles, ct);
-                view.CompleteQueue(result.Succeeded, result.Failed.Count);
+                desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
                 if (result.Failed.Count > 0) throw new Exception("Не удалось скачать: " + String.Join(", ", result.Failed.Select(x => x.Name)) + ". Кнопка «Повторить ошибки» повторит только эти приложения.");
             });
         }
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
-            C<TextBlock>("SearchEmpty").IsVisible = C<DataGrid>("Apps").ItemsSource == null || !C<DataGrid>("Apps").ItemsSource.Cast<object>().Any();
-            C<Button>("RetryDownloads").IsEnabled = !busy && failedDownloads.Count > 0 && !engine.AccountRequests.RequiresLogin;
-            C<Button>("RetryDownloads").Content = "Повторить ошибки (" + failedDownloads.Count + ")";
-            ToolTip.SetTip(C<Button>("RetryDownloads"), String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label)));
-            C<Button>("ForgetDownloadErrors").IsEnabled = !busy && failedDownloads.Count > 0;
-            C<Button>("AddChosen").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count > 0;
-            C<Button>("ClearChosen").IsEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
-            C<Button>("Download").IsEnabled = !busy && chosen.Count > 0 && !engine.AccountRequests.RequiresLogin;
-            C<ItemsControl>("ChosenApps").IsEnabled = !busy;
-            C<Button>("VersionTable").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
-            C<Button>("VersionInfo").IsEnabled = !busy && C<DataGrid>("Apps").SelectedItems.Count == 1;
+            SearchEmptyVisible = Apps.Items == null || !Apps.Items.Cast<object>().Any();
+            RetryDownloadsEnabled = !busy && failedDownloads.Count > 0 && !engine.AccountRequests.RequiresLogin;
+            RetryDownloadsLabel = "Повторить ошибки (" + failedDownloads.Count + ")";
+            RetryDownloadsTip = String.Join(Environment.NewLine, failedDownloads.Snapshot().Select(x => x.Label));
+            ForgetDownloadErrorsEnabled = !busy && failedDownloads.Count > 0;
+            AddChosenEnabled = !busy && Apps.SelectedItems.Count > 0;
+            ClearChosenEnabled = !busy && (chosen.Count > 0 || lastDownloads.Count > 0);
+            DownloadEnabled = !busy && chosen.Count > 0 && !engine.AccountRequests.RequiresLogin;
+            ChosenAppsEnabled = !busy;
+            VersionTableEnabled = !busy && Apps.SelectedItems.Count == 1;
+            VersionInfoEnabled = !busy && Apps.SelectedItems.Count == 1;
         }
         void RefreshChosen()
         {
-            C<ItemsControl>("ChosenApps").ItemsSource = chosen.Snapshot();
-            C<ScrollViewer>("SearchSelection").IsVisible=chosen.Count>0;
-            C<TextBlock>("ChosenCount").Text = chosen.Count == 0 ? "Добавьте приложения из результатов поиска" : "Выбрано: " + chosen.Count + " · сохраняются при новом поиске";
-            C<Button>("Download").Content = "Скачать (" + chosen.Count + ")";
-            if (chosen.Count == 0 && lastDownloads.Count > 0) C<TextBlock>("SearchSetStatus").Text = "Для набора: приложения последней загрузки (" + lastDownloads.Count + ").";
-            else C<TextBlock>("SearchSetStatus").Text = chosen.Count > 0 ? "Для набора выбрано: " + chosen.Count + ". Введите название или выберите набор." : "Выберите приложения, затем введите название набора.";
+            ChosenAppsOptions = chosen.Snapshot();
+            SearchSelectionVisible = chosen.Count > 0;
+            ChosenCount = chosen.Count == 0 ? "Добавьте приложения из результатов поиска" : "Выбрано: " + chosen.Count + " · сохраняются при новом поиске";
+            DownloadLabel = "Скачать (" + chosen.Count + ")";
+            if (chosen.Count == 0 && lastDownloads.Count > 0) SearchSetStatus = "Для набора: приложения последней загрузки (" + lastDownloads.Count + ").";
+            else SearchSetStatus = chosen.Count > 0 ? "Для набора выбрано: " + chosen.Count + ". Введите название или выберите набор." : "Выберите приложения, затем введите название набора.";
             ApplyActions();
         }
         List<AppRow> SelectedApps()
         {
-            var rows = C<DataGrid>("Apps").SelectedItems.Cast<AppRow>().ToList();
+            var rows = Apps.SelectedItems.Cast<AppRow>().ToList();
             if (rows.Count == 0) throw new Exception("Выберите приложение в таблице.");
             return rows;
         }

@@ -146,7 +146,7 @@ GitHub Actions проверяет Windows-сборку и пакеты обно�
 
 ### Интерфейс
 
-Общая тема и палитра находятся в `Source/Presentation/Theme.axaml`. Состояние и команды операции, iPhone, очереди и журнала находятся в `Source/Presentation/ViewModels`; новые представления используют compiled bindings. Поиск, установка и обновления пока остаются в контроллерах: переход на MVVM выполняется постепенно. Векторные иконки и шаблоны действий — в `Source/Presentation/Shared/AppIcon.cs`; подписи и счётчики остаются обычным текстом кнопок. Для диалогов используется `AppDialogs.Action`. Отображение журнала и отчётов отделено в `DesktopOperations.cs`. Журнал представлен отдельным `JournalWindow.axaml`.
+Общая тема и палитра находятся в `Source/Presentation/Theme.axaml`. Все разделы и рабочие диалоги используют MVVM: состояние и команды — в `Source/Presentation/ViewModels`, представления — в XAML и классах окон. `Desktop` только собирает приложение; `IDesktopInteraction` отделяет ViewModel от окон, диспетчера, таймеров и системных диалогов. Основное окно использует compiled bindings, множественный выбор синхронизируется через общий `SelectionBinding`. Пароль и 2FA не хранятся в свойствах ViewModel. Подробнее — [архитектура](https://github.com/iamdarkls/IPA-Desktop/blob/main/Docs/ARCHITECTURE.md).
 
 ### Защита Apple Account
 

@@ -23,16 +23,11 @@ namespace IpaDesktop
         public Button SubmitButton { get; private set; }
         public Button CancelButton { get; private set; }
         public TextBlock Status { get; private set; }
-        public string SignedInEmail { get; private set; }
-        readonly IAppleLoginService service;
-        readonly CancellationTokenSource lifetime;
-        CancellationTokenSource operation;
-        TaskCompletionSource<SecureString> codeSource;
+        public string SignedInEmail => Model.SignedInEmail;
+        public AppleLoginViewModel Model { get; private set; }
         readonly StackPanel credentials, codePanel;
-        bool loading, closing;
         public AppleLoginWindow(Window owner, IAppleLoginService service, CancellationToken ct)
         {
-            this.service = service; lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
             Window = AppDialogs.Create(owner, "Вход в Apple Account", 560, 580);
             Window.MinWidth = 480; Window.MinHeight = 480;
             var layout = new Grid { Margin = new Thickness(22) };
@@ -58,20 +53,28 @@ namespace IpaDesktop
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
             SubmitButton = AppDialogs.Action("Войти", IconKind.Shield, primary: true); SubmitButton.IsDefault = true;
             CancelButton = AppDialogs.Action("Отмена", IconKind.Close); CancelButton.Margin = new Thickness(0);
-            SubmitButton.Click += Submit;
-            CancelButton.Click += delegate { RequestClose(); };
             actions.Children.Add(SubmitButton); actions.Children.Add(CancelButton); Grid.SetRow(actions, 1); layout.Children.Add(actions);
             Window.Content = layout;
             var names = new NameScope(); NameScope.SetNameScope(Window,names);
             names.Register("AppleLoginEmail",EmailBox); names.Register("AppleLoginPassword",PasswordBox);
             names.Register("AppleLoginCode",CodeBox); names.Register("AppleLoginSubmit",SubmitButton);
             names.Register("AppleLoginCancel",CancelButton); names.Register("AppleLoginStatus",Status);
-            Window.Opened += delegate { EmailBox.Focus(); };
-            Window.KeyDown += delegate(object sender, KeyEventArgs e) { if (e.Key == Key.Escape) { e.Handled = true; RequestClose(); } };
-            Window.Closing += delegate(object sender, WindowClosingEventArgs e)
-            {
-                if (loading) { e.Cancel = true; RequestClose(); }
-            };
+            Model = new AppleLoginViewModel(service, new SecretInput(this), action => Dispatcher.UIThread.Post(action), ct);
+            Window.DataContext = Model;
+            ViewBindings.Bind(EmailBox, TextBox.TextProperty, nameof(Model.Email), true);
+            ViewBindings.Bind(Status, TextBlock.TextProperty, nameof(Model.Status));
+            ViewBindings.Bind(credentials, Control.IsVisibleProperty, nameof(Model.CredentialsVisible));
+            ViewBindings.Bind(credentials, Control.IsEnabledProperty, nameof(Model.CredentialsEnabled));
+            ViewBindings.Bind(codePanel, Control.IsVisibleProperty, nameof(Model.CodeVisible));
+            ViewBindings.Bind(CodeBox, Control.IsEnabledProperty, nameof(Model.CodeEnabled));
+            ViewBindings.Bind(SubmitButton, ContentControl.ContentProperty, nameof(Model.SubmitLabel));
+            ViewBindings.Bind(SubmitButton,Control.IsEnabledProperty,nameof(Model.SubmitEnabled));
+            ViewBindings.Bind(CancelButton,Control.IsEnabledProperty,nameof(Model.CancelEnabled));
+            SubmitButton.Command = Model.SubmitCommand; CancelButton.Command = Model.CancelCommand;
+            Model.CloseRequested += result => { if (result == true) Window.Close(true); else Window.Close(); };
+            Window.Opened += (_, _) => EmailBox.Focus();
+            Window.KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Model.CancelCommand.Execute(null); } };
+            Window.Closing += (_, e) => { if (!Model.RequestClose()) e.Cancel = true; };
         }
         static SolidColorBrush Brush(string color) { return new SolidColorBrush((Color)Color.Parse(color)); }
         static TextBlock Note(string text, double top) { return new TextBlock { Text = text, FontSize = 12, Foreground = Brush("#9BACBF"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0) }; }
@@ -82,84 +85,22 @@ namespace IpaDesktop
                 Background = Brush("#1C293B"), Foreground = Brush("#EDF1F8"), BorderBrush = Brush("#34445C") };
             return box;
         }
-        async void Submit(object sender, RoutedEventArgs e)
+        sealed class SecretInput : ILoginInput
         {
-            if (loading)
+            readonly AppleLoginWindow view;
+            public SecretInput(AppleLoginWindow view) => this.view = view;
+            static SecureString Take(TextBox box)
             {
-                if (codeSource == null || codeSource.Task.IsCompleted) return;
-                var code = Secret(CodeBox);
-                if (!ValidCode(code)) { code.Dispose(); Status.Text = "Введите шесть цифр без пробелов."; CodeBox.Focus(); return; }
-                CodeBox.Text = ""; CodeBox.IsEnabled = false; SubmitButton.IsEnabled = false;
-                Status.Text = "Проверяем код…";
-                if (!codeSource.TrySetResult(code)) code.Dispose();
-                return;
+                var value = new SecureString();
+                foreach (char character in box.Text ?? "") value.AppendChar(character);
+                value.MakeReadOnly(); box.Text = ""; return value;
             }
-            using (var password = Secret(PasswordBox))
-            {
-                if (String.IsNullOrWhiteSpace(EmailBox.Text) || password.Length == 0)
-                { Status.Text = "Введите Apple Account и пароль."; return; }
-                PasswordBox.Text = ""; loading = true;
-                operation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-                credentials.IsEnabled = false; SubmitButton.IsEnabled = false;
-                Status.Text = "Связываемся с Apple…";
-                bool success = false;
-                try
-                {
-                    SignedInEmail = await service.LoginAsync(EmailBox.Text.Trim(), password, RequestCode, operation.Token);
-                    success = true;
-                }
-                catch (OperationCanceledException) { Status.Text = "Вход отменён."; }
-                catch (AppleLoginException error) { Status.Text = error.Message + "\nПеред новой попыткой действует защитная пауза."; }
-                catch (AppleAccountException error) { Status.Text = error.Message; }
-                catch (Exception) { Status.Text = "Не удалось выполнить вход. Повторите попытку; детали авторизации не записываются в журнал."; }
-                finally
-                {
-                    loading = false; operation.Dispose(); operation = null;
-                    if (codeSource != null) codeSource.TrySetCanceled(); codeSource = null;
-                    CodeBox.Text = ""; PasswordBox.Text = ""; codePanel.IsVisible = false;
-                    credentials.IsVisible = true; credentials.IsEnabled = true;
-                    SubmitButton.IsEnabled = true; SubmitButton.Content = "Войти"; PasswordBox.Focus();
-                }
-                if (success) Window.Close(true);
-                else if (closing || lifetime.IsCancellationRequested) Window.Close();
-            }
+            public SecureString TakePassword() => Take(view.PasswordBox);
+            public SecureString TakeCode() => Take(view.CodeBox);
+            public void Clear() { view.PasswordBox.Text = ""; view.CodeBox.Text = ""; }
+            public void FocusPassword() => view.PasswordBox.Focus();
+            public void FocusCode() => view.CodeBox.Focus();
         }
-        async Task<SecureString> RequestCode(CancellationToken ct)
-        {
-            var pending = new TaskCompletionSource<SecureString>();
-            using (ct.Register(delegate { pending.TrySetCanceled(); }))
-            {
-                Dispatcher.UIThread.Post(new Action(delegate
-                {
-                    if (ct.IsCancellationRequested) return;
-                    codeSource = pending; credentials.IsVisible = false; codePanel.IsVisible = true;
-                    CodeBox.Text = ""; CodeBox.IsEnabled = true; SubmitButton.Content = "Подтвердить"; SubmitButton.IsEnabled = true;
-                    Status.Text = "Apple запросила код подтверждения."; CodeBox.Focus();
-                }));
-                return await pending.Task.ConfigureAwait(false);
-            }
-        }
-        static SecureString Secret(TextBox box)
-        {
-            var value = new SecureString();
-            foreach (char character in box.Text ?? "") value.AppendChar(character);
-            value.MakeReadOnly(); return value;
-        }
-        static bool ValidCode(SecureString code)
-        {
-            if (code.Length != 6) return false;
-            var pointer = Marshal.SecureStringToGlobalAllocUnicode(code);
-            try { for (int i = 0; i < 6; i++) { char c = (char)Marshal.ReadInt16(pointer, i * 2); if (c < '0' || c > '9') return false; } return true; }
-            finally { Marshal.ZeroFreeGlobalAllocUnicode(pointer); }
-        }
-        void RequestClose()
-        {
-            if (!loading) { Window.Close(); return; }
-            closing = true; SubmitButton.IsEnabled = false; CancelButton.IsEnabled = false; Status.Text = "Останавливаем вход…"; operation.Cancel();
-        }
-        public void Dispose()
-        {
-            lifetime.Cancel(); lifetime.Dispose(); PasswordBox.Text = ""; CodeBox.Text = "";
-        }
+        public void Dispose() => Model.Dispose();
     }
 }

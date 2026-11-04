@@ -8,22 +8,15 @@ using System.Net;
 using System.Net.Http;
 using IpaDesktop;
 public static class DesktopContract {
- public static object Files(Desktop view){return typeof(Desktop).GetField("files",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(view);}
- public static Task ScanDevices(Desktop view){var files=Files(view);return (Task)files.GetType().GetMethod("RefreshDevicesAsync",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
- public static void StartMonitoring(Desktop view){var files=Files(view);files.GetType().GetMethod("StartDeviceDetection",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
- public static void StopMonitoring(Desktop view){var files=Files(view);files.GetType().GetMethod("StopDeviceDetection",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(files,null);}
+ public static Task ScanDevices(Desktop view) => view.Model.Files.RefreshDevicesAsync();
+ public static void StartMonitoring(Desktop view) => view.Model.Files.StartDeviceDetection();
+ public static void StopMonitoring(Desktop view) => view.Model.Files.StopDeviceDetection();
  public static TaskCompletionSource<bool> BeginWait(Desktop view) {
   var pending = new TaskCompletionSource<bool>();
-  Func<CancellationToken, Task> action = delegate(CancellationToken ct) { return pending.Task; };
-  typeof(Desktop).GetMethod("Work", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-   .Invoke(view, new object[]{"Test busy controls", action});
+  view.Model.Work("Test busy commands", _ => pending.Task);
   return pending;
  }
-
- public static void Error(Desktop view, string message) {
-  typeof(Desktop).GetMethod("Error", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-   .Invoke(view, new object[]{new Exception(message)});
- }
+ public static void Error(Desktop view, string message) => view.Model.Error(new Exception(message));
 }
 public sealed class InstalledAppleSupportProbe : IAppleSupportProbe
 {

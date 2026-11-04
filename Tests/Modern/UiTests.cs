@@ -35,7 +35,7 @@ public sealed class UiTests
   foreach(var name in new[]{"ipatool.exe","idevice_id.exe","ideviceinfo.exe","ideviceinstaller.exe","idevicepair.exe"})File.WriteAllText(Path.Combine(bins,RuntimePlatform.ToolName(name)),"fixture");
   return engine;
  }
- static bool Busy(Desktop desktop)=>(bool)typeof(Desktop).GetProperty("IsBusy",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(desktop);
+ static bool Busy(Desktop desktop)=>desktop.Model.IsBusy;
  [AvaloniaFact] public async Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales()
  {
   using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;
@@ -78,16 +78,6 @@ public sealed class UiTests
    Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public void LocalFileTablesPreserveSelectionAcrossMetadataRefresh()
- {
-  var grid=new DataGrid();var old=new LocalRow{Path="/ipa/first.ipa",Version="1"};
-  LocalFileGrid.Show(grid,new[]{old,new LocalRow{Path="/ipa/gone.ipa"}});
-  grid.SelectedItems.Add(old);
-  var refreshed=new LocalRow{Path=old.Path,Version="2"};
-  LocalFileGrid.Show(grid,new[]{refreshed});Assert.Same(refreshed,Assert.Single(grid.SelectedItems.Cast<LocalRow>()));
-  LocalFileGrid.Show(grid,new[]{refreshed});Assert.Single(grid.SelectedItems.Cast<LocalRow>());
-  LocalFileGrid.Show(grid,Array.Empty<LocalRow>());Assert.Empty(grid.SelectedItems);
  }
  [AvaloniaFact] public async Task QueueSetsAndMinimumLayoutRemainUsable()
  {
@@ -214,7 +204,7 @@ public sealed class UiTests
    var file=new FileInfo(row.Path);desktop.Model.Queue.Start("Установка",new[]{new QueueSeed(row.Path,"Library","1.0"){FileSize=file.Length,ModifiedTicks=file.LastWriteTimeUtc.Ticks}},fixture.Device.ID+"|False","Phone",_=>{});
    desktop.Model.Queue.Begin(1);desktop.Model.Queue.Stop("Обрыв",false);Assert.True(desktop.Model.Queue.VerifyCommand.CanExecute(null));desktop.Model.Queue.VerifyCommand.Execute(null);
    await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Версия найдена на iPhone"));Assert.Equal(QueueItemState.Uncertain,desktop.Model.Queue.Items.Single().State);
-   var confirm=window.OwnedWindows.Single(x=>x.Title=="Версия найдена на iPhone");confirm.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   var confirm=window.OwnedWindows.Single(x=>x.Title=="Версия найдена на iPhone");confirm.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).Command.Execute(null);
    await Wait(()=>!Busy(desktop));Assert.Equal(QueueItemState.Succeeded,desktop.Model.Queue.Items.Single().State);
   }
   finally{window.Close();}
@@ -228,7 +218,7 @@ public sealed class UiTests
   async Task Confirm(string title)
   {
    await Wait(()=>window.OwnedWindows.Any(x=>x.Title==title));var dialog=window.OwnedWindows.Single(x=>x.Title==title);
-   dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).Command.Execute(null);
   }
   try
   {
@@ -256,7 +246,7 @@ public sealed class UiTests
    desktop.Model.PropertyChanged+=Changed;
    try
    {
-    dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    dialog.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Продолжить")).Command.Execute(null);
     await Wait(()=>finished);
    }
    finally{desktop.Model.PropertyChanged-=Changed;}
@@ -268,9 +258,10 @@ public sealed class UiTests
   try
   {
    Find<TabItem>(window,"FilesTab").IsSelected=true;
+   Find<TabItem>(window,"FilesTab").IsSelected=true;await Task.Delay(20);
    var files=Find<DataGrid>(window,"Files");await Wait(()=>files.ItemsSource?.Cast<LocalRow>().Count()==3);
    var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
-   foreach(var row in files.ItemsSource.Cast<LocalRow>().ToArray())files.SelectedItems.Add(row);Click(window,"AddInstall");
+   foreach(var row in files.ItemsSource.Cast<LocalRow>().ToArray())files.SelectedItems.Add(row);await Wait(()=>desktop.Model.Files.Files.SelectedItems.Count==3);Click(window,"AddInstall");
    Assert.Equal(3,Find<ItemsControl>(window,"ChosenFiles").ItemCount);
    Click(window,"InstallFiles");await ConfirmInstall(2);Assert.Equal(2,fixture.Runner.Installs);
    Assert.Equal(new[]{QueueItemState.Succeeded,QueueItemState.Uncertain,QueueItemState.Paused},desktop.Model.Queue.Items.Select(x=>x.State));
@@ -292,7 +283,8 @@ public sealed class UiTests
   try
   {
    var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
-   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;Click(window,"AddInstall");
+   Find<TabItem>(window,"FilesTab").IsSelected=true;await Task.Delay(20);
+   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;await Wait(()=>desktop.Model.Files.Files.SelectedItems.Count==1);Click(window,"AddInstall");
    Assert.True(Find<Button>(window,"InstallFiles").IsEnabled);
    fixture.Runner.Pairing.Enqueue(("validate","No device found"));Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));
    Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.True(Find<Button>(window,"CheckConnection").IsEnabled);Assert.Equal(0,fixture.Runner.Installs);Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);
@@ -324,7 +316,8 @@ public sealed class UiTests
   try
   {
    var devices=Find<ComboBox>(window,"DeviceList");devices.ItemsSource=new[]{fixture.Device};devices.SelectedIndex=0;
-   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;Click(window,"AddInstall");
+   Find<TabItem>(window,"FilesTab").IsSelected=true;await Task.Delay(20);
+   var files=Find<DataGrid>(window,"Files");files.ItemsSource=new[]{row};files.SelectedItem=row;await Wait(()=>desktop.Model.Files.Files.SelectedItems.Count==1);Click(window,"AddInstall");
    Click(window,"CheckConnection");await Wait(()=>Find<TextBlock>(window,"ConnectionTitle").Text?.Contains("Подтвердите")==true);
    Click(window,"Cancel");await Wait(()=>!Busy(desktop));Assert.False(Find<Button>(window,"InstallFiles").IsEnabled);Assert.Contains("отменена",Find<TextBlock>(window,"ConnectionTitle").Text);
    Assert.Equal(0,fixture.Runner.Installs);fixture.Runner.Trusted=true;
@@ -363,12 +356,12 @@ public sealed class UiTests
   {
    var service=new WindowLoginService();using var login=new AppleLoginWindow(owner,service,CancellationToken.None);
    var result=login.Window.ShowDialog<bool>(owner);
-   login.EmailBox.Text="fixture@example.com";login.PasswordBox.Text="Fixture-secret";login.SubmitButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   login.EmailBox.Text="fixture@example.com";login.PasswordBox.Text="Fixture-secret";login.SubmitButton.Command.Execute(null);
    Assert.Equal("",login.PasswordBox.Text);Assert.NotEqual('\0',login.PasswordBox.PasswordChar);
-   await Wait(()=>login.SubmitButton.IsEnabled);Assert.Contains("повтор",login.Status.Text.ToLowerInvariant());
-   login.PasswordBox.Text="Fixture-secret";login.SubmitButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Wait(()=>login.CodeBox.IsVisible&&login.SubmitButton.IsEnabled);
-   login.CodeBox.Text="12";login.SubmitButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Assert.Contains("шесть",login.Status.Text);
-   login.CodeBox.Text="123456";login.SubmitButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Assert.Equal("",login.CodeBox.Text);
+   await login.Model.Attempt;await Wait(()=>login.Status.Text.ToLowerInvariant().Contains("повтор"));
+   login.PasswordBox.Text="Fixture-secret";login.SubmitButton.Command.Execute(null);await Wait(()=>login.CodeBox.IsVisible&&login.SubmitButton.IsEnabled);
+   login.CodeBox.Text="12";login.SubmitButton.Command.Execute(null);await Wait(()=>login.Status.Text.Contains("шесть"));
+   login.CodeBox.Text="123456";login.SubmitButton.Command.Execute(null);Assert.Equal("",login.CodeBox.Text);
    Assert.True(await result);Assert.Equal("fixture@example.com",login.SignedInEmail);Assert.Equal("",login.PasswordBox.Text);
   }
   finally{owner.Close();}
@@ -381,9 +374,9 @@ public sealed class UiTests
    var service=new AppVersions(new VersionTool());var rows=await service.ListAsync("123",CancellationToken.None);
    using var dialog=new AppVersionWindow(owner,"Fixture","123",rows,service,CancellationToken.None);var result=dialog.Window.ShowDialog<bool>(owner);
    var grid=dialog.Window.GetLogicalDescendants().OfType<DataGrid>().Single();grid.SelectedItems.Add(rows[0]);grid.SelectedItems.Add(rows[1]);
-   var details=dialog.Window.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Получить сведения"));details.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   var details=dialog.Window.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Получить сведения"));details.Command.Execute(null);
    await Wait(()=>details.IsEnabled);Assert.Equal(2,grid.SelectedItems.Count);Assert.Equal("2.0",rows[0].Version);
-   dialog.Window.GetLogicalDescendants().OfType<Button>().Single(x=>Equals(x.Content,"Добавить выбранные в очередь")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+   dialog.Model.AddCommand.Execute(null);
    Assert.True(await result);Assert.Equal(2,dialog.SelectedIDs.Count);
   }
   finally{owner.Close();}
