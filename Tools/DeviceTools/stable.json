@@ -12,8 +12,8 @@
     "sha": "adf9c22b9010490e4b55eaeb14731991db1c172c"
   },
   "libtatsu": {
-    "tag": "1.0.5",
-    "sha": "42329cb756682535c7c0f087987b78d1dd5b16c8"
+    "tag": "1.1.0",
+    "sha": "d8928042bcbb7048bc87a994d3e84c29eacf2f32"
   },
   "libimobiledevice": {
     "tag": "1.4.0",
