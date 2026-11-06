@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace IpaDesktop;
 
-public sealed record DeviceToolManifest(string Version, string Components)
+public sealed record DeviceToolManifest(string Version, string Components, int EventProtocol = 0)
 {
     public string Description => "Комплект " + Version + Environment.NewLine + Components;
     public static DeviceToolManifest Read(string path)
@@ -19,7 +19,7 @@ public sealed record DeviceToolManifest(string Version, string Components)
         if (!System.Text.RegularExpressions.Regex.IsMatch(version ?? "", @"^\d+\.\d+\.\d+$")) throw new InvalidDataException("Некорректная версия комплекта.");
         var lines = root.GetProperty("components").EnumerateObject().Select(component => component.Name + " " +
             component.Value.GetProperty("version").GetString() + " · " + component.Value.GetProperty("revision").GetString());
-        return new(version, String.Join(Environment.NewLine, lines));
+        return new(version, String.Join(Environment.NewLine, lines), root.TryGetProperty("eventProtocol", out var protocol) ? protocol.GetInt32() : 0);
     }
     public static string InstalledDescription(string workspace, State settings)
     {

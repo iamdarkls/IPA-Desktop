@@ -67,7 +67,8 @@ namespace IpaDesktop
             var names = Directory.GetFiles(root, "*.exe", SearchOption.AllDirectories).Select(Path.GetFileName).ToArray();
             if (names.Length < 4 || names.Length > 5 || DeviceFiles.Take(4).Any(name => !names.Contains(name)) ||
                 names.Any(name => !DeviceFiles.Take(4).Append("ipa-device-events.exe").Contains(name))) throw new IOException("Комплект содержит неожиданные программы.");
-            if (names.Contains("ipa-device-events.exe")) DeviceToolManifest.Read(Path.Combine(root, "device-tools.json"));
+            if (names.Contains("ipa-device-events.exe") && DeviceToolManifest.Read(Path.Combine(root, "device-tools.json")).EventProtocol != 1)
+                throw new IOException("Манифест не подтверждает протокол событий iPhone.");
         }
 
         readonly SettingsStore store;
@@ -294,7 +295,12 @@ namespace IpaDesktop
         {
             var current = Settings.DeviceCurrent ?? Settings.Current;
             var version = Settings.DeviceVersion ?? (Settings.Source == null ? Settings.Version : null);
-            return Settings.DeviceSource == DeviceRepository && !String.IsNullOrEmpty(current) && release.tag_name == version && HasDeviceTools(new ToolLocator(store).VersionRoot(current));
+            if (Settings.DeviceSource != DeviceRepository || String.IsNullOrEmpty(current) || release.tag_name != version) return false;
+            var root = new ToolLocator(store).VersionRoot(current);
+            if (!HasDeviceTools(root)) return false;
+            if (!SelectDeviceAsset(release).name.EndsWith("-Events.zip", StringComparison.Ordinal)) return true;
+            var manifest = Path.Combine(root, "device-tools.json");
+            return File.Exists(Path.Combine(root,"windows_amd64","ipa-device-events.exe")) && File.Exists(manifest) && DeviceToolManifest.Read(manifest).EventProtocol == 1;
         }
         /// <summary>Проверяет запуск обязательных утилит до активации установленного комплекта.</summary>
         async Task ValidateDeviceTools(string root, CancellationToken ct)

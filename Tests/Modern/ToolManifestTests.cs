@@ -28,4 +28,21 @@ public sealed class ToolManifestTests
         state.Current = "previous";
         Assert.Contains("нет манифеста", DeviceToolManifest.InstalledDescription(folder.Path, state));
     }
+    [Fact]
+    public void SameVersionLegacyBundleStillNeedsTheEventsVariant()
+    {
+        using var folder = new TempFolder(); var store = new SettingsStore(folder.Path);
+        store.Settings.DeviceCurrent = "fixture"; store.Settings.DeviceVersion = "device-tools-v1.0.8"; store.Settings.DeviceSource = EngineUpdater.DeviceRepository;
+        var root = Path.Combine(folder.Path, "Versions", "fixture"); var bins = Path.Combine(root, "windows_amd64"); Directory.CreateDirectory(bins);
+        foreach (var name in new[] { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" }) File.WriteAllText(Path.Combine(bins, name), "fixture");
+        var nameEvents = "IPA-DeviceTools-1.0.8-Windows-x64-Events.zip";
+        var release = new Release { tag_name = "device-tools-v1.0.8", assets = new[] { new Asset { name = nameEvents, size = 10, digest = "sha256:" + new string('0', 64), browser_download_url = "https://github.com/iamdarkls/IPA-Desktop/releases/download/device-tools-v1.0.8/" + nameEvents } } };
+        var updater = new EngineUpdater(store, new RecordingProcessRunner());
+        Assert.False(updater.DeviceToolsCurrent(release));
+        File.WriteAllText(Path.Combine(bins, "ipa-device-events.exe"), "fixture");
+        File.WriteAllText(Path.Combine(root, "device-tools.json"), "{\"schema\":1,\"version\":\"1.0.8\",\"eventProtocol\":0,\"components\":{}}");
+        Assert.False(updater.DeviceToolsCurrent(release));
+        File.WriteAllText(Path.Combine(root, "device-tools.json"), "{\"schema\":1,\"version\":\"1.0.8\",\"eventProtocol\":1,\"components\":{}}");
+        Assert.True(updater.DeviceToolsCurrent(release));
+    }
 }
