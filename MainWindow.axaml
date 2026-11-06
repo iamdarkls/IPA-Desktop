@@ -163,7 +163,7 @@
           </Grid.RowDefinitions>
           <StackPanel>
             <Border Classes="card" Padding="16,12" Margin="0,0,0,12">
-              <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="260,*,Auto" ColumnSpacing="12" RowSpacing="8">
+              <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="260,*,Auto" ColumnSpacing="12" RowSpacing="8">
                 <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="10">
                   <ui:AppIcon Kind="Phone" Width="20" Height="20" Foreground="{DynamicResource AccentTextBrush}" />
                   <TextBlock Text="{CompiledBinding Device.Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -186,8 +186,8 @@
                   </Button>
                 </StackPanel>
                 <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
-                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="2" Grid.ColumnSpan="3" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding Files.DeviceDetectionStatusTip}" />
-                <TextBlock x:Name="PhoneSummary" Grid.Row="3" Grid.ColumnSpan="3" IsVisible="{CompiledBinding Device.HasSummary}" Text="{CompiledBinding Device.Summary}" ToolTip.Tip="{CompiledBinding Device.ServiceDetail}" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="2" Grid.ColumnSpan="3" IsVisible="{CompiledBinding Device.ShowDetail}" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding Files.DeviceDetectionStatusTip}" />
+                <TextBlock x:Name="PhoneSummary" Grid.Row="2" Grid.ColumnSpan="3" IsVisible="{CompiledBinding Device.HasSummary}" Text="{CompiledBinding Device.Summary}" ToolTip.Tip="{CompiledBinding Device.SummaryTip}" TextWrapping="Wrap" FontSize="12" />
                 <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                   <Button x:Name="DeviceApps" Content="Приложения на iPhone" ui:ActionIcon.Kind="Layers" Margin="0" IsEnabled="{CompiledBinding Library.DeviceAppsEnabled}" Command="{CompiledBinding Library.DeviceAppsCommand}" />
                   <Button x:Name="CheckConnection" ui:ActionIcon.Kind="Link" Content="{CompiledBinding Device.ActionText}" Command="{CompiledBinding Device.CheckCommand}" Margin="0" ToolTip.Tip="Проверить доверие и восстановить сопряжение с выбранным iPhone" />

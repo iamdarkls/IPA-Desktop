@@ -13,10 +13,12 @@ public sealed class DeviceViewModel : ObservableObject
     public string Summary => snapshot?.Summary ?? "";
     public string ServiceDetail => snapshot?.InstallationService ?? "";
     public bool HasSummary => snapshot != null;
+    public bool ShowDetail => snapshot == null;
+    public string SummaryTip => detail + Environment.NewLine + (snapshot?.InstallationService ?? "");
     public void ShowSnapshot(string key, DeviceSnapshot value)
     {
         if (key != selectedKey) return;
-        snapshot = value; Changed(nameof(Summary)); Changed(nameof(ServiceDetail)); Changed(nameof(HasSummary));
+        snapshot = value; Changed(nameof(Summary)); Changed(nameof(ServiceDetail)); Changed(nameof(HasSummary)); Changed(nameof(ShowDetail)); Changed(nameof(SummaryTip));
     }
     string supportMessage = "Компоненты Apple: проверка при запуске", supportDetails;
     public string SupportMessage => supportMessage;
@@ -56,6 +58,7 @@ public sealed class DeviceViewModel : ObservableObject
     {
         if (value is PhoneStatus.Disconnected or PhoneStatus.Lost or PhoneStatus.WaitingForTrust) ShowSnapshot(selectedKey, null);
         status = value; detail = message;
+        Changed(nameof(SummaryTip));
         Changed(nameof(Status)); Changed(nameof(Title)); Changed(nameof(Detail)); Changed(nameof(ActionText)); CheckCommand.Refresh();
     }
     public void SetBusy(bool value) { busy = value; CheckCommand.Refresh(); }
