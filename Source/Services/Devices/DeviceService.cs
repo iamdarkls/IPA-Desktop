@@ -7,9 +7,10 @@ using System.Threading.Tasks;
 namespace IpaDesktop
 {
     /// <summary>Фасад инструментов iPhone. Обнаружение, команды и установка разделены и доступны для независимых проверок.</summary>
-    public sealed class DeviceService : IDeviceService
+    public sealed class DeviceService : IDeviceService, IDeviceEvents, IDeviceDiagnostics
     {
         readonly DeviceReadiness readiness;
+        readonly DeviceEventMonitor events;
         readonly DeviceCommandClient client; readonly DeviceDiscovery discovery; readonly DeviceInstallation installation;
         Action<string> log;
         public Action<string> Log
@@ -19,6 +20,7 @@ namespace IpaDesktop
         }
         public DeviceService(IProcessRunner runner, ToolLocator locator)
         {
+            events = new DeviceEventMonitor(locator);
             client = new DeviceCommandClient(runner, locator); discovery = new DeviceDiscovery(client); readiness = new DeviceReadiness(client); installation = new DeviceInstallation(client, readiness); Log = delegate { };
         }
         public Task<List<DeviceRow>> FindAsync(CancellationToken ct) { return discovery.FindAsync(ct); }
@@ -28,6 +30,14 @@ namespace IpaDesktop
         public Task<Dictionary<string,string>> ValidateReadyAsync(DeviceRow device, CancellationToken ct) => readiness.ValidateAsync(device,ct);
         public Task<Dictionary<string,string>> EnsureReadyAsync(DeviceRow device, Action<DeviceConnectionProgress> progress, CancellationToken ct) => readiness.EnsureAsync(device,progress,ct);
         public Task<List<LibraryApp>> ApplicationsAsync(DeviceRow device, CancellationToken ct) => client.ApplicationsAsync(device,ct);
+        public Task WatchAsync(Action changed, Action<bool> status, CancellationToken ct) => events.WatchAsync(changed, status, ct);
+        public async Task<DeviceSnapshot> InspectAsync(DeviceRow device, bool checkInstallationService, CancellationToken ct)
+        {
+            var values = await readiness.ValidateAsync(device, ct);
+            var free = await client.FreeSpaceAsync(device, ct);
+            if (checkInstallationService) await client.CheckInstallationServiceAsync(device, ct);
+            return DeviceSnapshot.From(values, free, checkInstallationService ? "Служба установки отвечает" : "Доверие подтверждено · службу установки проверим перед отправкой IPA");
+        }
         public Task InstallAsync(DeviceRow device, LocalRow file, CancellationToken ct) { return installation.InstallAsync(device, file, ct); }
         public Task InstallAsync(DeviceRow device, LocalRow file, Action<DeviceConnectionProgress> progress, CancellationToken ct) => installation.InstallAsync(device,file,ct,progress);
         public static string[] Arguments(DeviceRow device, params string[] args) { return DeviceCommandClient.Arguments(device, args); }

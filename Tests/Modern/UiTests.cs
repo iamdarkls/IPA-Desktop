@@ -149,6 +149,12 @@ public sealed class UiTests
    Assert.Contains(download.GetVisualDescendants().OfType<AppIcon>(),x=>x.Kind==IconKind.Download);
    var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
    window.Width=940;window.Height=720;tabs.SelectedIndex=1;await Task.Delay(50);
+   desktop.Model.Device.Select("fixture",false,true);
+   desktop.Model.Device.ShowSnapshot("fixture",new DeviceSnapshot("iPhone16,2","18.0",50UL*1073741824,"Служба установки отвечает"));
+   await Task.Delay(30);
+   var phoneSummary=Find<TextBlock>(window,"PhoneSummary");
+   Assert.Contains("iPhone16,2",phoneSummary.Text);Assert.True(phoneSummary.IsEffectivelyVisible);
+   Assert.True(phoneSummary.TranslatePoint(default,window).Value.X+phoneSummary.Bounds.Width<=window.ClientSize.Width,"Phone card clipped");
    Assert.True(Find<DataGrid>(window,"Files").Bounds.Height>=80,"Files table collapsed: " + Find<DataGrid>(window,"Files").Bounds.Height);
    Assert.NotNull(Find<TextBlock>(window,"DeviceDetectionStatus"));
    foreach(var tab in tabs.Items.Cast<TabItem>())

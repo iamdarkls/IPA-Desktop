@@ -25,6 +25,16 @@ namespace IpaDesktop
                 string ios; info.TryGetValue("ProductVersion", out ios);
                 string reason = AppCompatibility.BlockReason(source, ios);
                 if (reason != null) throw new IOException(reason);
+                await client.CheckInstallationServiceAsync(device, ct);
+                var free = await client.FreeSpaceAsync(device, ct);
+                using (var archive = System.IO.Compression.ZipFile.OpenRead(file.Path))
+                {
+                    long required = 0;
+                    foreach (var entry in archive.Entries.Where(entry => entry.FullName.StartsWith("Payload/", StringComparison.Ordinal))) required = checked(required + entry.Length);
+                    if (free.HasValue && (ulong)required > free.Value)
+                        throw new IOException("На iPhone недостаточно места: свободно " + DeviceSnapshot.FormatBytes(free.Value) + ", распакованные файлы IPA занимают " + DeviceSnapshot.FormatBytes((ulong)required) + ". Освободите место и повторите установку.");
+                    if (!free.HasValue) Log("Свободное место iPhone не удалось прочитать; окончательную проверку выполнит установщик iOS.");
+                }
                 using (var package = await InstallationPackage.CreateAsync(file.Path, ct))
                 {
                     var details = await Task.Run(() => IpaMetadata.ReadDetails(Path.Combine(package.WorkingDirectory, package.RelativePath)), ct);

@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse,hashlib,json,os,shutil,subprocess,sys,tempfile,zipfile
 ROOT=Path(__file__).resolve().parents[2];BASE=ROOT/'artifacts/unix';SCHEMA=1
 INPUTS=json.loads((ROOT/'Tools/Portable/native-inputs.json').read_text())
-COMMANDS=['ipatool','ipa-pty','idevice_id','ideviceinfo','ideviceinstaller','idevicepair']
+COMMANDS=['ipatool','ipa-pty','idevice_id','ideviceinfo','ideviceinstaller','idevicepair','ipa-device-events']
 
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def inputs():

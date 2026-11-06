@@ -9,6 +9,15 @@ public sealed class DeviceViewModel : ObservableObject
     PhoneStatus status;
     string selectedKey, detail = "Подключите и разблокируйте iPhone — он появится автоматически.";
     bool busy;
+    DeviceSnapshot snapshot;
+    public string Summary => snapshot?.Summary ?? "";
+    public string ServiceDetail => snapshot?.InstallationService ?? "";
+    public bool HasSummary => snapshot != null;
+    public void ShowSnapshot(string key, DeviceSnapshot value)
+    {
+        if (key != selectedKey) return;
+        snapshot = value; Changed(nameof(Summary)); Changed(nameof(ServiceDetail)); Changed(nameof(HasSummary));
+    }
     string supportMessage = "Компоненты Apple: проверка при запуске", supportDetails;
     public string SupportMessage => supportMessage;
     public string SupportDetails => supportDetails;
@@ -37,6 +46,7 @@ public sealed class DeviceViewModel : ObservableObject
     {
         if (selectedKey == key) return;
         selectedKey = key;
+        ShowSnapshot(key, null);
         SetState(key == null ? (lost ? PhoneStatus.Lost : PhoneStatus.Disconnected) : ready ? PhoneStatus.Ready : lost ? PhoneStatus.Lost : PhoneStatus.Detected,
             key == null ? "Подключите и разблокируйте iPhone. Очередь автоматически не запускается." :
             ready ? "Доверие и связь с выбранным iPhone проверены." : "Перед установкой проверим доверие. Можно проверить связь сейчас.");
@@ -44,6 +54,7 @@ public sealed class DeviceViewModel : ObservableObject
     }
     public void SetState(PhoneStatus value, string message)
     {
+        if (value is PhoneStatus.Disconnected or PhoneStatus.Lost or PhoneStatus.WaitingForTrust) ShowSnapshot(selectedKey, null);
         status = value; detail = message;
         Changed(nameof(Status)); Changed(nameof(Title)); Changed(nameof(Detail)); Changed(nameof(ActionText)); CheckCommand.Refresh();
     }

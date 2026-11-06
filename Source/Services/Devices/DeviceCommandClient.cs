@@ -24,6 +24,21 @@ namespace IpaDesktop
         }
         public Task<Result> ListAsync(bool network, CancellationToken ct) { return Probe(locator.Find("idevice_id*.exe"), new[] { network ? "-n" : "-l" }, ct); }
         public Task<Result> NameAsync(DeviceRow device, CancellationToken ct, int seconds = 5) { return Probe(locator.Find("ideviceinfo*.exe"), Arguments(device, "-u", device.ID, "-k", "DeviceName"), ct, seconds); }
+        public async Task<ulong?> FreeSpaceAsync(DeviceRow device, CancellationToken ct)
+        {
+            try
+            {
+                var result = await Probe(locator.Find("ideviceinfo*.exe"), Arguments(device, "-u", device.ID, "-q", "com.apple.disk_usage", "-k", "TotalDataAvailable"), ct, 8);
+                return DeviceSnapshot.TryFreeBytes(result.Output, out var bytes) ? bytes : null;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (DeviceConnectionException error) when (!ct.IsCancellationRequested && error.Failure.Code == FailureCode.Transport) { return null; }
+        }
+        public async Task CheckInstallationServiceAsync(DeviceRow device, CancellationToken ct)
+        {
+            var result = await Probe(locator.Find("ideviceinstaller*.exe"), Arguments(device, "--udid", device.ID, "list", "--user", "--xml", "--attribute", "CFBundleIdentifier"), ct, 20);
+            DeviceApplications.Parse(result.Output);
+        }
         public async Task InstallAsync(DeviceRow device, InstallationPackage package, CancellationToken ct)
         {
             var exe=locator.Find("ideviceinstaller*.exe");

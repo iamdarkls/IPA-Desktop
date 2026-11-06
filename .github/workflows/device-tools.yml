@@ -87,7 +87,7 @@ jobs:
             if((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $entry.Value){throw 'Device package checksum mismatch'}
           }
           $folder=Join-Path $PWD 'device-build/package/windows_amd64'
-          foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')){
+          foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair','ipa-device-events')){
             $version=& "$folder/$name.exe" --version 2>&1
             if($LASTEXITCODE -ne 0 -or !$version){throw "$name failed outside MSYS2"}
             $help=& "$folder/$name.exe" --help 2>&1
@@ -96,7 +96,7 @@ jobs:
             if($name -eq 'ideviceinfo' -and ((($help -join "`n") -notmatch '--udid') -or (($help -join "`n") -notmatch '--key'))){throw 'Device info CLI contract changed'}
             if($name -eq 'ideviceinstaller' -and (($help -join "`n") -notmatch 'install PATH')){throw 'Installer CLI contract changed'}
             if($name -eq 'ideviceinstaller' -and (($help -join "`n") -notmatch '--placeholders')){throw 'Installer placeholder browsing missing'}
-            if($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network'){throw "$name network transport missing"}
+            if($name -notin @('idevicepair','ipa-device-events') -and ($help -join "`n") -notmatch '--network'){throw "$name network transport missing"}
             if($name -eq 'idevicepair'){
               foreach($command in @('validate','pair','unpair')){if(($help -join "`n") -notmatch ("\b"+$command+"\b")){throw "Pairing command missing: $command"}}
             }
@@ -133,7 +133,7 @@ jobs:
             $target=git rev-parse HEAD
             gh api --method PATCH "repos/$env:GH_REPO/releases/$($release.id)" -f target_commitish=$target | Out-Null
             if($LASTEXITCODE -ne 0){throw 'Could not update tested draft target'}
-            foreach($name in @("IPA-DeviceTools-$version-Windows-x64.zip","IPA-DeviceTools-$version-Sources.zip")){
+            foreach($name in @("IPA-DeviceTools-$version-Windows-x64.zip","IPA-DeviceTools-$version-Windows-x64-Events.zip","IPA-DeviceTools-$version-Sources.zip")){
               foreach($asset in @($release.assets|Where-Object name -eq $name)){
                 gh api --method DELETE "repos/$env:GH_REPO/releases/assets/$($asset.id)"
                 if($LASTEXITCODE -ne 0){throw 'Could not replace incomplete draft asset'}
@@ -143,7 +143,7 @@ jobs:
             }
           }else{
             $target=git rev-parse HEAD
-            gh release create $tag "IPA-DeviceTools-$version-Windows-x64.zip" "IPA-DeviceTools-$version-Sources.zip" --draft --target $target --title "IPA Desktop Device Tools $version" --notes-file Tools/DeviceTools/changelog.md --latest=false
+            gh release create $tag "IPA-DeviceTools-$version-Windows-x64.zip" "IPA-DeviceTools-$version-Windows-x64-Events.zip" "IPA-DeviceTools-$version-Sources.zip" --draft --target $target --title "IPA Desktop Device Tools $version" --notes-file Tools/DeviceTools/changelog.md --latest=false
             if($LASTEXITCODE -ne 0){throw 'Failed to create tool release draft'}
             # A newly created draft can take a few seconds to appear in the collection.
             $match=@()
@@ -160,7 +160,7 @@ jobs:
           }
           $release=gh api "repos/$env:GH_REPO/releases/$($release.id)"|ConvertFrom-Json
           if($LASTEXITCODE -ne 0 -or !$release.draft){throw 'Could not validate uploaded draft'}
-          foreach($name in @("IPA-DeviceTools-$version-Windows-x64.zip","IPA-DeviceTools-$version-Sources.zip")){
+          foreach($name in @("IPA-DeviceTools-$version-Windows-x64.zip","IPA-DeviceTools-$version-Windows-x64-Events.zip","IPA-DeviceTools-$version-Sources.zip")){
             $assets=@($release.assets|Where-Object name -eq $name)
             if($assets.Count -ne 1 -or $assets[0].size -le 0 -or $assets[0].digest -notmatch '^sha256:[0-9a-f]{64}$'){throw 'Incomplete assets; release remains a draft'}
           }

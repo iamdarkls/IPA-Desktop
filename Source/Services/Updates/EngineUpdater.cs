@@ -21,6 +21,7 @@ namespace IpaDesktop
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";
         public const string WindowsAssetName = "IPA-AuthTools-1.2.1.1-Windows-x64.zip";
+        public string DescribeInstalled() => DeviceToolManifest.InstalledDescription(Root, Settings);
         static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
         /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
         public static Asset SelectAsset(Release release)
@@ -44,6 +45,8 @@ namespace IpaDesktop
         {
             if (release.tag_name == null || !System.Text.RegularExpressions.Regex.IsMatch(release.tag_name, @"^device-tools-v\d+\.\d+\.\d+$")) throw new IOException("Некорректный релиз нашего комплекта для iPhone.");
             var expected = "IPA-DeviceTools-" + release.tag_name.Substring(DeviceTagPrefix.Length) + "-Windows-x64.zip";
+            var events = expected.Replace(".zip", "-Events.zip");
+            if ((release.assets ?? Array.Empty<Asset>()).Any(asset => asset.name == events)) expected = events;
             var matches = (release.assets ?? new Asset[0]).Where(a => a.name == expected).ToArray();
             if (matches.Length != 1) throw new IOException("Не найден однозначный Windows x64 архив нашего комплекта.");
             ValidateAsset(matches[0], DeviceRepository);
@@ -62,7 +65,9 @@ namespace IpaDesktop
         {
             if (!HasDeviceTools(root) || !Directory.Exists(Path.Combine(root, "LICENSES")) || !File.Exists(Path.Combine(root, "sources.json"))) throw new IOException("Неполный комплект: нужны утилиты, DLL, лицензии и исходные ревизии.");
             var names = Directory.GetFiles(root, "*.exe", SearchOption.AllDirectories).Select(Path.GetFileName).ToArray();
-            if (names.Length != 4 || DeviceFiles.Take(4).Any(name => !names.Contains(name))) throw new IOException("Комплект содержит неожиданные программы.");
+            if (names.Length < 4 || names.Length > 5 || DeviceFiles.Take(4).Any(name => !names.Contains(name)) ||
+                names.Any(name => !DeviceFiles.Take(4).Append("ipa-device-events.exe").Contains(name))) throw new IOException("Комплект содержит неожиданные программы.");
+            if (names.Contains("ipa-device-events.exe")) DeviceToolManifest.Read(Path.Combine(root, "device-tools.json"));
         }
 
         readonly SettingsStore store;
@@ -295,7 +300,7 @@ namespace IpaDesktop
         async Task ValidateDeviceTools(string root, CancellationToken ct)
         {
             if (!HasDeviceTools(root)) throw new IOException("Неполный комплект инструментов для iPhone.");
-            foreach (var name in DeviceFiles.Take(4))
+            foreach (var name in DeviceFiles.Take(4).Concat(File.Exists(Path.Combine(root,"windows_amd64","ipa-device-events.exe")) ? new[]{"ipa-device-events.exe"} : Array.Empty<string>()))
             {
                 var file = Directory.GetFiles(root, name, SearchOption.AllDirectories).Single();
                 using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -304,6 +309,7 @@ namespace IpaDesktop
                     var result = await runner.Run(file, new[] { "--version" }, timeout.Token, false, false);
                     ToolResponse.Ensure(result);
                     if (String.IsNullOrWhiteSpace(result.Output)) throw new IOException("Инструмент не сообщил версию: " + name);
+                    if (name == "ipa-device-events.exe" && result.Output.Trim() != "IPA-DESKTOP-DEVICE-EVENTS/1") throw new IOException("Неизвестный протокол событий iPhone.");
                 }
             }
         }
@@ -325,6 +331,9 @@ namespace IpaDesktop
                     CheckDevicePackage(stage);
                 }, ct);
                 await ValidateDeviceTools(stage, ct);
+                var manifestPath = Path.Combine(stage, "device-tools.json");
+                if (File.Exists(manifestPath) && DeviceTagPrefix + DeviceToolManifest.Read(manifestPath).Version != release.tag_name)
+                    throw new IOException("Версия манифеста не совпадает с выбранным релизом.");
                 ct.ThrowIfCancellationRequested();
                 var old = Settings;
                 Settings = old.Copy();

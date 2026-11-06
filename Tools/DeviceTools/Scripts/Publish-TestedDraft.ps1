@@ -13,6 +13,7 @@ if(!$release.draft){Write-Host 'Native release is already public';return}
 $target=$release.target_commitish
 if($target -notmatch '^[0-9a-f]{40}$'){throw 'Draft target is not an exact commit'}
 $names=@("IPA-DeviceTools-$version-Windows-x64.zip","IPA-DeviceTools-$version-Sources.zip")
+if([version]$version -ge [version]"1.0.8"){$names+="IPA-DeviceTools-$version-Windows-x64-Events.zip"}
 foreach($name in $names){
  $asset=@($release.assets|Where-Object name -eq $name)
  if($asset.Count -ne 1 -or $asset[0].size -le 0 -or $asset[0].digest -notmatch '^sha256:[0-9a-f]{64}$'){throw 'Draft is incomplete; refuse recovery'}
@@ -57,7 +58,9 @@ foreach($name in $names){
  if((Get-Item $path).Length -ne $asset.size -or ('sha256:'+(Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()) -ne $asset.digest){throw 'Draft asset size or SHA-256 mismatch'}
 }
 $package=Join-Path $cache 'package'
-Expand-Archive (Join-Path $cache "IPA-DeviceTools-$version-Windows-x64.zip") $package
+$binaryArchive="IPA-DeviceTools-$version-Windows-x64.zip"
+if([version]$version -ge [version]"1.0.8"){$binaryArchive="IPA-DeviceTools-$version-Windows-x64-Events.zip"}
+Expand-Archive (Join-Path $cache $binaryArchive) $package
 $manifest=Get-Content (Join-Path $package 'sha256.json') -Raw | ConvertFrom-Json
 $prefix=[IO.Path]::GetFullPath($package)+[IO.Path]::DirectorySeparatorChar
 foreach($entry in $manifest.PSObject.Properties){
@@ -67,15 +70,17 @@ foreach($entry in $manifest.PSObject.Properties){
 $pins=Get-Content Tools/DeviceTools/pins.json -Raw | ConvertFrom-Json
 $builtPins=Get-Content (Join-Path $package 'sources.json') -Raw | ConvertFrom-Json
 foreach($entry in $pins.PSObject.Properties){if($builtPins.PSObject.Properties[$entry.Name].Value -ne $entry.Value){throw 'Recovered package source revision mismatch'}}
+$tools=@('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')
+if([version]$version -ge [version]"1.0.8"){$tools+='ipa-device-events'}
 $savedPath=$env:PATH
 try{
  $env:PATH="$env:SystemRoot\System32;$env:SystemRoot"
- foreach($name in @('idevice_id','ideviceinfo','ideviceinstaller','idevicepair')){
+ foreach($name in $tools){
   $exe=Join-Path $package "windows_amd64/$name.exe"
   $reported=& $exe --version 2>&1
   if($LASTEXITCODE -ne 0 -or !$reported){throw 'Recovered native tool does not run independently'}
   $help=& $exe --help 2>&1
-  if($LASTEXITCODE -ne 0 -or ($name -ne 'idevicepair' -and ($help -join "`n") -notmatch '--network')){throw 'Recovered native network support missing'}
+  if($LASTEXITCODE -ne 0 -or ($name -notin @('idevicepair','ipa-device-events') -and ($help -join "`n") -notmatch '--network')){throw 'Recovered native network support missing'}
   if($name -eq 'ideviceinstaller' -and ($help -join "`n") -notmatch '--placeholders'){throw 'Recovered placeholder browsing missing'}
   Write-Host "$name : $reported"
  }
@@ -84,4 +89,4 @@ try{
 gh api --method PATCH "repos/$repo/releases/$($release.id)" -F draft=false -f make_latest=false | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Could not publish validated draft by ID'}
 "published=true" >> $env:GITHUB_OUTPUT
-Write-Host "PASS: recovered tested native draft by release ID; verified both asset hashes, native inputs, manifest and standalone network CLI. Published $tag."
+Write-Host "PASS: recovered tested native draft by release ID; verified all asset hashes, native inputs, manifest and standalone network CLI. Published $tag."

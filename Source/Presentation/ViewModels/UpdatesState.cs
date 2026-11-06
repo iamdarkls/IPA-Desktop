@@ -5,6 +5,11 @@ namespace IpaDesktop;
 
 public sealed partial class UpdatesViewModel
 {
+    string deviceComponents = "", deviceUpdateStatus = "Обновления ещё не проверялись.", deviceReleaseNotes = "";
+    public string DeviceComponents { get => deviceComponents; set => Set(ref deviceComponents, value); }
+    public string DeviceUpdateStatus { get => deviceUpdateStatus; set => Set(ref deviceUpdateStatus, value); }
+    public string DeviceReleaseNotes { get => deviceReleaseNotes; set => Set(ref deviceReleaseNotes, value); }
+    public void RefreshInstalledTools() => DeviceComponents = toolUpdates.DescribeInstalled();
     bool soundsEnabled = false;
     public bool SoundsEnabled { get => soundsEnabled; set { if (Set(ref soundsEnabled, value)) RefreshCommands(); } }
     bool checkGuiUpdates = false;

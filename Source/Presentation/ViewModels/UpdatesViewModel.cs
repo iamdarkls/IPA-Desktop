@@ -114,15 +114,32 @@ namespace IpaDesktop
         }
         public async Task UpdateDevices(CancellationToken ct, bool startup)
         {
-            if (!RuntimePlatform.Windows) { Log("На этой системе инструменты iPhone обновляются вместе с IPA Desktop."); await CheckGui(ct); return; }
-            var release = await toolUpdates.CheckDeviceTools(ct);
-            if (toolUpdates.DeviceToolsCurrent(release))
+            DeviceUpdateStatus = "Проверяем доступную версию…";
+            try
             {
-                Log("Наш комплект для iPhone актуален: " + release.tag_name);
-                return;
+                if (!RuntimePlatform.Windows)
+                {
+                    await CheckGui(ct);
+                    DeviceUpdateStatus = guiRelease == null ? "Обновлений IPA Desktop нет. Встроенный комплект проверен при сборке приложения." : "Новый встроенный комплект доступен вместе с " + guiRelease.tag_name + ". Обновите IPA Desktop.";
+                    DeviceReleaseNotes = guiRelease?.body ?? "Инструменты на macOS и Linux обновляются вместе с программой.";
+                    return;
+                }
+                var release = await toolUpdates.CheckDeviceTools(ct);
+                DeviceReleaseNotes = release.body ?? "Описание изменений отсутствует.";
+                DeviceUpdateStatus = "Доступен комплект " + release.tag_name;
+                if (toolUpdates.DeviceToolsCurrent(release))
+                {
+                    DeviceUpdateStatus = "Установлен актуальный комплект " + release.tag_name;
+                    Log("Наш комплект для iPhone актуален: " + release.tag_name);
+                    return;
+                }
+                if (!startup && !await desktop.Interaction.Confirm("Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.\n\n" + (release.body ?? "Описание изменений отсутствует."))) return;
+                await toolUpdates.InstallDeviceTools(release, ct);
+                RefreshInstalledTools();
+                DeviceUpdateStatus = "Комплект " + release.tag_name + " установлен: контрольная сумма и запуск утилит проверены.";
             }
-            if (!startup && !await desktop.Interaction.Confirm("Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.")) return;
-            await toolUpdates.InstallDeviceTools(release, ct);
+            catch (OperationCanceledException) { DeviceUpdateStatus = "Проверка или обновление отменены. Активная версия указана выше."; throw; }
+            catch (Exception) { DeviceUpdateStatus = "Проверка или обновление не завершены. Активная версия указана выше; подробности в журнале."; throw; }
         }
         public async Task CheckGui(CancellationToken ct)
         {

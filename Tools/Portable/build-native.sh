@@ -39,21 +39,23 @@ if [[ "$rid" == osx-* ]];then options+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DCMA
 cmake -S "$source" -B artifacts/unix/auth-build -G 'Unix Makefiles' "${options[@]}"
 cmake --build artifacts/unix/auth-build --parallel 4
 cp artifacts/unix/auth-build/ipatool "$stage/ipatool"
-for name in idevice_id ideviceinfo ideviceinstaller idevicepair;do cp "$prefix/bin/$name" "$stage/$name";done
+cc -O2 -Wall -Wextra Tools/DeviceTools/ipa-device-events.c -o "$prefix/bin/ipa-device-events" $(pkg-config --cflags --libs libimobiledevice-1.0)
+for name in idevice_id ideviceinfo ideviceinstaller idevicepair ipa-device-events;do cp "$prefix/bin/$name" "$stage/$name";done
 if [[ "$rid" == linux-* ]];then
  cc -O2 -Wall -Wextra Tools/Portable/ipa-pty.c -o "$stage/ipa-pty" -lutil
  python3 Tools/Portable/bundle-libraries.py "$stage"
 else
  cc -O2 -Wall -Wextra Tools/Portable/ipa-pty.c -o "$stage/ipa-pty"
- dylibbundler -of -b -x "$stage/idevice_id" -x "$stage/ideviceinfo" -x "$stage/ideviceinstaller" -x "$stage/idevicepair" -d "$stage" -p @executable_path/
+ dylibbundler -of -b -x "$stage/idevice_id" -x "$stage/ideviceinfo" -x "$stage/ideviceinstaller" -x "$stage/idevicepair" -x "$stage/ipa-device-events" -d "$stage" -p @executable_path/
  for file in "$stage"/*;do codesign --force --sign - "$file";done
 fi
-for name in idevice_id ideviceinfo ideviceinstaller idevicepair;do "$stage/$name" --version;done
+for name in idevice_id ideviceinfo ideviceinstaller idevicepair ipa-device-events;do "$stage/$name" --version;done
 "$stage/ideviceinstaller" --help | grep -- --placeholders
 test "$("$stage/ipatool" account-safety-info)" = IPA-DESKTOP-AUTH-SAFETY/1
 # Keep exact patched source, build recipes and licenses with the release.
 cp "$source/LICENSE" "$stage/ipatool-LICENSE.txt"
 cp Tools/DeviceTools/pins.json "$stage/sources.json"
+python3 -c 'import sys;from pathlib import Path;sys.path.insert(0,"Tools/DeviceTools");from device_tools.manifest import write_manifest;write_manifest(Path("Tools/DeviceTools"),Path(sys.argv[1])/"device-tools.json",sys.argv[2])' "$stage" "$rid"
 for project in libplist libimobiledevice-glue libusbmuxd libtatsu libimobiledevice ideviceinstaller;do
  for license in COPYING COPYING.LESSER LICENSE;do
   file="$root/artifacts/unix/source/$project/$license"

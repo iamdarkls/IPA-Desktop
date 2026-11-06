@@ -1,6 +1,6 @@
 # IPA Desktop Device Tools
 
-Комплект **Windows 10/11 x64** для обнаружения iPhone, получения сведений и установки IPA. Содержит `idevice_id`, `ideviceinfo`, `ideviceinstaller`, `idevicepair` и необходимые DLL. Это наша сборка свободных проектов, сохраняющая их протоколы и лицензии.
+Комплект **Windows 10/11 x64** для обнаружения iPhone, получения сведений и установки IPA. Содержит `idevice_id`, `ideviceinfo`, `ideviceinstaller`, `idevicepair`, наш `ipa-device-events` и необходимые DLL. Это наша сборка свободных проектов, сохраняющая их протоколы и лицензии.
 
 Пользователю IPA Desktop достаточно установить комплект через **«Настройки» → «Проверить инструменты»**. Для USB нужны компоненты Apple Mobile Device, разблокировка iPhone и доверие компьютеру. Wi-Fi требует предварительного включения сетевой синхронизации через Apple Devices/iTunes.
 
@@ -52,3 +52,7 @@ GitHub Actions ежедневно в **08:17 МСК** проверяет ста�
 ### Local browse patch (1.0.5)
 
 `Scripts/patch_installer.py` verifies the pinned source hash and adds `list --placeholders`, setting the boolean `ShowPlaceholders` option. This only extends browsing; install/pair behavior is unchanged. The source archive contains the patched source. A placeholder can represent an offloaded or incomplete app; the GUI does not treat it as a completed installation.
+
+Манифест device-tools.json создаётся при упаковке из VERSION/stable.json/pins.json. ipa-device-events использует отдельный канал: ready после подписки, changed при изменении, EOF входного канала освобождает подписку. Канал не содержит идентификаторов устройств. Исходник helper и лицензия приложены к исходному архиву.
+
+Обычный архив Windows-x64.zip сохраняет контракт четырёх EXE для старых клиентов. Новый IPA Desktop предпочитает Windows-x64-Events.zip с отдельным helper; отсутствие Events-архива означает резервный опрос.

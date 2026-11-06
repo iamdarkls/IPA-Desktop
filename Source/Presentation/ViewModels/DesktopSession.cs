@@ -91,7 +91,8 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         Updates.SoundsEnabled = settings.Settings.SoundsEnabled;
         Updates.AutoUpdate = settings.Settings.AutoUpdate;
         Updates.AutoUpdateDeviceTools = settings.Settings.AutoUpdateDeviceTools;
-        Updates.DeviceToolsVersion = (settings.Settings.DeviceSource == EngineUpdater.DeviceRepository ? "Наш комплект: " : "Прежний комплект: ") + (settings.Settings.DeviceVersion ?? (settings.Settings.Source == null ? settings.Settings.Version : null) ?? "не установлен");
+        Updates.DeviceToolsVersion = (!RuntimePlatform.Windows ? "Встроенный комплект: " : settings.Settings.DeviceSource == EngineUpdater.DeviceRepository ? "Наш комплект: " : "Прежний комплект: ") + (settings.Settings.DeviceVersion ?? (settings.Settings.Source == null ? settings.Settings.Version : null) ?? "не установлен");
+        Updates.RefreshInstalledTools();
         setting = false;
     }
     /// <summary>Не допускает параллельных операций, управляет отменой и восстанавливает UI в finally.</summary>
@@ -164,7 +165,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         ExportRequested = () => _ = RunAsyncCommand(ExportDiagnostics);
         account = new(this, services.Accounts, services.Protection, services.Login);
         search = new(this, services.Tools, services.Catalog, services.Versions, services.Downloads, services.Protection);
-        files = new(this, services.Settings, services.Devices, services.LocalApps, services.AppleSupport);
+        files = new(this, services.Settings, services.Devices, services.LocalApps, services.AppleSupport, services.Devices as IDeviceEvents, services.Devices as IDeviceDiagnostics);
         updates = new(this, services.Settings, services.ToolUpdates, services.GuiUpdates);
         storage = new(this); appSets = new(this, services.AppSets, services.LocalApps, services.Downloads);
         library = new(this, services.Devices, services.LocalApps, services.Purchases, services.Protection);

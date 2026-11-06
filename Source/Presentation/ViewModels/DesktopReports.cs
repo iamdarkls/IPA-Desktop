@@ -104,7 +104,7 @@ namespace IpaDesktop
             var email = Account.AccountLabel;
             if (email?.Contains("@") == true) privateValues.Add(email);
             foreach (var device in Files.DeviceList.Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
-            var report = DiagnosticReport.Create(JournalText, settings.Settings.Version ?? "not installed", settings.Settings.DeviceVersion ?? "not installed", privateValues);
+            var report = DiagnosticReport.Create(JournalText, settings.Settings.Version ?? "not installed", (settings.Settings.DeviceVersion ?? "not installed") + Environment.NewLine + Updates.DeviceComponents, privateValues);
             if (!await Interaction.ExportText("IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt", report)) return;
             Log("Отчёт диагностики сохранён.");
         }

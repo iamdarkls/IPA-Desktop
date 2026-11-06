@@ -7,9 +7,10 @@ import tempfile
 import zipfile
 
 from .dependencies import DependencyCollector, sha256_file
+from .manifest import write_manifest
 
 
-TOOLS = ('idevice_id.exe', 'ideviceinfo.exe', 'ideviceinstaller.exe', 'idevicepair.exe')
+TOOLS = ('idevice_id.exe', 'ideviceinfo.exe', 'ideviceinstaller.exe', 'idevicepair.exe', 'ipa-device-events.exe')
 LICENSE_NAMES = (
     'COPYING', 'COPYING.LESSER', 'COPYING.GPLv3', 'LICENSE',
     'LICENSE.md', 'LICENSE.txt', 'COPYING.LGPLv2.1',
@@ -64,6 +65,7 @@ class PackageBuilder:
                 (self.build / 'msys2-packages.txt', 'msys2-packages.txt'),
             ):
                 shutil.copy2(source, out / name)
+            write_manifest(self.config, out / 'device-tools.json', 'win-x64')
             (out / 'version.txt').write_text(version + '\n', encoding='utf-8')
             manifest = {
                 p.relative_to(out).as_posix(): sha256_file(p)
@@ -76,8 +78,22 @@ class PackageBuilder:
                 shutil.rmtree(target)
             shutil.move(str(out), target)
         windows_zip = self.root / f'IPA-DeviceTools-{version}-Windows-x64.zip'
+        events_zip = self.root / f'IPA-DeviceTools-{version}-Windows-x64-Events.zip'
         sources_zip = self.root / f'IPA-DeviceTools-{version}-Sources.zip'
-        write_archive(target, windows_zip)
+        write_archive(target, events_zip)
+        # Older IPA Desktop validates an exact four-EXE contract. Keep that
+        # archive name and payload compatible; new clients select Events explicitly.
+        with tempfile.TemporaryDirectory(prefix='legacy-', dir=self.build) as temporary:
+            legacy = Path(temporary) / 'package'
+            shutil.copytree(target, legacy)
+            (legacy / 'windows_amd64/ipa-device-events.exe').unlink()
+            metadata = json.loads((legacy / 'device-tools.json').read_text())
+            metadata['eventProtocol'] = 0
+            (legacy / 'device-tools.json').write_text(json.dumps(metadata, indent=2) + '\n')
+            (legacy / 'sha256.json').unlink()
+            checksums = {p.relative_to(legacy).as_posix(): sha256_file(p) for p in sorted(legacy.rglob('*')) if p.is_file()}
+            (legacy / 'sha256.json').write_text(json.dumps(checksums, indent=2) + '\n')
+            write_archive(legacy, windows_zip)
         write_archive(self.build / 'source-archives', sources_zip)
         return len(files)
 

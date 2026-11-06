@@ -46,6 +46,7 @@ def published(tag,fetch=api):
         if release.get('draft') or release.get('prerelease'):return False
         current=tag.removeprefix('device-tools-v')
         expected={f'IPA-DeviceTools-{current}-Windows-x64.zip',f'IPA-DeviceTools-{current}-Sources.zip'}
+        if version(current)>=(1,0,8):expected.add(f'IPA-DeviceTools-{current}-Windows-x64-Events.zip')
         healthy={a['name'] for a in release.get('assets',[]) if a.get('size',0)>0 and re.fullmatch(r'sha256:[0-9a-fA-F]{64}',a.get('digest') or '')}
         return expected.issubset(healthy)
     except urllib.error.HTTPError as error:

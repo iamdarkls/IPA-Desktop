@@ -94,6 +94,7 @@ public sealed class WifiRunner : IProcessRunner {
    return Task.FromResult(new Result{Code=0,Output=Array.IndexOf(args,"-k")>=0?"Test iPhone":"UniqueDeviceID: "+(WrongIdentity?"00008030-0000111ABC000ABC":"00008030-0000111ABC000DEF")+"\nProductType: iPhone16,2\nProductVersion: "+Ios});
   }
   if(exe.EndsWith(RuntimePlatform.ToolName("ideviceinstaller.exe"))){
+   if(args.Contains("list"))return Task.FromResult(new Result{Code=0,Output="<plist><array/></plist>"});
    Installs++;if(net)NetworkInstalls++;
    int offset=net?1:0;if(args[offset]!="--udid"||args[offset+1]!="00008030-0000111ABC000DEF"||args[offset+2]!="install")throw new Exception("Transport/UDID arguments lost");
    if(!File.Exists(Path.Combine(workingDirectory,args[offset+3])))throw new Exception("Missing staged package");

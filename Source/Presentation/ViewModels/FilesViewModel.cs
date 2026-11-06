@@ -41,7 +41,8 @@ namespace IpaDesktop
         {
             try
             {
-                await deviceService.EnsureReadyAsync(device, ShowConnection, ct); blockedConnections.Remove(ConnectionKey(device));
+                var values = await deviceService.EnsureReadyAsync(device, ShowConnection, ct); blockedConnections.Remove(ConnectionKey(device));
+                desktop.Device.ShowSnapshot(ConnectionKey(device), diagnostics == null ? DeviceSnapshot.From(values) : await diagnostics.InspectAsync(device, true, ct));
                 ShowConnection(new("iPhone готов к установке", "Доверие подтверждено. Устройство: " + device.DisplayLabel, false, true));
             }
             catch (OperationCanceledException) { blockedConnections.Add(ConnectionKey(device)); throw; }
@@ -53,6 +54,12 @@ namespace IpaDesktop
         List<LocalRow> visibleFiles = new List<LocalRow>();
         bool updatingAccounts;
         IDisposable deviceTimer;
+        readonly IDeviceEvents deviceEvents;
+        readonly IDeviceDiagnostics diagnostics;
+        CancellationTokenSource eventCancellation;
+        Task eventTask = Task.CompletedTask;
+        bool eventsReady, refreshPending = true;
+        long lastDiscovery, lastSnapshot;
         CancellationTokenSource deviceScanCancellation;
         Task deviceScan = Task.FromResult(true);
         bool deviceMonitoring, deviceClosed;
@@ -71,7 +78,8 @@ namespace IpaDesktop
         readonly IDeviceService deviceService;
         readonly ILocalApps localApps;
         readonly IAppleSupport support;
-        public FilesViewModel(DesktopViewModel desktop, ISettingsStore settings, IDeviceService devices, ILocalApps localApps, IAppleSupport support) : base(desktop) { this.settings = settings; deviceService = devices; this.localApps = localApps; this.support = support; }
+        public FilesViewModel(DesktopViewModel desktop, ISettingsStore settings, IDeviceService devices, ILocalApps localApps, IAppleSupport support, IDeviceEvents deviceEvents = null, IDeviceDiagnostics diagnostics = null) : base(desktop)
+        { this.settings = settings; deviceService = devices; this.localApps = localApps; this.support = support; this.deviceEvents = deviceEvents; this.diagnostics = diagnostics; }
         internal void Initialize()
         {
             FileAccount.SelectionChanged += delegate
@@ -102,6 +110,7 @@ namespace IpaDesktop
                 if (!busy) desktop.ConnectionNoticeVisible = false;
                 var selected = DeviceList.SelectedItem as DeviceRow;
                 desktop.Device.Select(selected == null ? null : ConnectionKey(selected), selected != null && blockedConnections.Contains(ConnectionKey(selected)), selected != null && verifiedConnections.Contains(ConnectionKey(selected)));
+                lastSnapshot = 0; refreshPending = true;
                 ApplyActions();
             };
             AddInstallCommand = Command(delegate
@@ -131,6 +140,12 @@ namespace IpaDesktop
                 Work("Сведения об iPhone…", async delegate (CancellationToken ct)
                 {
                     var details = await deviceService.DetailsAsync(device, ct);
+                    if (diagnostics != null)
+                    {
+                        var snapshot = await diagnostics.InspectAsync(device, true, ct);
+                        desktop.Device.ShowSnapshot(ConnectionKey(device), snapshot);
+                        details += Environment.NewLine + snapshot.Summary + Environment.NewLine + snapshot.InstallationService;
+                    }
                     ct.ThrowIfCancellationRequested();
                     await desktop.Interaction.ShowText("Об iPhone", details);
                 });
@@ -190,7 +205,34 @@ namespace IpaDesktop
         {
             if (deviceClosed) return;
             deviceMonitoring = true;
-            deviceTimer ??= desktop.Tasks.Own(desktop.Interaction.Repeat(TimeSpan.FromSeconds(3), () => _ = desktop.RunAsyncCommand(RefreshDevicesAsync)));
+            StartEventMonitor();
+            deviceTimer ??= desktop.Tasks.Own(desktop.Interaction.Repeat(TimeSpan.FromSeconds(1), () =>
+            {
+                if (refreshPending || Stopwatch.GetElapsedTime(lastDiscovery) >= TimeSpan.FromSeconds(eventsReady ? 30 : 3))
+                    _ = desktop.RunAsyncCommand(RefreshDevicesAsync);
+            }));
+        }
+        void StartEventMonitor()
+        {
+            if (!deviceMonitoring || deviceClosed || deviceEvents == null || !eventTask.IsCompleted || desktop.IsClosing) return;
+            eventTask = desktop.Tasks.Run(async cancellation =>
+            {
+                using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation); eventCancellation = stop;
+                try
+                {
+                    await deviceEvents.WatchAsync(() => desktop.Interaction.Post(() =>
+                    {
+                        if (deviceClosed || stop.IsCancellationRequested) return;
+                        refreshPending = true;
+                        _ = desktop.RunAsyncCommand(RefreshDevicesAsync);
+                    }), ready => desktop.Interaction.Post(() =>
+                    {
+                        if (!deviceClosed && !stop.IsCancellationRequested) eventsReady = ready;
+                    }), stop.Token);
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+                finally { if (eventCancellation == stop) eventCancellation = null; eventsReady = false; }
+            });
         }
         internal void StopDeviceDetection()
         {
@@ -199,15 +241,18 @@ namespace IpaDesktop
             deviceGeneration++;
             deviceTimer?.Dispose(); deviceTimer = null;
             if (deviceScanCancellation != null) deviceScanCancellation.Cancel();
+            eventCancellation?.Cancel();
         }
         internal async Task PauseDeviceDetectionAsync()
         {
             if (deviceScanCancellation != null) deviceScanCancellation.Cancel();
+            eventCancellation?.Cancel();
+            await eventTask;
             await deviceScan;
         }
         internal void ResumeDeviceDetection()
         {
-            if (deviceMonitoring) _ = desktop.RunAsyncCommand(RefreshDevicesAsync);
+            if (deviceMonitoring) { StartEventMonitor(); refreshPending = true; _ = desktop.RunAsyncCommand(RefreshDevicesAsync); }
         }
         /// <summary>Один фоновый поиск за раз; рабочая операция отменяет и дожидается его до запуска CLI.</summary>
         internal Task RefreshDevicesAsync()
@@ -220,6 +265,7 @@ namespace IpaDesktop
                 return Task.FromResult(true);
             }
             var wifi = SearchWifi; var generation = deviceGeneration;
+            refreshPending = false; lastDiscovery = Stopwatch.GetTimestamp();
             deviceScan = desktop.Tasks.Run(cancellation =>
             {
                 var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
@@ -242,9 +288,10 @@ namespace IpaDesktop
                 {
                     try
                     {
-                        await deviceService.ValidateReadyAsync(selected, stop.Token);
+                        var values = await deviceService.ValidateReadyAsync(selected, stop.Token);
                         if (deviceClosed || busy || generation != deviceGeneration || stop.IsCancellationRequested) return;
                         verifiedConnections.Add(ConnectionKey(selected));
+                        desktop.Device.ShowSnapshot(ConnectionKey(selected), DeviceSnapshot.From(values));
                         desktop.Device.SetState(PhoneStatus.Ready, "Доверие и связь с выбранным iPhone проверены.");
                     }
                     catch (OperationCanceledException) { throw; }
@@ -268,6 +315,13 @@ namespace IpaDesktop
                     }
                     catch (OperationCanceledException) { throw; }
                     catch (Exception) { /* Keep the queue blocked until this same device answers a real handshake. */ }
+                }
+                if (selected != null && diagnostics != null && desktop.Device.Status == PhoneStatus.Ready &&
+                    (lastSnapshot == 0 || Stopwatch.GetElapsedTime(lastSnapshot) >= TimeSpan.FromSeconds(30)))
+                {
+                    var snapshot = await diagnostics.InspectAsync(selected, false, stop.Token);
+                    if (!deviceClosed && !busy && generation == deviceGeneration && !stop.IsCancellationRequested)
+                    { desktop.Device.ShowSnapshot(ConnectionKey(selected), snapshot); lastSnapshot = Stopwatch.GetTimestamp(); }
                 }
             }
             catch (OperationCanceledException)
@@ -295,7 +349,7 @@ namespace IpaDesktop
         }
         void ShowDeviceWarning(string warning)
         {
-            DeviceDetectionStatusTip = warning.Length == 0 ? "Список проверяется автоматически каждые 3 секунды в отсутствие других операций." : warning;
+            DeviceDetectionStatusTip = warning.Length == 0 ? (eventsReady ? "События подключения включены. Контрольная проверка — каждые 30 секунд." : "События недоступны: резервная проверка каждые 3 секунды в отсутствие операций.") : warning;
             if (warning.Length > 0) desktop.Device.SetState(desktop.Device.Status, "Проверьте подключение iPhone — подробности в подсказке.");
             if (warning != deviceWarning && warning.Length > 0) Log("Автоопределение iPhone: " + warning);
             deviceWarning = warning;

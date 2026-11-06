@@ -27,6 +27,7 @@ class PackagingChecks(unittest.TestCase):
             (self.prefix / name).write_bytes(b'native fixture')
         (self.config / 'VERSION').write_text('1.0.2\n')
         (self.config / 'pins.json').write_text('{}')
+        (self.config / 'stable.json').write_text('{}')
         (self.config / 'README.md').write_text('Device tools')
         (self.build / 'msys2-packages.txt').write_text('fixture 1.0')
         (self.build / 'source/test/LICENSE').write_text('license')
@@ -45,8 +46,15 @@ class PackagingChecks(unittest.TestCase):
         self.assertEqual(set(manifest), expected)
         for name, digest in manifest.items():
             self.assertEqual(sha256_file(out / name), digest)
-        with zipfile.ZipFile(self.root / 'IPA-DeviceTools-1.0.2-Windows-x64.zip') as archive:
+        with zipfile.ZipFile(self.root / 'IPA-DeviceTools-1.0.2-Windows-x64-Events.zip') as archive:
             self.assertEqual(set(archive.namelist()), expected | {'sha256.json'})
+        with zipfile.ZipFile(self.root / 'IPA-DeviceTools-1.0.2-Windows-x64.zip') as archive:
+            self.assertEqual(len([name for name in archive.namelist() if name.endswith('.exe')]), 4)
+            self.assertEqual(json.loads(archive.read('device-tools.json'))['eventProtocol'], 0)
+            self.assertEqual(json.loads(archive.read('device-tools.json'))['version'], '1.0.2')
+            for name, digest in json.loads(archive.read('sha256.json')).items():
+                import hashlib
+                self.assertEqual(hashlib.sha256(archive.read(name)).hexdigest(), digest)
         with zipfile.ZipFile(self.root / 'IPA-DeviceTools-1.0.2-Sources.zip') as archive:
             self.assertEqual(archive.read('test.tar'), b'source archive')
 

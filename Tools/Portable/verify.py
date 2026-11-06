@@ -11,10 +11,11 @@ with tempfile.TemporaryDirectory(prefix='ipa-platform-') as folder:
    if p.is_file():p.chmod((entry.external_attr>>16)&0o777 or 0o644)
  package=stage/('IPA-Desktop.app' if sys.platform=='darwin' else 'IPA-Desktop');base=package/'Contents/MacOS' if sys.platform=='darwin' else package
  native=base/'native'
- for tool in ['idevice_id','ideviceinfo','ideviceinstaller','idevicepair']:
+ for tool in ['idevice_id','ideviceinfo','ideviceinstaller','idevicepair','ipa-device-events']:
   subprocess.run([str(native/tool),'--version'],check=True,timeout=15)
  assert '--placeholders' in subprocess.check_output([str(native/'ideviceinstaller'),'--help'],text=True)
  assert subprocess.check_output([str(native/'ipatool'),'account-safety-info'],text=True).strip()=='IPA-DESKTOP-AUTH-SAFETY/1'
+ manifest=json.loads((native/'device-tools.json').read_text());assert manifest['schema']==1 and manifest['eventProtocol']==1 and 'libplist' in manifest['components']
  data=root/'data';data.mkdir()
  (data/'state.json').write_text(json.dumps({'Current':'legacy','DeviceCurrent':'devices','AutoUpdate':False,'SoundsEnabled':False,'CheckGuiUpdates':False,'AutoUpdateDeviceTools':False}))
  (data/'AppSets.json').write_text('[{"Name":"Legacy set","Apps":[{"ID":"123","Name":"Fixture"}]}]')

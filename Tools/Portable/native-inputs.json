@@ -10,5 +10,8 @@
   "Tools/DeviceTools/Scripts/patch_installer.py",
   "Tools/Portable/build-native.sh",
   "Tools/Portable/bundle-libraries.py",
-  "Tools/Portable/ipa-pty.c"
+  "Tools/Portable/ipa-pty.c",
+  "Tools/DeviceTools/stable.json",
+  "Tools/DeviceTools/ipa-device-events.c",
+  "Tools/DeviceTools/device_tools/manifest.py"
 ]

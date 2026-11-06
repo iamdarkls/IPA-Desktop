@@ -30,9 +30,12 @@ public interface IDeviceService
     Task<string> DetailsAsync(DeviceRow device, CancellationToken cancellation);
 }
 public interface IAppleSupport { Task<AppleSupportReport> CheckAsync(CancellationToken cancellation); }
+public interface IDeviceEvents { Task WatchAsync(Action changed, Action<bool> status, CancellationToken cancellation); }
+public interface IDeviceDiagnostics { Task<DeviceSnapshot> InspectAsync(DeviceRow device, bool checkInstallationService, CancellationToken cancellation); }
 public interface INetworkDiagnostics { Task<string> DiagnoseAsync(CancellationToken cancellation); }
 public interface IToolUpdates
 {
+    string DescribeInstalled() => "Сведения о компонентах недоступны.";
     Task<Release> Check(CancellationToken cancellation); Task Install(Release release, CancellationToken cancellation);
     Task<Release> CheckDeviceTools(CancellationToken cancellation); bool DeviceToolsCurrent(Release release);
     Task InstallDeviceTools(Release release, CancellationToken cancellation); void RollbackDeviceTools(); void Rollback();

@@ -12,6 +12,8 @@ public sealed class PairingRunner : IProcessRunner
  public bool NetworkBroken, WrongDevice, FailFirstInstall, FailAllInstalls, DisconnectInstall;
  public int Installs, DisconnectAt;
  public string InventoryXml="<plist><array/></plist>";
+ public string FreeSpace;
+ public bool ServiceUnavailable;
  public bool WaitForTrust, Trusted;
  public string ID="00008030-0000111ABC000DEF";
  public Task<Result> Run(string exe,string[] args,CancellationToken ct,bool visible,bool publish,string workingDirectory=null)
@@ -20,7 +22,8 @@ public sealed class PairingRunner : IProcessRunner
   string output="SUCCESS";int code=0;
   if(name=="ipatool.exe"&&args.Take(2).SequenceEqual(new[]{"auth","info"}))return Task.FromResult(new Result{Code=0,Output="{\"success\":true,\"email\":\"fixture@example.com\"}"});
   if(name=="ideviceinstaller.exe"&&args.Contains("--help"))return Task.FromResult(new Result{Code=0,Output="--placeholders --xml list install --network"});
-  if(name=="ideviceinstaller.exe"&&args.Contains("list"))return Task.FromResult(new Result{Code=0,Output=InventoryXml});
+  if(name=="ideviceinstaller.exe"&&args.Contains("list"))return Task.FromResult(new Result{Code=ServiceUnavailable?1:0,Output=ServiceUnavailable?"No device found":InventoryXml});
+  if(name=="ideviceinfo.exe"&&args.Contains("TotalDataAvailable"))return Task.FromResult(new Result{Code=0,Output=FreeSpace??"unknown"});
   if(name=="idevicepair.exe")
   {
    var command=args.Last();
@@ -69,6 +72,16 @@ public sealed class PairingFixture : IDisposable
 }
 public sealed class PairingTests
 {
+ [Theory] [InlineData(true)] [InlineData(false)]
+ public async Task PreflightStopsBeforeTransferWhenServiceOrStorageUnavailable(bool service)
+ {
+  using var fixture=new PairingFixture();var row=fixture.Ipa();
+  fixture.Runner.ServiceUnavailable=service;fixture.Runner.FreeSpace=service?"1000000000":"0";
+  var failure=await Record.ExceptionAsync(()=>fixture.Engine.Devices.InstallAsync(fixture.Device,row,TestContext.Current.CancellationToken));
+  Assert.NotNull(failure);Assert.Equal(0,fixture.Runner.Installs);
+  Assert.Contains(service?"No device":"недостаточно места",failure.ToString());
+  Assert.All(fixture.Runner.Calls,c=>Assert.Contains(fixture.Device.ID,c.Args));
+ }
  [Fact] public async Task PreflightRepairsSelectedDeviceAndWaitsForTrust()
  {
   using var f=new PairingFixture();var r=f.Runner;

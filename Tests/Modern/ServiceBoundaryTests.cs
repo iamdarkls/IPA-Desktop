@@ -4,6 +4,40 @@ namespace IpaDesktop.Tests;
 
 public sealed class ServiceBoundaryTests
 {
+    sealed class EventDevices : IDeviceService, IDeviceEvents
+    {
+        public Action Changed;
+        public bool Stopped;
+        public int Reads;
+        public List<DeviceRow> Rows = new() { new() { ID = "00008030-0000111ABC000DEF", Name = "Fixture" } };
+        public Task<List<DeviceRow>> FindAsync(bool wifi, CancellationToken cancellation, Action<string> report) { Reads++; return Task.FromResult(Rows.ToList()); }
+        public Task<Dictionary<string, string>> ValidateReadyAsync(DeviceRow device, CancellationToken cancellation) => Task.FromResult(new Dictionary<string, string> { ["ProductType"] = "iPhone16,2", ["ProductVersion"] = "18.0" });
+        public Task<Dictionary<string, string>> EnsureReadyAsync(DeviceRow device, Action<DeviceConnectionProgress> progress, CancellationToken cancellation) => ValidateReadyAsync(device, cancellation);
+        public Task<List<LibraryApp>> ApplicationsAsync(DeviceRow device, CancellationToken cancellation) => Task.FromResult(new List<LibraryApp>());
+        public Task InstallAsync(DeviceRow device, LocalRow row, Action<DeviceConnectionProgress> progress, CancellationToken cancellation) => throw new NotSupportedException();
+        public Task<string> DetailsAsync(DeviceRow device, CancellationToken cancellation) => Task.FromResult("");
+        public async Task WatchAsync(Action changed, Action<bool> status, CancellationToken cancellation)
+        {
+            Changed = changed; status(true); changed();
+            try { await Task.Delay(Timeout.Infinite, cancellation); }
+            finally { Stopped = true; status(false); }
+        }
+    }
+    [Fact]
+    public async Task DeviceEventsRefreshSelectionClearCardOnDisconnectAndStopWithDesktop()
+    {
+        using var folder = new TempFolder(); var engine = new Engine(folder.Path, new RecordingProcessRunner(), new InstalledAppleSupportProbe());
+        engine.Settings.Current = "fixture";
+        var devices = new EventDevices();
+        await using var desktop = new DesktopViewModel(engine.CreateDesktopServices() with { Devices = devices }, new NoWindowInteraction());
+        desktop.Files.StartDeviceDetection();
+        Assert.Single(desktop.Files.DeviceList.Items); Assert.True(desktop.Device.HasSummary); Assert.Contains("iPhone16,2", desktop.Device.Summary);
+        devices.Rows.Clear(); devices.Changed();
+        Assert.Empty(desktop.Files.DeviceList.Items); Assert.False(desktop.Device.HasSummary);
+        await desktop.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        Assert.True(devices.Stopped); Assert.Equal(0, desktop.Tasks.PendingCount);
+        var reads = devices.Reads; devices.Changed(); Assert.Equal(reads, devices.Reads);
+    }
     sealed class Session : IAccountSession
     {
         public int Reads;

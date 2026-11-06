@@ -42,6 +42,12 @@ internal static class PublishedSmoke
                 throw new Exception("Published icon or live action label failed.");
             if(ErrorLocalizer.Describe("Invalid HostID").Code != FailureCode.Pairing)throw new Exception("Published error localization failed.");
             if(desktop.C<Button>("CheckConnection") == null || desktop.C<Border>("ConnectionNotice").IsVisible)throw new Exception("Published connection UI failed.");
+            desktop.Model.Device.Select("fixture",false,true);
+            desktop.Model.Device.ShowSnapshot("fixture",new DeviceSnapshot("iPhone16,2","18.0",1073741824,"Служба установки отвечает"));
+            desktop.Model.Updates.DeviceUpdateStatus="Fixture: tools verified";
+            await Task.Delay(50);
+            if(!desktop.C<TextBlock>("PhoneSummary").Text.Contains("iPhone16,2") || desktop.C<TextBlock>("DeviceUpdateStatus").Text!="Fixture: tools verified")
+                throw new Exception("Published phone summary or tool update bindings failed.");
             // Verify the new compiled bindings and commands in the trimmed shipping binary.
             desktop.SetAccountIdentity("smoke@example.com");
             string[] remaining = null;

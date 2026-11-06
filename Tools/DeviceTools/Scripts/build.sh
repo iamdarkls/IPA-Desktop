@@ -36,5 +36,8 @@ for project in libplist libimobiledevice-glue libusbmuxd libtatsu libimobiledevi
   make install
   cd "$root"
 done
+cc -O2 -Wall -Wextra Tools/DeviceTools/ipa-device-events.c -o "$prefix/bin/ipa-device-events.exe" $(pkg-config --cflags --libs libimobiledevice-1.0)
+mkdir -p device-build/source-archives/ipa-desktop-tools
+cp Tools/DeviceTools/ipa-device-events.c Tools/DeviceTools/device_tools/manifest.py Tools/DeviceTools/{VERSION,pins.json,stable.json} LICENSE.txt device-build/source-archives/ipa-desktop-tools/
 pacman -Q > device-build/msys2-packages.txt
 python Tools/DeviceTools/Scripts/package.py
