@@ -1,7 +1,7 @@
-## IPA Desktop Device Tools 1.0.6
+## IPA Desktop Device Tools 1.0.7
 
 Автоматическое обновление стабильных исходников:
 
-- **libtatsu**: 1.0.5 → [1.1.0](https://github.com/libimobiledevice/libtatsu/releases/tag/1.1.0), ревизия `d8928042bcbb`.
+- **libplist**: 2.8.0 → [2.8.1](https://github.com/libimobiledevice/libplist/releases/tag/2.8.1), ревизия `678b1a34693b`.
 
 Windows x64-комплект публикуется после сборки, проверки DLL и совместимости команд. Предыдущие релизы сохраняются для отката. Лицензии и исходники приложены.
