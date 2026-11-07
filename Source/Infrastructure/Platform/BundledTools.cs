@@ -19,7 +19,7 @@ public static class BundledTools
         }
         if(store.Settings.Current==version&&store.Settings.DeviceCurrent==version&&!store.Settings.AutoUpdate&&!store.Settings.AutoUpdateDeviceTools)return;
         store.Settings.Current=store.Settings.DeviceCurrent=version;
-        store.Settings.Version="ipatool-guard 1.2.1.1";store.Settings.DeviceVersion="device-tools " + DeviceToolManifest.Read(Path.Combine(source,"device-tools.json")).Version + " · "+RuntimePlatform.Rid;
+        store.Settings.Version="ipatool-guard 1.2.1.2";store.Settings.DeviceVersion="device-tools " + DeviceToolManifest.Read(Path.Combine(source,"device-tools.json")).Version + " · "+RuntimePlatform.Rid;
         store.Settings.AutoUpdate=store.Settings.AutoUpdateDeviceTools=false;
         store.Save();
     }

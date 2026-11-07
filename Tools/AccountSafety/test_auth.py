@@ -12,6 +12,7 @@ PRELUDE = r'''
 #include <iostream>
 #include <map>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -52,7 +53,9 @@ int main() {
   }
   for(auto code:{std::string(""),std::string("123456")}) {
     m_http={{{HttpResponse{200},{{"failureType",FAILURE_INVALID_CREDENTIALS}}}},0};
-    bool rejected=false; try { login(code); } catch(const IpaError&) { rejected=true; }
+    bool rejected=false; try { login(code); } catch(const IpaError& e) {
+      rejected=std::string(e.what())==(code.empty()?"invalid credentials":"verification code rejected");
+    }
     assert(rejected && m_http.calls==1);
   }
   m_http={{{HttpResponse{200},{{"customerMessage",CUSTOMER_MSG_ACCOUNT_DISABLED}}}},0};
@@ -62,6 +65,13 @@ int main() {
   m_http={{{HttpResponse{200},success}},0};login("123456");assert(m_http.calls==1);
   m_http={{{HttpResponse{302,"",{{"location","https://p1-buy.itunes.apple.com/auth"}}},{}},{HttpResponse{200},success}},0};
   login();assert(m_http.calls==2);
+  m_http={{{HttpResponse{302,"",{{"location","https://p1-buy.itunes.apple.com/private?token=private"}}},{}},{HttpResponse{204},{}}},0};
+  std::ostringstream route;
+  auto* original=std::cerr.rdbuf(route.rdbuf());
+  bool empty=false;try{login();}catch(const IpaError&){empty=true;}
+  std::cerr.rdbuf(original);
+  assert(empty && m_http.calls==2);
+  assert(route.str()=="IPA_AUTH_STATUS http=302 host=buy.itunes.apple.com redirects=0\nIPA_AUTH_STATUS http=204 host=p1-buy.itunes.apple.com redirects=1\n");
   for(auto url:{"https://evil.example/auth","https://apple.com.evil.example/auth","https://apple.com@evil.example/auth","http://buy.itunes.apple.com/auth"}) {
     m_http={{{HttpResponse{302,"",{{"location",url}}},{} }},0};
     bool rejected=false;try{login();}catch(const IpaError&){rejected=true;}assert(rejected && m_http.calls==1);

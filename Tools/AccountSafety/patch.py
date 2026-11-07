@@ -41,10 +41,12 @@ def patch(root):
     first = store.index('        // Transport retry: up to 3 attempts')
     last = store.index('        lastData = decode_plist(lastRes.body);',first)
     store = store[:first] + '''        // Exactly one password POST per phase/Apple-directed redirect. No transport retry.
-        if (!account_safety::apple_url(currentURL)) throw IpaError("unsafe authentication endpoint");
+        const auto authHost = account_safety::apple_host(currentURL);
+        if (authHost.empty()) throw IpaError("unsafe authentication endpoint");
         if (m_debug) debug_dump_auth_request(currentURL, headers, body);
         lastRes = m_http.post(currentURL, body, headers);
-        std::cerr << "IPA_AUTH_STATUS http=" << lastRes.statusCode << "\\n";
+        std::cerr << "IPA_AUTH_STATUS http=" << lastRes.statusCode
+                  << " host=" << authHost << " redirects=" << (attempt - 1) << "\\n";
         if (m_debug) debug_dump_auth_response(lastRes);
         if (lastRes.statusCode == 429) throw IpaError("rate limited by Apple (HTTP 429)");
         if (lastRes.statusCode != 200 && lastRes.statusCode != 302)
@@ -59,7 +61,7 @@ def patch(root):
     store = replace_once(store, '            currentURL   = locIt->second;', '            if (!account_safety::apple_url(locIt->second)) throw IpaError("unsafe authentication redirect");\n            currentURL   = locIt->second;')
     store = replace_once(store, '''        } else if (attempt == 1 && failureType == FAILURE_INVALID_CREDENTIALS) {
             retry = true;''', '''        } else if (failureType == FAILURE_INVALID_CREDENTIALS) {
-            throw IpaError("invalid credentials"); // Stop after the first rejection, including 2FA.''')
+            throw IpaError(authCode.empty() ? "invalid credentials" : "verification code rejected");''')
     # HTTP transport also retries on curl timeouts, even when AppStore itself does not.
     # No POST may be replayed after an uncertain outcome (including password/purchase POSTs).
     http = replace_once(http, 'if (!is_retryable_curl(rc) || attempt > API_MAX_RETRIES) break;',

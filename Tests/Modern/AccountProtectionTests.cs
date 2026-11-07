@@ -20,7 +20,6 @@ public sealed class AccountProtectionTests
         using(var lease=guard.Enter(true,TestContext.Current.CancellationToken))
         {
             Assert.Throws<AppleAccountException>(()=>new AccountRequestGuard(folder.Path,()=>now).Enter(true,TestContext.Current.CancellationToken));
-            guard.LoginStarted();
             guard.LoginFailed(ErrorLocalizer.Describe("incorrect password"));
         }
         Assert.True(new AccountRequestGuard(folder.Path).RequiresLogin);
@@ -29,7 +28,7 @@ public sealed class AccountProtectionTests
         now=now.AddSeconds(29);
         Assert.Throws<AppleAccountException>(()=>guard.Enter(true,TestContext.Current.CancellationToken));
         now=now.AddSeconds(1);
-        using(guard.Enter(true,TestContext.Current.CancellationToken)) { guard.LoginStarted(); guard.LoginSucceeded(); }
+        using(guard.Enter(true,TestContext.Current.CancellationToken)) { guard.LoginSucceeded(); }
         Assert.False(guard.RequiresLogin);
         using(guard.Enter(false,TestContext.Current.CancellationToken)) { }
         Assert.DoesNotContain("password",File.ReadAllText(Path.Combine(folder.Path,"account-requests.txt")),StringComparison.OrdinalIgnoreCase);
@@ -126,16 +125,47 @@ public sealed class AccountProtectionTests
     sealed class RejectLoginFactory : ILoginProcessFactory
     {
         public int Calls; public bool Success;
-        public ILoginProcess Start(string executable,string directory) { Calls++;return new Session(Success); }
+        public string Rejection = "incorrect password";
+        public ILoginProcess Start(string executable,string directory) { Calls++;return new Session(Success, Rejection); }
         sealed class Session : ILoginProcess
         {
             readonly bool success;
-            public Session(bool success) { this.success=success; }
+            readonly string rejection;
+            public Session(bool success, string rejection) { this.success=success; this.rejection=rejection; }
             int index;public int ExitCode=>success?0:1;
-            public Task<string> ReadAsync(CancellationToken ct)=>Task.FromResult(index++ switch {0=>"Enter email:",1=>"Enter password:",2=>success?"{\"success\":true,\"email\":\"fixture@example.com\"}":"incorrect password",_=>null});
+            public Task<string> ReadAsync(CancellationToken ct)=>Task.FromResult(index++ switch {0=>"Enter email:",1=>"Enter password:",2=>success?"{\"success\":true,\"email\":\"fixture@example.com\"}":rejection,_=>null});
             public Task SendAsync(System.Security.SecureString value,CancellationToken ct)=>Task.CompletedTask;
             public void Dispose() { }
         }
+    }
+
+    [Theory]
+    [InlineData("IPA_AUTH_STATUS http=204 host=p1-buy.itunes.apple.com redirects=1\nignored private output", "HTTP 204; хост p1-buy.itunes.apple.com; перенаправлений: 1")]
+    [InlineData("authentication failed", "Причина:")]
+    [InlineData("verification code rejected", "Код подтверждения не принят")]
+    [InlineData("IPA_AUTH_STATUS http=204 host=apple.com.evil.example redirects=1", "Ответ Apple: HTTP 204.")]
+    public async Task NonPasswordLoginFailureDoesNotCreatePauseOrRetry(string response, string detail)
+    {
+        using var folder = new TempFolder();
+        var now = DateTimeOffset.UtcNow;
+        var guard = new AccountRequestGuard(folder.Path, () => now);
+        File.WriteAllLines(Path.Combine(folder.Path, "account-requests.txt"), new[] {
+            "Unknown", now.AddMinutes(10).ToUnixTimeMilliseconds().ToString(), "0", "1", "0", "0", "0", "0", "False" });
+        var factory = new RejectLoginFactory { Rejection = response };
+        var tools = new FakeTools();
+        var service = new AppleLoginService(factory, () => "fixture", folder.Path, tools, guard);
+        using var password = LoginContract.Secret("fixture-password");
+        var ct = TestContext.Current.CancellationToken;
+        var error = await Assert.ThrowsAsync<AppleLoginException>(() => service.LoginAsync("fixture@example.com", password, _ => throw new InvalidOperationException(), ct));
+        Assert.Equal(FailureCode.Unknown, error.Failure.Code);
+        Assert.Contains(detail, error.Message);
+        Assert.DoesNotContain("ignored private output", error.Message);
+        Assert.DoesNotContain("evil.example", error.Message);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(0, tools.Calls);
+        Assert.False(guard.RequiresLogin);
+        Assert.Empty(guard.SafetyStatus);
+        using (new AccountRequestGuard(folder.Path, () => now).Enter(true, ct)) { }
     }
 
     [Fact] public void PasswordFailuresAcrossAccountsAndSuccessfulLoginsTriggerGlobalPause()
@@ -145,7 +175,7 @@ public sealed class AccountProtectionTests
         for(int index=0;index<3;index++)
         {
             using(guard.Enter(true,TestContext.Current.CancellationToken))
-            { guard.LoginStarted();guard.LoginFailed(ErrorLocalizer.Describe("incorrect password")); }
+            { guard.LoginFailed(ErrorLocalizer.Describe("incorrect password")); }
             now=now.AddMinutes(index<2?16:9);
             if(index<2) using(guard.Enter(true,TestContext.Current.CancellationToken)) guard.LoginSucceeded();
         }
@@ -158,12 +188,11 @@ public sealed class AccountProtectionTests
         using(restarted.Enter(true,TestContext.Current.CancellationToken)) restarted.LoginSucceeded();
         Assert.False(restarted.RequiresLogin);
     }
-    [Fact] public void ExplicitAccountLockStopsEveryAccountUntilReviewedAndPauseExpires()
+    [Fact] public void ExplicitAccountLockStopsEveryAccountUntilReviewed()
     {
         using var folder=new TempFolder();var now=DateTimeOffset.UtcNow;var guard=new AccountRequestGuard(folder.Path,()=>now);
         using(guard.Enter(true,TestContext.Current.CancellationToken))
-        { guard.LoginStarted();guard.LoginFailed(ErrorLocalizer.Describe("account is locked")); }
-        now=now.AddDays(2);
+        { guard.LoginFailed(ErrorLocalizer.Describe("account is locked")); }
         var restarted=new AccountRequestGuard(folder.Path,()=>now);
         Assert.True(restarted.SafetyStopped);
         Assert.Throws<AppleAccountException>(()=>restarted.Enter(true,TestContext.Current.CancellationToken));

@@ -23,7 +23,7 @@ public sealed class AccountRequestGuard : IAccountProtection
     {
         public FailureCode Blocked;
         public long LoginAfter, RequestAfter;
-        public int LoginFailures, RequestFailures, CredentialFailures;
+        public int RequestFailures, CredentialFailures;
         public long WindowStarted, GlobalAfter;
         public bool SafetyStop;
     }
@@ -38,7 +38,9 @@ public sealed class AccountRequestGuard : IAccountProtection
             !long.TryParse(parts[1], out var login) || !long.TryParse(parts[2], out var request) ||
             !int.TryParse(parts[3], out var lf) || !int.TryParse(parts[4], out var rf) || lf < 0 || rf < 0)
             throw new IOException("Не удалось прочитать состояние защиты Apple Account. Проверьте доступ к профилю приложения.");
-        var state = new State { Blocked=blocked, LoginAfter=login, RequestAfter=request, LoginFailures=lf, RequestFailures=rf,
+        // Keep reading the old file layout, but ignore legacy login pauses that
+        // were recorded without a credential rejection.
+        var state = new State { Blocked=blocked, LoginAfter=blocked == FailureCode.Credentials ? login : 0, RequestAfter=request, RequestFailures=rf,
             SafetyStop=blocked == FailureCode.AccountRestricted };
         if(parts.Length == 9)
         {
@@ -52,7 +54,7 @@ public sealed class AccountRequestGuard : IAccountProtection
     {
         string temporary = StatePath + ".new";
         File.WriteAllLines(temporary, new[] { state.Blocked.ToString(), state.LoginAfter.ToString(CultureInfo.InvariantCulture),
-            state.RequestAfter.ToString(CultureInfo.InvariantCulture), state.LoginFailures.ToString(CultureInfo.InvariantCulture), state.RequestFailures.ToString(CultureInfo.InvariantCulture),
+            state.RequestAfter.ToString(CultureInfo.InvariantCulture), "0", state.RequestFailures.ToString(CultureInfo.InvariantCulture),
             state.WindowStarted.ToString(CultureInfo.InvariantCulture), state.CredentialFailures.ToString(CultureInfo.InvariantCulture),
             state.GlobalAfter.ToString(CultureInfo.InvariantCulture), state.SafetyStop.ToString(CultureInfo.InvariantCulture) });
         File.Move(temporary, StatePath, true);
@@ -77,11 +79,7 @@ public sealed class AccountRequestGuard : IAccountProtection
     }
     void RecordAccountFailure(State state, UserError error)
     {
-        if(error.Code == FailureCode.AccountRestricted)
-        {
-            state.SafetyStop=true;
-            state.GlobalAfter=Math.Max(state.GlobalAfter,clock().AddMinutes(15).ToUnixTimeMilliseconds());
-        }
+        if(error.Code == FailureCode.AccountRestricted) state.SafetyStop=true;
         if(error.Code != FailureCode.Credentials) return;
         var now=clock().ToUnixTimeMilliseconds();
         if(state.WindowStarted == 0 || now-state.WindowStarted >= TimeSpan.FromHours(24).TotalMilliseconds)
@@ -126,26 +124,17 @@ public sealed class AccountRequestGuard : IAccountProtection
         Save(new State { WindowStarted=previous.WindowStarted, CredentialFailures=previous.CredentialFailures,
             GlobalAfter=previous.GlobalAfter, SafetyStop=previous.SafetyStop });
     }
-    public void LoginStarted()
-    {
-        var state = Read();
-        state.LoginFailures = Math.Min(5, state.LoginFailures + 1);
-        state.LoginAfter = clock().AddSeconds(Math.Min(900, 60 * (1 << (state.LoginFailures - 1)))).ToUnixTimeMilliseconds();
-        Save(state);
-    }
     public void LoginFailed(UserError error)
     {
+        if (!IsAccountFailure(error.Code)) return;
         var state = Read();
-        state.LoginFailures = Math.Max(1, state.LoginFailures);
-        if (IsAccountFailure(error.Code)) state.Blocked = error.Code;
+        state.Blocked = error.Code;
         RecordAccountFailure(state,error);
-        int seconds = error.Code switch
+        if (error.Code == FailureCode.Credentials)
         {
-            FailureCode.Credentials => state.CredentialFailures switch { 1 => 30, 2 => 120, _ => 600 },
-            FailureCode.AccountRestricted => 900,
-            _ => Math.Min(900, 60 * (1 << (state.LoginFailures - 1)))
-        };
-        state.LoginAfter = clock().AddSeconds(seconds).ToUnixTimeMilliseconds();
+            int seconds = state.CredentialFailures switch { 1 => 30, 2 => 120, _ => 600 };
+            state.LoginAfter = clock().AddSeconds(seconds).ToUnixTimeMilliseconds();
+        }
         Save(state);
     }
     public void RequestFailed(UserError error, TimeSpan? serverDelay = null)

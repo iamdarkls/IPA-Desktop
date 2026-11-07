@@ -23,8 +23,11 @@ namespace IpaDesktop
     {
         string buffer = "";
         bool identifierSent, passwordSent, codeSent;
-        string httpStatus="", failureCode="";
-        public string Diagnostics => String.IsNullOrEmpty(httpStatus) ? "" : "Ответ Apple: HTTP " + httpStatus + (String.IsNullOrEmpty(failureCode)?"":"; код отказа " + failureCode) + ".";
+        string httpStatus="", failureCode="", host="", redirects="";
+        static readonly Regex authStatus = new(@"^IPA_AUTH_STATUS http=([1-5][0-9]{2})(?: host=([a-z0-9.-]{1,253}) redirects=([0-3]))?$", RegexOptions.Multiline | RegexOptions.CultureInvariant);
+        public string Diagnostics => String.IsNullOrEmpty(httpStatus) ? "" : "Ответ Apple: HTTP " + httpStatus +
+            (host.Length == 0 ? "" : "; хост " + host + "; перенаправлений: " + redirects) +
+            (String.IsNullOrEmpty(failureCode) ? "" : "; код отказа " + failureCode) + ".";
         static readonly Regex[] prompts =
         {
             new Regex(@"\bEnter[ \t]+(?:e-?mail|Apple[ \t]+(?:ID|Account))[ \t]*:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
@@ -36,8 +39,15 @@ namespace IpaDesktop
             if (buffer.Length + chunk.Length > 65536) throw new AppleLoginException("Неожиданный ответ ipatool. Обновите движок и повторите вход.");
             buffer += chunk;
             string text = Text();
-            var status=Regex.Matches(text,@"IPA_AUTH_STATUS http=([1-5][0-9]{2})\b");
-            if(status.Count>0) httpStatus=status[status.Count-1].Groups[1].Value;
+            var status=authStatus.Matches(text);
+            if (status.Count > 0)
+            {
+                var last = status[status.Count - 1];
+                httpStatus = last.Groups[1].Value;
+                string candidate = last.Groups[2].Value;
+                host = candidate == "apple.com" || candidate.EndsWith(".apple.com", StringComparison.Ordinal) ? candidate : "";
+                redirects = host.Length == 0 ? "" : last.Groups[3].Value;
+            }
             var failure=Regex.Matches(text,@"IPA_AUTH_FAILURE code=(-?[0-9]{1,15})\b");
             if(failure.Count>0) failureCode=failure[failure.Count-1].Groups[1].Value;
             // ConPTY может повторно прислать всю строку при перерисовке, включая старые запросы.
@@ -92,8 +102,20 @@ namespace IpaDesktop
                     catch (AppleLoginException) { throw; }
                     catch (Exception) { }
                 }
+                if (httpStatus == "204")
+                    throw new AppleLoginException(new UserError(FailureCode.Unknown, "Apple вернула пустой ответ",
+                        "HTTP 204 не содержит данных для создания сессии или продолжения входа. Причину по нему определить нельзя.",
+                        "Проверьте тот же аккаунт в App Store. Если там всё работает, передайте технические сведения из этого окна. Автоматического повтора нет."));
                 var lower = text.ToLowerInvariant();
                 var failure = ErrorLocalizer.Describe(text);
+                if (lower.Contains("verification code rejected") || (codeSent && failure.Code == FailureCode.Credentials))
+                    throw new AppleLoginException(new UserError(FailureCode.Unknown, "Код подтверждения не принят",
+                        "Apple отклонила вход на этапе подтверждения.", "Проверьте запрос на доверенном устройстве Apple. Автоматического повтора нет."));
+                // Download errors use a broader credentials classification.
+                // Login cooldowns require an explicit password rejection.
+                if (failure.Code == FailureCode.Credentials &&
+                    !Regex.IsMatch(lower, @"\b(?:incorrect password|password is incorrect|invalid password|incorrect account or password|invalid credentials)\b"))
+                    failure = failure with { Code = FailureCode.Unknown };
                 if (AccountRequestGuard.IsAccountFailure(failure.Code) || failure.Code == FailureCode.RateLimited) throw new AppleLoginException(failure);
                 if (lower.Contains("resolve") || lower.Contains("connect") || lower.Contains("timeout") || lower.Contains("ssl") || lower.Contains("tls"))
                     throw new AppleLoginException("Не удалось связаться с Apple. Проверьте подключение, дату системы и повторите вход позже.");
@@ -131,7 +153,6 @@ namespace IpaDesktop
                     {
                         token.ThrowIfCancellationRequested();
                         if(validateEngine!=null) await validateEngine(token).ConfigureAwait(false);
-                        guard?.LoginStarted();
                         using (var session = factory.Start(executable(), directory))
                         {
                             string chunk;

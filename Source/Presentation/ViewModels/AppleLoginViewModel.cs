@@ -74,7 +74,7 @@ public sealed class AppleLoginViewModel : ObservableObject, IDisposable, IAsyncD
         bool success = false;
         try { SignedInEmail = await service.LoginAsync(Email.Trim(), password, RequestCode, operation.Token); success = true; }
         catch (OperationCanceledException) { Status = "Вход отменён."; }
-        catch (AppleLoginException error) { Status = error.Message + "\nПеред новой попыткой действует защитная пауза."; }
+        catch (AppleLoginException error) { Status = error.Message + (error.Failure?.Code == FailureCode.Credentials ? "\nПеред новой попыткой действует защитная пауза." : ""); }
         catch (AppleAccountException error) { Status = error.Message; }
         catch (Exception) { Status = "Не удалось выполнить вход. Повторите попытку; детали авторизации не записываются в журнал."; }
         finally

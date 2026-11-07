@@ -62,7 +62,7 @@ namespace IpaDesktop
             });
             OpenReleaseCommand = Command(delegate
             {
-                SystemIntegration.Open("https://github.com/iamdarkls/IPA-Desktop/releases/tag/ipatool-guard-v1.2.1.1");
+                SystemIntegration.Open(AppInfo.ReleasesUrl + "/tag/" + EngineUpdater.GuardedEngineTag);
             });
             CheckDeviceUpdateCommand = Command(delegate
             {
