@@ -43,7 +43,10 @@ cc -O2 -Wall -Wextra Tools/DeviceTools/ipa-device-events.c -o "$prefix/bin/ipa-d
 for name in idevice_id ideviceinfo ideviceinstaller idevicepair ipa-device-events;do cp "$prefix/bin/$name" "$stage/$name";done
 if [[ "$rid" == linux-* ]];then
  cc -O2 -Wall -Wextra Tools/Portable/ipa-pty.c -o "$stage/ipa-pty" -lutil
- python3 Tools/Portable/bundle-libraries.py "$stage"
+ # The event helper links directly with cc, so unlike the libtool binaries it
+ # has no build-prefix runpath. Resolve against the pinned libraries while
+ # staging; the bundler replaces runpaths with $ORIGIN for distribution.
+ LD_LIBRARY_PATH="$prefix/lib" python3 Tools/Portable/bundle-libraries.py "$stage"
 else
  cc -O2 -Wall -Wextra Tools/Portable/ipa-pty.c -o "$stage/ipa-pty"
  dylibbundler -of -b -x "$stage/idevice_id" -x "$stage/ideviceinfo" -x "$stage/ideviceinstaller" -x "$stage/idevicepair" -x "$stage/ipa-device-events" -d "$stage" -p @executable_path/
