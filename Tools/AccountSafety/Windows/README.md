@@ -1,7 +1,7 @@
-# ipatool-guard 1.2.1.4 · Windows x64
+# ipatool-guard 1.2.1.5 · Windows x64
 
-Built from [majd/ipatool commit 72c47d5](https://github.com/majd/ipatool/commit/72c47d538b726df397fbf17bb3af809d69ef51b7). It retains local App Store authentication and uses the current Store User-Agent for purchase history and license acquisition. No WSL or third-party authentication service is required. On first use upstream downloads and verifies runtime files from Apple and Unicorn; the account password goes only to Apple's login endpoint.
+Built from [Sorvigolova/ipatool PR #5, d5050b1](https://github.com/Sorvigolova/ipatool/pull/5/changes/d5050b1604b8b8964061e59c789ba975b4a68691). Store authentication uses SAP and local device proof. The engine downloads and verifies the required Apple runtime libraries during first provisioning; they are not included in the release archive. Store requests for licenses and downloads also use device proof.
 
-IPA Desktop sends login input via its private terminal. The engine stores session tokens and device provisioning state under the current Windows user with DPAPI. It never persists the Apple password or silently signs in after a session expires. It only continues login when Apple requests a protocol step (device provisioning, validated redirects, or 2FA confirmed by the user). Failed transport requests and password rejections are not replayed.
+The engine does not save the Apple password or silently sign in. It continues only for a validated Apple authentication redirect, an explicit device provisioning challenge, or a verification code supplied by the user. Network errors and rejected credentials do not cause password replays.
 
-The Windows updater installs this engine separately. Sessions from engine 1.2.1.3 are compatible. Users upgrading from the older C++ engine need to sign in again. macOS and Linux retain the previous engine.
+Sign in after switching from the Go engine; the session formats differ. The updater retains the previously installed engine for rollback. macOS and Linux keep their existing engine.

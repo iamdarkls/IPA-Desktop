@@ -17,10 +17,10 @@ namespace IpaDesktop
     public sealed class EngineUpdater : IToolUpdates
     {
         public const string SourceRepository = AppInfo.Repository;
-        public const string GuardedEngineTag = "ipatool-guard-v1.2.1.4";
+        public const string GuardedEngineTag = "ipatool-guard-v1.2.1.5";
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";
-        public const string WindowsAssetName = "IPA-AuthTools-1.2.1.4-Windows-x64.zip";
+        public const string WindowsAssetName = "IPA-AuthTools-1.2.1.5-Windows-x64.zip";
         public string DescribeInstalled() => DeviceToolManifest.InstalledDescription(Root, Settings);
         static readonly string[] DeviceFiles = { "idevice_id.exe", "ideviceinfo.exe", "ideviceinstaller.exe", "idevicepair.exe", "libimobiledevice-1.0.dll", "libplist-2.0.dll" };
         /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
@@ -207,9 +207,7 @@ namespace IpaDesktop
                     {
                         "auth", "search", "download", "list-versions", "get-version-metadata", "--format"
                     }) if (!test.Output.Contains(command)) throw new IOException("Релиз несовместим с адаптером: нет " + command);
-                    var download = await runner.Run(bins[0], new[]{"download", "--help"}, timeout.Token, false, false);
-                    ToolResponse.Ensure(download);
-                    if (!download.Output.Contains("--external-version-id") || !download.Output.Contains("--purchase"))
+                    if (!test.Output.Contains("--external-version-id") || !test.Output.Contains("--purchase"))
                         throw new IOException("Движок не поддерживает загрузку выбранной версии или получение лицензии.");
                 }
                 ct.ThrowIfCancellationRequested();

@@ -1,6 +1,15 @@
 {
-  "repository": "https://github.com/majd/ipatool.git",
-  "revision": "72c47d538b726df397fbf17bb3af809d69ef51b7",
-  "version": "1.2.1.4",
-  "tag": "ipatool-guard-v1.2.1.4"
+  "repository": "https://github.com/Sorvigolova/ipatool.git",
+  "revision": "d5050b1604b8b8964061e59c789ba975b4a68691",
+  "version": "1.2.1.5",
+  "tag": "ipatool-guard-v1.2.1.5",
+  "files": {
+    "main.cpp": "72ea80b5fea5e4af0cf9c078100c610d717c650c9b7ddf4126634c6d9aa5e5cd",
+    "appstore.cpp": "14571e38b399de094b9cea6f852bbb6775032ae566339dd74a3e41024e6da196",
+    "http_client.cpp": "6d845718af1079e96ca54fb3aebfd38311cb62fe175054b09b504e530444af9a",
+    "CMakeLists.txt": "57b5e3949c94b0b83c07aa30b8bdbb5ecd1db804c543795e2aae696d625464ff",
+    "store_adi.cpp": "bab2b14a3d454b769899495e253ed1b537477f4e9a347dedc7adb85be78d1977",
+    "store_adi.h": "fa1a88d52f29e14957652ee2345fb0552624eb04ae9434297296cfedb0c43d18",
+    "store_proof.h": "d63ce5ca4a3ece925e6934f409b50e6595296c8583d7b0f968df8cbc908121ef"
+  }
 }

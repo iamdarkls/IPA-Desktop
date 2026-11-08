@@ -4,14 +4,15 @@ root="$(pwd)"
 source_root="$root/artifacts/guarded-engine/source"
 build_root="$root/artifacts/guarded-engine/build"
 stage="$root/artifacts/guarded-engine/package"
-pinned_revision="$(python -c 'import json;print(json.load(open("Tools/AccountSafety/pins.json"))["revision"])')"
+pin="Tools/AccountSafety/Windows/pin.json"
+pin_value() { python -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$pin" "$1"; }
+pinned_revision="$(pin_value revision)"
 mkdir -p "$source_root" "$stage/LICENSES"
 git -C "$source_root" init
-git -C "$source_root" remote add origin https://github.com/Sorvigolova/ipatool.git
-git -C "$source_root" fetch --depth 1 origin "$pinned_revision"
+git -C "$source_root" fetch --depth 1 "$(pin_value repository)" "$pinned_revision"
 git -C "$source_root" -c core.autocrlf=false checkout --detach FETCH_HEAD
 test "$(git -C "$source_root" rev-parse HEAD)" = "$pinned_revision"
-python Tools/AccountSafety/patch.py "$source_root"
+python Tools/AccountSafety/patch.py "$source_root" "$pin"
 python Tools/AccountSafety/test_auth.py "$source_root"
 cmake -S "$source_root" -B "$build_root" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON
 cmake --build "$build_root" --parallel 2
@@ -30,4 +31,4 @@ mkdir -p "$root/artifacts/guarded-engine/source-release/AccountSafety"
 cp -r Tools/AccountSafety/. "$root/artifacts/guarded-engine/source-release/AccountSafety/"
 cp -r "$source_root" "$root/artifacts/guarded-engine/source-release/ipatool"
 rm -rf "$root/artifacts/guarded-engine/source-release/ipatool/.git"
-python Tools/AccountSafety/package.py "$stage" "$root/artifacts/guarded-engine/source-release"
+python Tools/AccountSafety/package.py "$stage" "$root/artifacts/guarded-engine/source-release" "$pin"

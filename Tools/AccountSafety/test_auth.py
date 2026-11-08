@@ -27,7 +27,9 @@ const std::string CONFIGURATOR_UA="fixture",HTTP_HEADER_SAP_SIGNATURE="signature
 PlistDict decoded;
 struct FakeHttp {
   std::vector<std::pair<HttpResponse,PlistDict>> replies; int calls=0;
-  HttpResponse post(const std::string&,const std::string&,const std::map<std::string,std::string>&) {
+  std::map<std::string,std::string> lastHeaders;
+  HttpResponse post(const std::string&,const std::string&,const std::map<std::string,std::string>& headers) {
+    lastHeaders=headers;
     if(calls>=int(replies.size())) { ++calls; throw IpaError("unexpected repeated password POST"); }
     auto reply=replies[calls++]; decoded=reply.second; return reply.first;
   }
@@ -87,12 +89,42 @@ def run(root):
     main=(root/'main.cpp').read_text(encoding='utf-8')
     _,opening,_=function_span(store,'Account AppStore::do_login(')
     end=store.index('    std::string sf, pod;',opening)
-    login='void login(std::string authCode="") {\nstd::string email="fixture", password="fixture", guid="fixture", baseEndpoint="https://buy.itunes.apple.com/auth";\n'+store[opening+1:end]+'}\n'
+    native='const bool nativeAuth' in store[opening:end]
+    prelude, cases = PRELUDE, CASES
+    endpoint = "https://buy.itunes.apple.com/auth"
+    if native:
+        endpoint = "https://auth.itunes.apple.com/auth/v1/native"
+        prelude = prelude.replace("struct FakeHttp", "struct HttpClient")
+        prelude += r"""
+namespace ipt {
+int provisionings=0;
+std::map<std::string,std::string> store_proof_headers(const std::string& challenge, const std::string&) {
+    if (!challenge.empty()) ++provisionings;
+    return challenge.empty() ? std::map<std::string,std::string>{}
+        : std::map<std::string,std::string>{{"X-Apple-AMD","proof"}};
+}
+}
+#include "store_proof.h"
+"""
+        cases = cases.replace("https://p1-buy.itunes.apple.com/auth", endpoint + "/")
+        cases = cases.replace("https://p1-buy.itunes.apple.com/private?token=private", endpoint + "?token=private")
+        cases = cases.replace("host=buy.itunes.apple.com", "host=auth.itunes.apple.com")
+        cases = cases.replace("host=p1-buy.itunes.apple.com", "host=auth.itunes.apple.com")
+        cases = cases.replace("https://evil.example/auth", endpoint + "/fast")
+        cases = cases.replace("  m_http={};Account account;", r"""
+  m_http={{{HttpResponse{200,"",{{"x-apple-amd-action","SP"},{"x-apple-amd-data","challenge"}}},{}},{HttpResponse{200},success}},0};
+  login();assert(m_http.calls==2 && ipt::provisionings==1);
+  assert(m_http.lastHeaders.at("X-Apple-AMD")=="proof" && m_http.lastHeaders.at(HTTP_HEADER_SAP_SIGNATURE)=="fixture");
+  m_http={{{HttpResponse{200,"",{{"x-apple-amd-action","SP"}}},{} }},0};
+  bool missing=false;try{login();}catch(const IpaError&){missing=true;}
+  assert(missing && m_http.calls==1 && ipt::provisionings==1);
+  m_http={};Account account;""")
+    login='void login(std::string authCode="") {\nstd::string email="fixture", password="fixture", guid="fixture", baseEndpoint="'+endpoint+'";\n'+store[opening+1:end]+'}\n'
     start,_,end=function_span(main,'static bool silent_relogin(')
     # Exercise actual patched native control flow, not a second implementation of its retry policy.
     with tempfile.TemporaryDirectory(prefix='ipa-native-auth-') as temporary:
         source=Path(temporary)/'auth.cpp';binary=Path(temporary)/'auth.exe'
-        source.write_text(PRELUDE+login+main[start:end]+CASES,encoding='utf-8')
+        source.write_text(prelude+login+main[start:end]+cases,encoding='utf-8')
         subprocess.run(['g++','-std=c++20','-O0','-I'+str(root),str(source),'-o',str(binary)],check=True)
         subprocess.run([str(binary)],check=True,timeout=15)
     http=(root/'http_client.cpp').read_text(encoding='utf-8')
