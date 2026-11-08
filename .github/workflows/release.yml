@@ -90,30 +90,24 @@ jobs:
         id: engine
         shell: pwsh
         run: |
-          $pin=Get-Content Tools/AccountSafety/pins.json -Raw | ConvertFrom-Json
+          $pin=Get-Content Tools/AccountSafety/Windows/pin.json -Raw | ConvertFrom-Json
           gh release view $pin.tag --json assets 2>$null | Out-Null
           "build=$((-not ($LASTEXITCODE -eq 0)).ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           exit 0
-      - uses: msys2/setup-msys2@v2
+      - uses: actions/setup-go@v5
         if: steps.engine.outputs.build == 'true'
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git make mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja mingw-w64-x86_64-python
-            mingw-w64-x86_64-minizip mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-bzip2 mingw-w64-x86_64-nlohmann-json
+          go-version: '1.26.5'
+          cache: false
       - name: Build guarded Windows engine if missing
         if: steps.engine.outputs.build == 'true'
-        shell: msys2 {0}
-        run: bash Tools/AccountSafety/build.sh
+        run: python Tools/AccountSafety/Windows/build.py
       - name: Publish verified Windows guarded engine
         if: steps.engine.outputs.build == 'true'
         shell: pwsh
         run: |
-          $pin=Get-Content Tools/AccountSafety/pins.json -Raw | ConvertFrom-Json
-          gh release create $pin.tag "artifacts/IPA-AuthTools-$($pin.version)-Windows-x64.zip" "artifacts/IPA-AuthTools-$($pin.version)-Sources.zip" --target $env:GITHUB_SHA --title "ipatool $($pin.version) — guarded authentication" --notes-file Tools/AccountSafety/README.md --latest=false
+          $pin=Get-Content Tools/AccountSafety/Windows/pin.json -Raw | ConvertFrom-Json
+          gh release create $pin.tag "artifacts/IPA-AuthTools-$($pin.version)-Windows-x64.zip" "artifacts/IPA-AuthTools-$($pin.version)-Sources.zip" --target $env:GITHUB_SHA --title "ipatool $($pin.version) — guarded authentication" --notes-file Tools/AccountSafety/Windows/README.md --latest=false
           if($LASTEXITCODE -ne 0){throw 'Guarded engine release failed'}
       - name: Package and verify shipping application
         if: needs.prepare.outputs.package == 'true'

@@ -107,6 +107,10 @@ namespace IpaDesktop
                         "HTTP 204 не содержит данных для создания сессии или продолжения входа. Причину по нему определить нельзя.",
                         "Проверьте тот же аккаунт в App Store. Если там всё работает, передайте технические сведения из этого окна. Автоматического повтора нет."));
                 var lower = text.ToLowerInvariant();
+                if (lower.Contains("store runtime preparation failed"))
+                    throw new AppleLoginException(new UserError(FailureCode.Unknown, "Не удалось подготовить вход в App Store",
+                        "Движок не загрузил или не запустил компоненты для авторизации либо Apple не завершила подготовку устройства.",
+                        "Проверьте подключение к Apple и GitHub, свободное место и версию движка. Автоматического повтора нет."));
                 var failure = ErrorLocalizer.Describe(text);
                 if (lower.Contains("verification code rejected") || (codeSent && failure.Code == FailureCode.Credentials))
                     throw new AppleLoginException(new UserError(FailureCode.Unknown, "Код подтверждения не принят",
@@ -147,7 +151,7 @@ namespace IpaDesktop
                 using (var lease = guard?.Enter(true, ct))
                 using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
-                    timeout.CancelAfter(TimeSpan.FromMinutes(5));
+                    timeout.CancelAfter(TimeSpan.FromMinutes(RuntimePlatform.Windows ? 10 : 5));
                     var token = timeout.Token; var protocol = new AppleLoginProtocol(); string email = null;
                     try
                     {

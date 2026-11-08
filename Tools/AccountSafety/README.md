@@ -2,6 +2,8 @@
 
 Based on Sorvigolova/ipatool 1.2.1 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
 
+Windows now builds a separate [guarded engine](Windows/README.md). The C++ pin here remains the source for the bundled macOS and Linux engines.
+
 - No silent login with a stored password. New sessions do not store the Apple password, and passwords from old session files are ignored.
 - A credential rejection stops the attempt immediately. Authentication transport failures are not retried.
 - Apple-directed HTTPS redirects to `apple.com` subdomains remain supported (maximum four hops); a requested 2FA phase remains a separate explicit user action.
@@ -10,7 +12,7 @@ Based on Sorvigolova/ipatool 1.2.1 at the immutable revision in `pins.json`. MIT
 
 `patch.py` checks hashes of the reviewed source files and stops on any upstream change. `test_auth.py` compiles the patched native login control flow with a fake HTTP transport and checks request counts for invalid passwords, transport failures, 2FA, redirects and account restrictions, without contacting Apple. The same tests prove silent login sends zero requests.
 
-The existing Windows release workflow builds this engine only when the pinned engine release is absent. It publishes a separate binary ZIP, complete patched source ZIP and license files, then builds/releases the GUI. Future GUI releases reuse this engine; no extra workflow or scheduled job is added.
+The original Windows build recipe is retained for reproducing older engine releases.
 
 Version 1.2.1.1 incorporates upstream commit `3d36465d614bea25fbfb6eed53fa51ac0f16bf5f` (Windows CFG fix). Authentication source files retain their reviewed hashes; `CMakeLists.txt` is also pinned before appending the offline fixture target. The safety profile and password retry policy are unchanged.
 
