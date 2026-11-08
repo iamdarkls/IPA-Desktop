@@ -14,7 +14,21 @@ git -C "$source_root" -c core.autocrlf=false checkout --detach FETCH_HEAD
 test "$(git -C "$source_root" rev-parse HEAD)" = "$pinned_revision"
 python Tools/AccountSafety/patch.py "$source_root" "$pin"
 python Tools/AccountSafety/test_auth.py "$source_root"
-cmake -S "$source_root" -B "$build_root" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON
+# The MSYS2 Minizip config can reference an unshipped minizipstatic.exe.
+# Keep IPA metadata support by using the installed headers and static archive.
+mingw_prefix="$(cygpath -m /mingw64)"
+for file in include/minizip/zip.h include/minizip/unzip.h lib/libminizip.a; do
+  if [[ ! -f "$mingw_prefix/$file" ]]; then
+    printf 'Required static Minizip file missing: %s\n' "$file" >&2
+    exit 1
+  fi
+done
+cmake -S "$source_root" -B "$build_root" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DSTATIC_BUILD=ON \
+  -DCMAKE_DISABLE_FIND_PACKAGE_minizip=ON \
+  -DCMAKE_DISABLE_FIND_PACKAGE_unofficial-minizip=ON \
+  -DMINIZIP_INCLUDE_DIR:PATH="$mingw_prefix/include" \
+  -DMINIZIP_LIBRARY:FILEPATH="$mingw_prefix/lib/libminizip.a"
 cmake --build "$build_root" --parallel 2
 python Tools/AccountSafety/verify_cfg.py "$build_root" "$stage"
 cp "$build_root/ipatool.exe" "$stage/ipatool.exe"
