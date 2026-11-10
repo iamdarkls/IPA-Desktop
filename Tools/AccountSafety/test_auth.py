@@ -89,35 +89,39 @@ def run(root):
     main=(root/'main.cpp').read_text(encoding='utf-8')
     _,opening,_=function_span(store,'Account AppStore::do_login(')
     end=store.index('    std::string sf, pod;',opening)
-    native='const bool nativeAuth' in store[opening:end]
+    native='provRound' in store[opening:end]
     prelude, cases = PRELUDE, CASES
     endpoint = "https://buy.itunes.apple.com/auth"
     if native:
         endpoint = "https://auth.itunes.apple.com/auth/v1/native"
-        prelude = prelude.replace("struct FakeHttp", "struct HttpClient")
         prelude += r"""
-namespace ipt {
+const std::string PROV_AUTH_UA="fixture";
+constexpr uint64_t kAnonAdiDSID=~uint64_t(0);
 int provisionings=0;
-std::map<std::string,std::string> store_proof_headers(const std::string& challenge, const std::string&) {
-    if (!challenge.empty()) ++provisionings;
-    return challenge.empty() ? std::map<std::string,std::string>{}
-        : std::map<std::string,std::string>{{"X-Apple-AMD","proof"}};
+void prov_log(const std::string&) {}
+void prov_add_md(std::map<std::string,std::string>& headers, uint64_t, const char*) {
+    if (provisionings) headers["X-Apple-AMD"]="proof";
 }
+bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::string&, const char*) {
+    const auto action=res.headers.find("x-apple-amd-action");
+    const auto challenge=res.headers.find("x-apple-amd-data");
+    if (action==res.headers.end() || action->second!="SP" ||
+        challenge==res.headers.end() || challenge->second.empty()) return false;
+    ++provisionings;
+    return true;
 }
-#include "store_proof.h"
 """
         cases = cases.replace("https://p1-buy.itunes.apple.com/auth", endpoint + "/")
         cases = cases.replace("https://p1-buy.itunes.apple.com/private?token=private", endpoint + "?token=private")
         cases = cases.replace("host=buy.itunes.apple.com", "host=auth.itunes.apple.com")
         cases = cases.replace("host=p1-buy.itunes.apple.com", "host=auth.itunes.apple.com")
-        cases = cases.replace("https://evil.example/auth", endpoint + "/fast")
         cases = cases.replace("  m_http={};Account account;", r"""
   m_http={{{HttpResponse{200,"",{{"x-apple-amd-action","SP"},{"x-apple-amd-data","challenge"}}},{}},{HttpResponse{200},success}},0};
-  login();assert(m_http.calls==2 && ipt::provisionings==1);
+  login();assert(m_http.calls==2 && provisionings==1);
   assert(m_http.lastHeaders.at("X-Apple-AMD")=="proof" && m_http.lastHeaders.at(HTTP_HEADER_SAP_SIGNATURE)=="fixture");
   m_http={{{HttpResponse{200,"",{{"x-apple-amd-action","SP"}}},{} }},0};
   bool missing=false;try{login();}catch(const IpaError&){missing=true;}
-  assert(missing && m_http.calls==1 && ipt::provisionings==1);
+  assert(missing && m_http.calls==1 && provisionings==1);
   m_http={};Account account;""")
     login='void login(std::string authCode="") {\nstd::string email="fixture", password="fixture", guid="fixture", baseEndpoint="'+endpoint+'";\n'+store[opening+1:end]+'}\n'
     start,_,end=function_span(main,'static bool silent_relogin(')

@@ -10,7 +10,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/App.ico</ApplicationIcon>
-    <Version>1.2.4</Version>
+    <Version>1.2.5</Version>
     <Description>IPA Desktop: iPhone installation, downloads and operation queue with connection recovery</Description>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>

@@ -49,7 +49,7 @@ namespace IpaDesktop
             body.Children.Add(Status);
             body.Children.Add(Note("Пароль и код не передаются в командной строке и не записываются в журнал IPA Desktop. Защищённый движок сохраняет сессию без пароля Apple Account. Кнопка «Выйти» удаляет сохранённую сессию.", 12));
             body.Children.Add(Note(RuntimePlatform.Windows
-                ? "Первый вход может занять до 10 минут: движок скачивает и проверяет файлы для авторизации."
+                ? "Первый вход может занять до 10 минут: движок регистрирует устройство в App Store."
                 : "Вход в приватном терминале. Время одной попытки — до 5 минут.", 10));
             layout.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };

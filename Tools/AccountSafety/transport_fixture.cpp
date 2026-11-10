@@ -2,6 +2,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -15,6 +16,7 @@ enum { CURLOPT_URL,CURLOPT_USERAGENT,CURLOPT_SSL_VERIFYPEER,CURLOPT_CONNECTTIMEO
 struct CURL {};
 struct curl_slist {};
 struct HttpResponse { int statusCode=0;std::string body;std::map<std::string,std::string> headers; };
+std::function<void(const std::string&, const std::string&, const HttpResponse&)> m_observer;
 struct DnsResolveError:std::runtime_error { using std::runtime_error::runtime_error; };
 int calls=0,result=CURLE_OK,body_write_cb=0,header_cb=0;
 long status=200;

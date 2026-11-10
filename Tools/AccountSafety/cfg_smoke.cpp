@@ -5,9 +5,6 @@
 #include <windows.h>
 #include <unicorn/unicorn.h>
 #include <unicorn/x86.h>
-#ifdef IPA_CFG_ARM64
-#include <unicorn/arm64.h>
-#endif
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -22,27 +19,6 @@ static bool check(uc_err error) {
 static void stop_hook(uc_engine* engine, uint64_t, uint32_t, void* value) {
     if (++*static_cast<int*>(value) == 20) uc_emu_stop(engine);
 }
-#ifdef IPA_CFG_ARM64
-static bool arm64_smoke() {
-    uc_engine* engine = nullptr;
-    if (!check(uc_open(UC_ARCH_ARM64, UC_MODE_ARM, &engine))) return false;
-    const uint8_t loop[] = {0x00,0x04,0x00,0x91,0xff,0xff,0xff,0x17}; // add x0,x0,#1; b back
-    bool ok = check(uc_mem_map(engine,0x1000,0x1000,UC_PROT_ALL)) &&
-        check(uc_mem_write(engine,0x1000,loop,sizeof(loop)));
-    for (int attempt=0; ok && attempt<20; ++attempt) {
-        uint64_t value=0;
-        ok = check(uc_reg_write(engine,UC_ARM64_REG_X0,&value)) &&
-            check(uc_emu_start(engine,0x1000,0x1008,0,100)) &&
-            check(uc_reg_read(engine,UC_ARM64_REG_X0,&value)) && value==50;
-        int calls=0; uc_hook hook{};
-        if (ok) ok=check(uc_hook_add(engine,&hook,UC_HOOK_CODE,reinterpret_cast<void*>(stop_hook),&calls,1,0));
-        if (ok) ok=check(uc_emu_start(engine,0x1000,0x1008,0,0)) && calls==20;
-        if (hook) uc_hook_del(engine,hook);
-    }
-    uc_close(engine);
-    return ok;
-}
-#endif
 static int child() {
     PROCESS_MITIGATION_CONTROL_FLOW_GUARD_POLICY policy{};
     if (!GetProcessMitigationPolicy(GetCurrentProcess(), ProcessControlFlowGuardPolicy, &policy, sizeof(policy)) || !policy.EnableControlFlowGuard) {
@@ -65,9 +41,6 @@ static int child() {
         if (ok) ok=uc_emu_start(engine,0x2000,0x2002,0,0)==UC_ERR_INSN_INVALID;
     }
     uc_close(engine);
-#ifdef IPA_CFG_ARM64
-    if (ok) ok=arm64_smoke();
-#endif
     if (!ok) { std::fprintf(stderr,"Unicorn exit/recovery invariant failed\n"); return 1; }
     return 0;
 }
