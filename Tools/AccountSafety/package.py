@@ -13,7 +13,7 @@ script.write_text('param([string]$Executable,[string]$Command)\n$env:PATH="$env:
 try:
     command=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script.resolve()),str(exe.resolve())]
     output=subprocess.check_output([*command,'account-safety-info'],text=True,timeout=15).strip()
-    help_text=subprocess.check_output([*command,'--help'],text=True,timeout=15)
+    help_text=subprocess.check_output([*command,'help'],text=True,timeout=15)
     for option in ('--format','--external-version-id','--purchase','list-purchases','--ipa-desktop-cache'):
         if option not in help_text:
             raise RuntimeError('Missing engine CLI option: '+option)
