@@ -15,6 +15,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     readonly IAccountSession accounts;
     readonly IAccountProtection protection;
     readonly ILocalApps localApps;
+    readonly IApplicationDownloads downloads;
     readonly IAppCatalog catalog;
     readonly INetworkDiagnostics network;
     IDisposable eventSubscription;
@@ -39,6 +40,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     public UpdatesViewModel Updates => updates;
     public AppSetsViewModel AppSets => appSets;
     public StorageViewModel Storage => storage;
+    public ArchiveCacheViewModel ArchiveCache { get; }
     public LibraryViewModel Library => library;
     FeatureViewModel[] Features = Array.Empty<FeatureViewModel>();
     public IDesktopInteraction Interaction { get; }
@@ -73,6 +75,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         if (appSets != null) appSets.RefreshActions();
         if (storage != null) storage.RefreshActions();
         library?.RefreshActions();
+        ArchiveCache?.RefreshActions();
         NoticeRetryEnabled = !IsBusy && noticeRetry != null && lastReport != null && lastReport.Failed > 0 &&
             (lastReport.Kind == "Скачивание" ? Search.RetryDownloadsEnabled : Files.RetryInstallsEnabled);
         ShowLastReportEnabled = lastReport != null;
@@ -149,6 +152,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
             RenderQueue();
             StateView();
             RefreshFiles();
+            if (ArchiveCache != null) _ = Tasks.Run(ArchiveCache.RefreshUsage);
             ApplyActions();
             if (exitingForUpdate) Interaction.Close();
             else files.ResumeDeviceDetection();
@@ -159,7 +163,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(services);
         settings = services.Settings; paths = services.Paths; accounts = services.Accounts;
-        protection = services.Protection; localApps = services.LocalApps; network = services.Network; catalog = services.Catalog;
+        protection = services.Protection; localApps = services.LocalApps; downloads = services.Downloads; network = services.Network; catalog = services.Catalog;
         Interaction = interaction ?? throw new ArgumentNullException(nameof(interaction));
         CancelRequested = () => cancellation?.Cancel();
         JournalRequested = ShowJournal;
@@ -170,7 +174,8 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         updates = new(this, services.Settings, services.ToolUpdates, services.GuiUpdates);
         storage = new(this); appSets = new(this, services.AppSets, services.LocalApps, services.Downloads);
         library = new(this, services.Devices, services.LocalApps, services.Purchases, services.Protection);
-        Features = new FeatureViewModel[] { account, search, files, updates, appSets, storage, library };
+        ArchiveCache = new(this, settings, services.ArchiveCache);
+        Features = new FeatureViewModel[] { account, search, files, updates, appSets, storage, library, ArchiveCache };
         eventSubscription = Tasks.Own(services.Events.Subscribe(Log, value =>
         {
             long now = Stopwatch.GetTimestamp();
@@ -204,6 +209,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     public void Opened(bool checkAtStartup)
     {
         Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + paths.Downloads);
+        _ = Tasks.Run(ArchiveCache.RefreshUsage);
         if (!checkAtStartup) return;
         files.StartDeviceDetection();
         StartCheck("Компоненты Apple", files.CheckSupport);

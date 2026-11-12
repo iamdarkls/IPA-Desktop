@@ -6,4 +6,4 @@ public sealed record DesktopServices(
     IAppleLoginService Login, IAppToolClient Tools, IAppCatalog Catalog, IAppVersions Versions,
     IPurchaseHistory Purchases, IApplicationDownloads Downloads, ILocalApps LocalApps, IAppSets AppSets,
     IDeviceService Devices, IAppleSupport AppleSupport, INetworkDiagnostics Network,
-    IToolUpdates ToolUpdates, IGuiUpdates GuiUpdates, IApplicationEvents Events);
+    IToolUpdates ToolUpdates, IGuiUpdates GuiUpdates, IApplicationEvents Events, IpaArchiveCache ArchiveCache);

@@ -19,8 +19,10 @@ public sealed partial class DesktopViewModel
         int at = email.IndexOf('@');
         return at > 0 ? email.Substring(0, Math.Min(2, at)) + "…" + email.Substring(at) : "…" + email.Substring(Math.Max(0, email.Length - 4));
     }
+    internal string CurrentAccountEmail { get; private set; }
     internal void SetAccountIdentity(string email)
     {
+        CurrentAccountEmail = String.IsNullOrWhiteSpace(email) ? null : email.Trim();
         AccountKey = String.IsNullOrWhiteSpace(email) ? null : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant())));
         Queue.Refresh();
     }

@@ -3,6 +3,7 @@ namespace IpaDesktop
     /// <summary>Метаданные IPA, прочитанные из архива; отсутствующие поля остаются неизвестными.</summary>
     public sealed class IpaDetails
     {
+        public string ExternalVersionID { get; set; }
         public string AppStoreID { get; set; }
         public string Account { get; set; }
         public string BundleID { get; set; }

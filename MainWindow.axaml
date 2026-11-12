@@ -408,6 +408,18 @@
                   <TextBlock Text="Один маршрут для входа и загрузок. Проверка сети не отправляет пароль и не сбрасывает паузы Apple Account." FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
                 </StackPanel>
               </Border>
+              <Border Classes="card" Padding="20" Margin="0,0,0,20">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="Кэш исходных IPA" FontSize="20" FontWeight="SemiBold" />
+                  <TextBlock Text="{CompiledBinding ArchiveCache.Usage}" Foreground="{DynamicResource AccentTextBrush}" />
+                  <WrapPanel>
+                    <NumericUpDown x:Name="ArchiveCacheLimit" Minimum="0" Maximum="32" Increment="1" FormatString="0" Width="115" Margin="0,0,8,8" Value="{CompiledBinding ArchiveCache.Limit, Mode=TwoWay}" IsEnabled="{CompiledBinding ArchiveCache.CanEdit}" AutomationProperties.Name="Лимит кэша в ГиБ" />
+                    <Button Content="Сохранить лимит" Command="{CompiledBinding ArchiveCache.SaveCommand}" />
+                    <Button Content="Очистить кэш" ui:ActionIcon.Kind="Trash" Command="{CompiledBinding ArchiveCache.ClearCommand}" />
+                  </WrapPanel>
+                  <TextBlock Text="Лимит в ГиБ. 0 отключает кэш. Готовые IPA в библиотеке сохраняются при очистке." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
+                </StackPanel>
+              </Border>
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">
                 <StackPanel>
                   <TextBlock Text="Уведомления" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />

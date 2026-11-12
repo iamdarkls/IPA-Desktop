@@ -21,6 +21,7 @@ public sealed class QueueItemViewModel : ObservableObject
     QueueItemState state;
     double? percent;
     string detail = "Ожидает запуска";
+    internal string Phase { get; private set; }
     public QueueItemViewModel(QueueSeed seed, QueueBatchViewModel batch) { Seed = seed; Batch = batch; }
     public string Name => Seed.Name;
     public string Version => String.IsNullOrWhiteSpace(Seed.Version) ? "Не указана" : Seed.Version;
@@ -30,10 +31,10 @@ public sealed class QueueItemViewModel : ObservableObject
     public double Progress => state == QueueItemState.Succeeded ? 100 : percent ?? 0;
     public bool Indeterminate => state == QueueItemState.Running && !percent.HasValue;
     public string ProgressText => state == QueueItemState.Succeeded ? "100%" : percent.HasValue ? percent.Value.ToString("0") + "%" : "—";
-    public string Detail => detail;
+    public string Detail => Phase == null ? detail : String.IsNullOrWhiteSpace(detail) ? Phase : Phase + " · " + detail;
     public string Status => state switch
     {
-        QueueItemState.Running => "Выполняется",
+        QueueItemState.Running => Phase ?? "Выполняется",
         QueueItemState.Succeeded => "Готово",
         QueueItemState.Failed => "Ошибка",
         QueueItemState.Paused => "Не запущено",
@@ -46,6 +47,7 @@ public sealed class QueueItemViewModel : ObservableObject
         state = value; detail = message; percent = value == QueueItemState.Waiting ? null : value == QueueItemState.Succeeded ? 100 : progress ?? percent;
         foreach (var property in new[] { nameof(State), nameof(Status), nameof(Detail), nameof(Progress), nameof(ProgressText), nameof(Indeterminate) }) Changed(property);
     }
+    internal void SetPhase(string value) { Phase = value; detail = ""; Changed(nameof(Status)); Changed(nameof(Detail)); }
     public void Measure(double? value, string metrics)
     {
         if (state != QueueItemState.Running) return;
@@ -72,6 +74,7 @@ public sealed class OperationQueueViewModel : ObservableObject
     IReadOnlyList<QueueItemViewModel> active = Array.Empty<QueueItemViewModel>();
     QueueItemViewModel current, selected;
     bool busy;
+    internal QueueItemViewModel CurrentItem => System.Threading.Volatile.Read(ref current);
     public Action PersistRequested { get; set; }
     string storageStatus = "История сохраняется на этом компьютере; продолжение запускается вручную.";
     public string StorageStatus { get => storageStatus; set => Set(ref storageStatus, value); }
@@ -149,7 +152,9 @@ public sealed class OperationQueueViewModel : ObservableObject
     }
     public void Begin(int position)
     {
-        current = active[position - 1]; Selected = current; current.Update(QueueItemState.Running, "Ожидание прогресса от утилиты"); Refresh(); PersistRequested?.Invoke();
+        current = active[position - 1]; Selected = current; current.Update(QueueItemState.Running, "");
+        current.SetPhase(current.Kind == "Установка" ? "Готовый IPA найден" : "Проверяем доступ в App Store");
+        Refresh(); PersistRequested?.Invoke();
     }
     public void Result(Exception error)
     {
@@ -173,6 +178,11 @@ public sealed class OperationQueueViewModel : ObservableObject
             current.Update(canceled ? QueueItemState.Interrupted : QueueItemState.Uncertain, reason + " Проверьте результат перед повтором.");
         foreach (var item in active.Where(x => x.State == QueueItemState.Waiting)) item.Update(QueueItemState.Paused, reason + " Автоматического продолжения не будет.");
         current = null; active = Array.Empty<QueueItemViewModel>(); Refresh(); PersistRequested?.Invoke();
+    }
+    internal void SetPhase(QueueItemViewModel item, string phase)
+    {
+        if (item == null || item != current || item.Kind != "Скачивание") return;
+        item.SetPhase(phase); Changed(nameof(SelectionDetail));
     }
     public void Measure(double? percent, string metrics) { current?.Measure(percent, metrics); Changed(nameof(SelectionDetail)); }
     public void SetBusy(bool value) { busy = value; Refresh(); }

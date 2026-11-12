@@ -13,7 +13,13 @@ namespace fs = std::filesystem;
 // Set by the download command only. The cache contains original CDN bytes,
 // never the personalized IPA, license data, URLs or credentials.
 inline fs::path directory;
-constexpr std::uintmax_t max_bytes = 3ull * 1024 * 1024 * 1024;
+constexpr std::uintmax_t gib = 1024ull * 1024 * 1024;
+inline std::uintmax_t max_bytes = 3 * gib;
+inline void configure(const std::string& folder, const std::string& limit) {
+    if (!limit.empty() && limit.size() <= 2 && limit.find_first_not_of("0123456789") == std::string::npos)
+        max_bytes = (std::min)(std::stoi(limit), 32) * gib;
+    directory = max_bytes == 0 ? fs::path{} : ipt::fs_path(folder);
+}
 constexpr std::size_t max_entries = 100;
 
 inline bool valid_hash(const std::string& hash) {

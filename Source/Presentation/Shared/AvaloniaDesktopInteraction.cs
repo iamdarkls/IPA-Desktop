@@ -48,6 +48,7 @@ internal sealed class AvaloniaDesktopInteraction : IDesktopInteraction, IDisposa
         journal = new JournalWindow(window, model); journal.Closed += (_, _) => journal = null; journal.Show(window);
     }
     public Task ShowText(string title, string details) => ShowModal(AppDialogs.Text(window, title, details));
+    public Task<InstallAccountChoice> ChooseInstallAccount(string message, bool canPrepare) => AppDialogs.ChooseInstallAccount(window, message, canPrepare, Lifetime);
     public Task<bool> Confirm(string title, string message) => AppDialogs.Confirm(window, title, message, Lifetime);
     public async Task<string> Login(IAppleLoginService service, CancellationToken cancellation)
     {

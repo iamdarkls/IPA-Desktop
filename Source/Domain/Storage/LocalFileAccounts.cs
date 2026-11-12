@@ -18,7 +18,7 @@ namespace IpaDesktop
     {
         static readonly string[] MissingStatuses = { "Не указан", "Не удалось прочитать", "Нет доступа", "Метаданные слишком велики" };
 
-        static string Normalize(string account)
+        public static string Normalize(string account)
         {
             var value = (account ?? "").Trim();
             // Эти значения возвращает IpaMetadata при отсутствии или ошибке чтения, это не имена аккаунтов.

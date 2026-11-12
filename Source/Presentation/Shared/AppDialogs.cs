@@ -72,6 +72,28 @@ public static class AppDialogs
         using var registration = cancellation.Register(() => Dispatcher.UIThread.Post(() => dialog.Close(false)));
         return await pending;
     }
+    public static async Task<InstallAccountChoice> ChooseInstallAccount(Window owner, string message, bool canPrepare, CancellationToken cancellation)
+    {
+        var dialog = Create(owner, "Владелец IPA", 660, 370);
+        var layout = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("*,Auto") };
+        layout.Children.Add(new ScrollViewer { Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap } });
+        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var cancel = Action("Отмена", IconKind.Close); cancel.IsCancel = true; cancel.IsDefault = true;
+        cancel.Click += (_, _) => dialog.Close(InstallAccountChoice.Cancel);
+        var original = Action("Оставить исходные IPA", IconKind.Folder);
+        original.Click += (_, _) => dialog.Close(InstallAccountChoice.InstallOriginal);
+        actions.Children.Add(cancel); actions.Children.Add(original);
+        if (canPrepare)
+        {
+            var prepare = Action("Подготовить для текущего аккаунта", IconKind.Download, primary: true);
+            prepare.Click += (_, _) => dialog.Close(InstallAccountChoice.PrepareForCurrent);
+            actions.Children.Add(prepare);
+        }
+        Grid.SetRow(actions, 1); layout.Children.Add(actions); dialog.Content = layout;
+        var pending = dialog.ShowDialog<InstallAccountChoice>(owner);
+        using var registration = cancellation.Register(() => Dispatcher.UIThread.Post(() => dialog.Close(InstallAccountChoice.Cancel)));
+        return await pending;
+    }
     public static Window Ipa(Window owner, LocalRow row) => Text(owner, "Сведения об IPA — " + row.DisplayName,
         row.FileDetails + Environment.NewLine + "App Store ID: " + (row.AppStoreID ?? "не указан") +
         Environment.NewLine + "Bundle ID: " + (row.BundleID ?? "не указан") +

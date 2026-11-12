@@ -57,6 +57,57 @@ public sealed class ServiceBoundaryTests
         await account.Account(TestContext.Current.CancellationToken);
         Assert.Equal(1, session.Reads); Assert.Equal("fixture@example.com", account.AccountLabel); Assert.NotNull(desktop.AccountKey);
     }
+    sealed class PreparedDownload : IApplicationDownloads
+    {
+        readonly string folder;
+        public string Version = "456";
+        public PreparedDownload(string folder) => this.folder = folder;
+        public Task DownloadAsync(DownloadItem item, CancellationToken cancellation) => DownloadFileAsync(item, cancellation);
+        public Task<string> DownloadFileAsync(DownloadItem item, CancellationToken cancellation)
+        {
+            Assert.Equal("123", item.ID); Assert.Equal("456", item.VersionID);
+            var path = Path.Combine(folder, Guid.NewGuid() + ".ipa");
+            using var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create);
+            using var writer = new StreamWriter(zip.CreateEntry("iTunesMetadata.plist").Open());
+            writer.Write($"<plist><dict><key>itemId</key><integer>123</integer><key>softwareVersionExternalIdentifier</key><integer>{Version}</integer><key>appleId</key><string>fixture@example.com</string></dict></plist>");
+            return Task.FromResult(path);
+        }
+    }
+    [Fact]
+    public async Task AccountPreparationRequiresMatchingStoreBuildAndKeepsOriginal()
+    {
+        using var folder = new TempFolder();
+        var engine = new Engine(folder.Path, new RecordingProcessRunner(), new InstalledAppleSupportProbe());
+        var download = new PreparedDownload(engine.Downloads);
+        var services = engine.CreateDesktopServices() with { Accounts = new Session(), Downloads = download };
+        await using var desktop = new DesktopViewModel(services, new NoWindowInteraction());
+        desktop.SetAccountIdentity("fixture@example.com");
+        var original = new LocalRow { Path = Path.Combine(engine.Downloads, "original.ipa"), Name = "Original.ipa", AppStoreID = "123", ExternalVersionID = "456", AppleAccount = "other@example.com" };
+        File.WriteAllText(original.Path, "untouched");
+        var rows = new List<LocalRow> { original };
+        var prepared = await desktop.PrepareInstallCopies(rows);
+        Assert.Equal("fixture@example.com", prepared[original.Path].AppleAccount);
+        Assert.Equal("456", prepared[original.Path].ExternalVersionID);
+        Assert.Equal("untouched", File.ReadAllText(original.Path));
+        download.Version = "789";
+        Assert.Null(await desktop.PrepareInstallCopies(rows));
+    }
+    [Fact]
+    public async Task ClearingArchiveCacheDoesNotTouchFinishedIpasOrUnrelatedFiles()
+    {
+        using var folder = new TempFolder();
+        var cache = new IpaArchiveCache(folder.Path);
+        Directory.CreateDirectory(cache.Folder);
+        var original = Path.Combine(cache.Folder, "123-" + new string('a', 32) + ".raw");
+        var unrelated = Path.Combine(cache.Folder, "unrelated.raw");
+        var finished = Path.Combine(folder.Path, "finished.ipa");
+        File.WriteAllText(original, "original"); File.WriteAllText(unrelated, "unrelated"); File.WriteAllText(finished, "finished");
+        var ct = TestContext.Current.CancellationToken;
+        Assert.Equal(new FileInfo(original).Length, await cache.SizeAsync(ct));
+        await cache.TrimAsync(0, ct);
+        Assert.Equal(0, await cache.SizeAsync(ct));
+        Assert.True(File.Exists(unrelated)); Assert.True(File.Exists(finished));
+    }
     sealed class DelayedApps : ILocalApps
     {
         public TaskCompletionSource<List<LocalRow>> Rows = new(TaskCreationOptions.RunContinuationsAsynchronously);

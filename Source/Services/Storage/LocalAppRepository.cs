@@ -47,7 +47,7 @@ namespace IpaDesktop
                             metadataCache[path] = cached;
                         }
                         var metadata = cached.Item3;
-                        rows.Add(new LocalRow { Name = file.Name, Size = StorageAnalysis.Bytes(file.Length), Bytes = file.Length, Path = file.FullName, AppleAccount = metadata.Account, AppStoreID = metadata.AppStoreID, BundleID = metadata.BundleID, AppName = metadata.AppName, Version = metadata.Version, Build = metadata.Build, MinimumOS = metadata.MinimumOS, Platforms = metadata.Platforms == null ? null : (string[])metadata.Platforms.Clone() });
+                        rows.Add(new LocalRow { Name = file.Name, Size = StorageAnalysis.Bytes(file.Length), Bytes = file.Length, Path = file.FullName, AppleAccount = metadata.Account, AppStoreID = metadata.AppStoreID, ExternalVersionID = metadata.ExternalVersionID, BundleID = metadata.BundleID, AppName = metadata.AppName, Version = metadata.Version, Build = metadata.Build, MinimumOS = metadata.MinimumOS, Platforms = metadata.Platforms == null ? null : (string[])metadata.Platforms.Clone() });
                     }
                     catch (FileNotFoundException) { }
                     catch (DirectoryNotFoundException) { }

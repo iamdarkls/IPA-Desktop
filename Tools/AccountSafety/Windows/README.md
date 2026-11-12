@@ -1,4 +1,4 @@
-# ipatool-guard 1.3.1.2 · Windows x64
+# ipatool-guard 1.3.1.3 · Windows x64
 
 Built from the complete [Sorvigolova/ipatool 1.3.1 release](https://github.com/Sorvigolova/ipatool/releases/tag/1.3.1). Uses upstream's bundled CoreADI implementation, including provisioning and machine sync. No patch from PR #5, Android package download, or previous helper state is needed.
 

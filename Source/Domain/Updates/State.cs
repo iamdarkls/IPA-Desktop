@@ -10,6 +10,7 @@ namespace IpaDesktop
             AutoUpdateDeviceTools = true;
             CheckGuiUpdates = true;
         }
+        public int IpaCacheGiB { get; set; } = IpaArchiveCache.DefaultGiB;
         public string ProxyMode { get; set; } = "System";
         public string ProxyUrl { get; set; }
         public bool SoundsEnabled { get; set; }

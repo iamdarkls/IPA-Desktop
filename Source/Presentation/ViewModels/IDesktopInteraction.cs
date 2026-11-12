@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 namespace IpaDesktop;
 
+public enum InstallAccountChoice { Cancel, InstallOriginal, PrepareForCurrent }
+
 /// <summary>Platform UI boundary. ViewModels do not know about windows, controls or dispatchers.</summary>
 public interface IDesktopInteraction
 {
@@ -15,6 +17,8 @@ public interface IDesktopInteraction
     void ShowJournal(DesktopViewModel model);
     Task ShowText(string title, string details);
     Task<bool> Confirm(string title, string message);
+    async Task<InstallAccountChoice> ChooseInstallAccount(string message, bool canPrepare) =>
+        await Confirm("Владелец IPA", message) ? InstallAccountChoice.InstallOriginal : InstallAccountChoice.Cancel;
     Task<string> Login(IAppleLoginService service, CancellationToken cancellation);
     Task<IReadOnlyList<string>> SelectVersions(string name, string id, List<AppVersionRow> rows, IAppVersions service, CancellationToken cancellation);
     Task<bool> EditSet(string name, IEnumerable<AppRow> apps, Action<string, IEnumerable<AppRow>> save);

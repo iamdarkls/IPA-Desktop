@@ -33,6 +33,7 @@ namespace IpaDesktop
         public string MinimumOS { get; set; }
         public string[] Platforms { get; set; }
         public long Bytes { get; set; }
+        public string ExternalVersionID { get; set; }
         public string AppStoreID { get; set; }
         public string BundleID { get; set; }
         public string AppName { get; set; }

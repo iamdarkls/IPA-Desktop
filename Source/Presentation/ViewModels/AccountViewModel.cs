@@ -70,7 +70,7 @@ namespace IpaDesktop
         /// <summary>Запрашивает актуальный auth info и обновляет состояние входа только по успешному ответу.</summary>
         public async Task Account(CancellationToken ct)
         {
-            signedIn = false; AccountLabel = "Вход не выполнен";
+            signedIn = false; AccountLabel = "Вход не выполнен"; desktop.SetAccountIdentity(null);
             var email = await accounts.GetEmailAsync(ct);
             desktop.RegisterPrivate(email);
             desktop.SetAccountIdentity(email);

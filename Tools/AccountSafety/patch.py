@@ -90,9 +90,10 @@ def patch_raw_ipa_cache(main, store):
     for_header = '#include "path_utf8.h"'
     main = replace_once(main, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
     store = replace_once(store, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
-    main = replace_once(main, '        cmd_download(args);', """        raw_ipa_cache::directory = ipt::fs_path(get(args, "ipa-desktop-cache", ""));
+    main = replace_once(main, '        cmd_download(args);', """        raw_ipa_cache::configure(get(args, "ipa-desktop-cache", ""), get(args, "ipa-desktop-cache-gib", ""));
         cmd_download(args);""")
     main = replace_once(main, '  download:             -b/--bundle-id', """  --ipa-desktop-cache   Cache original iOS archives in this local folder.
+  --ipa-desktop-cache-gib   Limit in GiB (0–32; default 3).
   download:             -b/--bundle-id""")
     store = replace_once(store, """    int64_t rangeStart = file_size(tmpDest);
     m_http.download(downloadURL, tmpDest, rangeStart, progress);
@@ -112,6 +113,7 @@ def patch_raw_ipa_cache(main, store):
     if (reused) {
         std::cerr << "IPA_RAW_CACHE_HIT\\n";
     } else {
+        std::cerr << "IPA_RAW_CACHE_MISS\\n";
         int64_t rangeStart = file_size(tmpDest);
         m_http.download(downloadURL, tmpDest, rangeStart, progress);
         verify_and_report(tmpDest);

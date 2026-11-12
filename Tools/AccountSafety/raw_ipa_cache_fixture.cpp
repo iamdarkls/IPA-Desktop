@@ -42,7 +42,10 @@ void download(const fs::path& output, const Account& acc, const std::vector<Sinf
 int main(int argc, char** argv) {
     assert(argc == 2);
     const auto root = fs::path(argv[1]);
-    raw_ipa_cache::directory = root / "Cache";
+    raw_ipa_cache::configure(ipt::to_utf8(root / "Cache"), "0");
+    assert(raw_ipa_cache::entry(songId, good).empty());
+    raw_ipa_cache::configure(ipt::to_utf8(root / "Cache"), "5");
+    assert(raw_ipa_cache::max_bytes == 5 * raw_ipa_cache::gib);
     const auto cached = raw_ipa_cache::entry(songId, good);
     assert(cached != raw_ipa_cache::entry(songId + 1, good));
     assert(cached != raw_ipa_cache::entry(songId, alternate));

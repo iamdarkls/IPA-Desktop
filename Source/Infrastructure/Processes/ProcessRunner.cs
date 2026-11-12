@@ -122,8 +122,7 @@ namespace IpaDesktop
                                 if (output.Length<15000000) output.AppendLine();
                             }
                         }
-                        if (publish) Log(e.Data == "IPA_RAW_CACHE_HIT"
-                            ? "Исходный IPA найден в кэше. Собираем копию для текущего аккаунта." : e.Data);
+                        if (publish) Log(e.Data);
                     };
                     DataReceivedEventHandler stderr = delegate(object sender, DataReceivedEventArgs e)
                     {

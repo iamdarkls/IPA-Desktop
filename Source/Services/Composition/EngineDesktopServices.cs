@@ -9,7 +9,7 @@ public sealed partial class Engine
     public DesktopServices CreateDesktopServices() => new(
         settings, new WorkspacePaths(Root, Downloads), new AccountSession(tools), AccountRequests,
         new LoginAdapter(() => AppleLogin), tools, catalog, AppVersions, Purchases, ApplicationDownloads,
-        LocalFiles, AppSets, Devices, AppleSupport, Network, updater, new GuiUpdateAdapter(), new DesktopEvents(this));
+        LocalFiles, AppSets, Devices, AppleSupport, Network, updater, new GuiUpdateAdapter(), new DesktopEvents(this), archiveCache);
 
     sealed class AccountSession : IAccountSession
     {

@@ -415,9 +415,31 @@ namespace IpaDesktop
             if (busy) return;
             if (expectedDevice != null && !String.Equals(ConnectionKey(device), expectedDevice, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Выбран другой iPhone. Повторите подготовку набора.");
             if (resumeBatch != null && !CanResume(resumeBatch.TargetKey)) throw new Exception("Для продолжения восстановите связь с тем же iPhone.");
-            var summary = String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel));
-            if (rows.Count > 8) summary += Environment.NewLine + "… и ещё " + (rows.Count - 8);
+            var account = desktop.CurrentAccountEmail;
+            var mismatched = rows.Where(row => account != null && LocalFileAccounts.Normalize(row.AppleAccount).Length != 0 &&
+                !LocalFileAccounts.Matches(row, account)).ToList();
+            if (mismatched.Count > 0)
+            {
+                bool canPrepare = desktop.CanPrepareInstallCopies(mismatched);
+                var message = "Текущий аккаунт: " + account + "\n\n" + SummarizeInstall(mismatched) +
+                    "\n\nЭти IPA собраны для других аккаунтов. iPhone может запросить исходный аккаунт при установке или запуске." +
+                    (canPrepare ? "\nМожно подготовить копии той же сборки для текущего аккаунта." :
+                        "\nПодготовка недоступна: для части файлов не указан точный ID сборки или требуется заново войти.");
+                var choice = await desktop.Interaction.ChooseInstallAccount(message, canPrepare);
+                if (choice == InstallAccountChoice.Cancel) return;
+                if (choice == InstallAccountChoice.PrepareForCurrent)
+                {
+                    var copies = await desktop.PrepareInstallCopies(mismatched);
+                    if (copies == null) return;
+                    rows = rows.Select(row => copies.GetValueOrDefault(row.Path, row)).DistinctBy(row => row.Path).ToList();
+                    resumeBatch = null; // Prepared copies are new files with their own queue identity.
+                }
+            }
+            var summary = SummarizeInstall(rows);
+            int unknown = rows.Count(row => LocalFileAccounts.Normalize(row.AppleAccount).Length == 0);
+            if (unknown > 0) summary += "\n\nВладелец не определён для IPA: " + unknown + ".";
             if (!await desktop.Interaction.Confirm("Установка", "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?\n\n" + summary)) return;
+            if (DeviceList.SelectedItem is not DeviceRow selected || ConnectionKey(selected) != ConnectionKey(device)) return;
             await desktop.RunWorkAsync("Установка IPA…", async delegate (CancellationToken ct)
             {
                 desktop.StartReport("Установка", rows.Count, () => StartInstall(failedInstalls.Snapshot()));
@@ -448,10 +470,14 @@ namespace IpaDesktop
             });
         }
         /// <summary>В подтверждении различает одноимённые копии разных версий и аккаунтов.</summary>
+        static string SummarizeInstall(List<LocalRow> rows) =>
+            String.Join(Environment.NewLine, rows.Take(8).Select(SelectionLabel)) +
+            (rows.Count > 8 ? Environment.NewLine + "… и ещё " + (rows.Count - 8) : "");
+
         static string SelectionLabel(LocalRow row)
         {
             return row.DisplayName + (String.IsNullOrWhiteSpace(row.Version) ? "" : " · " + row.Version) + " · " +
-                (String.IsNullOrWhiteSpace(row.AppleAccount) ? "аккаунт не указан" : row.AppleAccount);
+                (LocalFileAccounts.Normalize(row.AppleAccount).Length == 0 ? "владелец не определён" : row.AppleAccount);
         }
         /// <summary>Обновляет статус компонентов Apple из отдельного сервиса проверки Windows.</summary>
         public async Task CheckSupport(CancellationToken cancellation)

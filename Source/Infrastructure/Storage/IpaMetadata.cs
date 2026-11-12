@@ -131,6 +131,7 @@ namespace IpaDesktop
                     details.Account = ReadAccount(zip);
                     if (zip.Entries.Count > 30000) return details;
                     var metadata = EntryBytes(zip.GetEntry("iTunesMetadata.plist"));
+                    details.ExternalVersionID = Field(Value(metadata, "softwareVersionExternalIdentifier"));
                     details.AppStoreID = Field(Value(metadata, "itemId", "itemID", "softwareVersionItemId"));
                     details.BundleID = Field(Value(metadata, "softwareVersionBundleId", "bundleId"));
                     details.AppName = Field(Value(metadata, "itemName"));

@@ -85,6 +85,19 @@ namespace IpaDesktop
         /// <summary>Передаёт метрики прогрессу, а обычные сообщения — в ограниченный буфер журнала.</summary>
         internal void Log(string text)
         {
+            string phase = text switch
+            {
+                "IPA_RAW_CACHE_HIT" => "Собираем из кэша",
+                "IPA_RAW_CACHE_MISS" => "Скачиваем с App Store",
+                _ => null
+            };
+            if (phase != null)
+            {
+                var item = Queue.CurrentItem;
+                Interaction.Post(() => Queue.SetPhase(item, phase));
+                journalBuffer.Add(phase);
+                return;
+            }
             if (queueProgress.Feed(text)) return;
             journalBuffer.Add(text);
         }

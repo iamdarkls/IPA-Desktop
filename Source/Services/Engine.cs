@@ -21,6 +21,7 @@ namespace IpaDesktop
         readonly ToolLocator locator;
         readonly IAppToolClient tools;
         readonly AppCatalog catalog;
+        readonly IpaArchiveCache archiveCache;
         readonly EngineUpdater updater;
         public string Root
         {
@@ -131,7 +132,8 @@ namespace IpaDesktop
             Devices = new DeviceService(runner, locator);
             LocalFiles = new LocalAppRepository(Downloads);
             AppSets = new AppSetStore(root, Downloads);
-            ApplicationDownloads = new ApplicationDownloads(tools, Downloads, rawCache: Path.Combine(settings.Root, "Cache", "IPA"));
+            archiveCache = new IpaArchiveCache(settings.Root);
+            ApplicationDownloads = new ApplicationDownloads(tools, Downloads, rawCache: archiveCache.Folder, cacheGiB: () => settings.Settings.IpaCacheGiB);
         }
         public void Save()
         {
