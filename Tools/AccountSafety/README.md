@@ -1,8 +1,8 @@
-# Guarded ipatool 1.2.1.2
+# Guarded ipatool 1.3.1.1
 
-Based on Sorvigolova/ipatool 1.2.1 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
+Based on Sorvigolova/ipatool 1.3.1 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
 
-Windows now builds a separate [guarded engine](Windows/README.md). The C++ pin here remains the source for the bundled macOS and Linux engines.
+Windows now builds a separate [guarded engine](Windows/README.md). The bundled macOS and Linux engines are built from the same upstream release.
 
 - No silent login with a stored password. New sessions do not store the Apple password, and passwords from old session files are ignored.
 - A credential rejection stops the attempt immediately. Authentication transport failures are not retried.

@@ -15,6 +15,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     readonly IAccountSession accounts;
     readonly IAccountProtection protection;
     readonly ILocalApps localApps;
+    readonly IAppCatalog catalog;
     readonly INetworkDiagnostics network;
     IDisposable eventSubscription;
     CancellationTokenSource cancellation;
@@ -85,7 +86,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     /// <summary>Отображает настройки, блокируя повторную реакцию обработчиков переключателей.</summary>
     internal void StateView()
     {
-        Updates.EngineVersion = "Движок: " + (settings.Settings.Version ?? "не установлен");
+        Updates.RefreshEngineState();
         setting = true;
         Updates.CheckGuiUpdates = settings.Settings.CheckGuiUpdates;
         Updates.SoundsEnabled = settings.Settings.SoundsEnabled;
@@ -158,7 +159,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(services);
         settings = services.Settings; paths = services.Paths; accounts = services.Accounts;
-        protection = services.Protection; localApps = services.LocalApps; network = services.Network;
+        protection = services.Protection; localApps = services.LocalApps; network = services.Network; catalog = services.Catalog;
         Interaction = interaction ?? throw new ArgumentNullException(nameof(interaction));
         CancelRequested = () => cancellation?.Cancel();
         JournalRequested = ShowJournal;
@@ -205,66 +206,31 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         Log("IPA Desktop " + AppInfo.Version + ". Файлы: " + paths.Downloads);
         if (!checkAtStartup) return;
         files.StartDeviceDetection();
-        Work("Проверка движка и сохранённого входа…", async delegate (CancellationToken ct)
-        {
-            await files.CheckSupport(ct);
-            if (settings.Settings.CheckGuiUpdates)
-            {
-                try
-                {
-                    await updates.CheckGui(ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    if (ct.IsCancellationRequested) throw;
-                    Log("Проверка IPA Desktop: время ожидания истекло.");
-                }
-                catch (Exception e)
-                {
-                    Log("Проверка IPA Desktop: " + e.Message);
-                }
-            }
-            if (settings.Settings.AutoUpdate)
-            {
-                try
-                {
-                    await updates.Update(ct, true);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception e)
-                {
-                    Log("Не удалось обновить движок: " + e.Message);
-                }
-            }
-            if (settings.Settings.AutoUpdateDeviceTools)
-            {
-                try { await updates.UpdateDevices(ct, true); }
-                catch (OperationCanceledException)
-                {
-                    if (ct.IsCancellationRequested) throw;
-                    Log("Проверка инструментов для iPhone: время ожидания истекло.");
-                }
-                catch (Exception e) { Log("Не удалось обновить инструменты для iPhone: " + e.Message); }
-            }
-            if (!String.IsNullOrEmpty(settings.Settings.Current))
-            {
-                try
-                {
-                    await account.Account(ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception e)
-                {
-                    Log("Проверка входа: " + e.Message);
-                }
-            }
-        });
+        StartCheck("Компоненты Apple", files.CheckSupport);
+        StartCheck("Каталог приложений", catalog.RefreshAsync);
+        if (settings.Settings.CheckGuiUpdates) StartCheck("Проверка IPA Desktop", updates.CheckGui);
+
+        if (!String.IsNullOrEmpty(settings.Settings.Current))
+            Work("Проверка сохранённого входа…", ct => CheckStartup("Проверка входа", account.Account, ct));
+
+        if (RuntimePlatform.Windows && (settings.Settings.AutoUpdate || settings.Settings.AutoUpdateDeviceTools))
+            StartCheck("Обновление инструментов", updates.CheckAutomaticUpdates);
+    }
+    void StartCheck(string name, Func<CancellationToken, Task> check) =>
+        _ = Tasks.Run(ct => CheckStartup(name, check, ct));
+
+    internal async Task ApplyAutomaticUpdates(Func<CancellationToken, Task> apply, CancellationToken ct)
+    {
+        while (IsBusy) await ActiveOperation.WaitAsync(ct);
+        ct.ThrowIfCancellationRequested();
+        await RunWorkAsync("Установка обновлений инструментов…", apply);
+    }
+    internal async Task CheckStartup(string name, Func<CancellationToken, Task> check, CancellationToken ct)
+    {
+        try { await check(ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) { Log(name + ": время ожидания истекло."); }
+        catch (Exception e) { Log(name + ": " + e.Message); }
     }
     public Task ShutdownAsync()
     {

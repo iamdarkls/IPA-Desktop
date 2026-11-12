@@ -30,6 +30,8 @@ public sealed partial class UpdatesViewModel
     public string UpdateNotice { get => updateNotice; set { if (Set(ref updateNotice, value)) RefreshCommands(); } }
     bool updateNoticeVisible = false;
     public bool UpdateNoticeVisible { get => updateNoticeVisible; set { if (Set(ref updateNoticeVisible, value)) RefreshCommands(); } }
+    bool engineUpdateNeeded;
+    public bool EngineUpdateNeeded { get => engineUpdateNeeded; private set => Set(ref engineUpdateNeeded, value); }
     string engineVersion = "Движок не установлен";
     public string EngineVersion { get => engineVersion; set { if (Set(ref engineVersion, value)) RefreshCommands(); } }
     string deviceToolsVersion = "Комплект не установлен";
@@ -59,7 +61,7 @@ public sealed partial class UpdatesViewModel
         RollbackDevicesCommand?.SetAvailability(() => !busy && RollbackDevicesEnabled);
         OpenDeviceReleasesCommand?.SetAvailability(() => true);
         CheckUpdateCommand?.SetAvailability(() => !busy && true);
-        RollbackCommand?.SetAvailability(() => !busy && true);
+        RollbackCommand?.SetAvailability(() => RuntimePlatform.Windows && !busy && !String.IsNullOrEmpty(settings.Settings.Previous));
     }
     public override void RefreshCommands()
     {

@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:ui="using:IpaDesktop" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow" x:DataType="ui:DesktopViewModel">
+<Window xmlns="https://github.com/avaloniaui" xmlns:ui="using:IpaDesktop" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="IPA Desktop" Width="1200" Height="880" MinWidth="940" MinHeight="720" WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}" FontSize="14" UseLayoutRounding="True" x:Class="IpaDesktop.MainWindow" x:DataType="ui:DesktopViewModel">
   <Grid Margin="28,20,28,18">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -24,6 +24,7 @@
       </StackPanel>
       <StackPanel Grid.Column="1" HorizontalAlignment="Right">
         <TextBlock x:Name="EngineVersion" Foreground="{DynamicResource AccentTextBrush}" HorizontalAlignment="Right" Text="{CompiledBinding Updates.EngineVersion}" />
+        <Button x:Name="UpdateEngineNow" ui:ActionIcon.Kind="Refresh" Content="Обновить движок" Classes="primary" HorizontalAlignment="Right" Margin="0,6,0,0" IsVisible="{CompiledBinding Updates.EngineUpdateNeeded}" Command="{CompiledBinding Updates.CheckUpdateCommand}" />
         <TextBlock x:Name="AccountLabel" MaxWidth="340" TextWrapping="Wrap" TextAlignment="Right" Margin="0,6,0,0" Foreground="{DynamicResource MutedBrush}" Text="{CompiledBinding Account.AccountLabel}" />
       </StackPanel>
     </Grid>

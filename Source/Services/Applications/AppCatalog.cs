@@ -36,6 +36,7 @@ namespace IpaDesktop
         DateTime nextCatalogAttemptUtc;
         readonly HttpClient http;
         readonly Func<DateTime> utcNow;
+        readonly SemaphoreSlim refreshGate = new SemaphoreSlim(1, 1);
         readonly SemaphoreSlim searchGate = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Tuple<long, long, List<AppRow>>> parsedFiles =
             new Dictionary<string, Tuple<long, long, List<AppRow>>>(StringComparer.OrdinalIgnoreCase);
@@ -76,52 +77,72 @@ namespace IpaDesktop
             Tuple<long, long, List<AppRow>> cached;
             if (!parsedFiles.TryGetValue(path, out cached) || cached.Item1 != file.Length || cached.Item2 != file.LastWriteTimeUtc.Ticks)
             {
-                cached = Tuple.Create(file.Length, file.LastWriteTimeUtc.Ticks,
-                    ToolResponse.ParseCatalog(File.ReadAllText(path, Encoding.UTF8)));
+                var length = file.Length;
+                var modified = file.LastWriteTimeUtc.Ticks;
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                cached = Tuple.Create(length, modified, ToolResponse.ParseCatalog(reader.ReadToEnd()));
                 parsedFiles[path] = cached;
             }
             return cached.Item3;
         }
+        string CatalogFolder => Path.Combine(Root, "Files");
+        string CatalogPath => Path.Combine(CatalogFolder, "AppsList.txt");
+
+        public Task RefreshAsync(CancellationToken ct) => Task.Run(() => RefreshCore(ct, true), ct);
+
+        async Task RefreshCore(CancellationToken ct, bool wait)
+        {
+            if (wait) await refreshGate.WaitAsync(ct);
+            else if (!await refreshGate.WaitAsync(0, ct)) return;
+            try
+            {
+                Directory.CreateDirectory(CatalogFolder);
+                var cache = CatalogPath;
+                if (!File.Exists(cache) && !String.IsNullOrEmpty(store.Settings.Current) && Directory.Exists(locator.CurrentRoot))
+                {
+                    var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
+                    if (bundled != null) await AtomicFile.CopyAsync(bundled, cache, ct);
+                }
+                if (!catalogChecked && utcNow() >= nextCatalogAttemptUtc)
+                {
+                    try
+                    {
+                        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                        {
+                            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                            using (var response = await http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
+                            {
+                                response.EnsureSuccessStatusCode();
+                                var content = await response.Content.ReadAsStringAsync(timeout.Token);
+                                if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
+                                ct.ThrowIfCancellationRequested();
+                                AtomicFile.WriteUtf8(cache, content);
+                                catalogChecked = true;
+                                Log("Каталог приложений обновлён из исходного репозитория.");
+                            }
+                        }
+                    } catch (OperationCanceledException)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        Log("Каталог: таймаут обновления, используется сохранённая копия.");
+                    } catch (Exception e)
+                    {
+                        Log("Каталог: используется сохранённая копия. " + e.Message);
+                    }
+                    // Ошибка не отключает обновления до перезапуска; короткая пауза не задерживает каждый поиск.
+                    if (!catalogChecked) nextCatalogAttemptUtc = utcNow().AddSeconds(30);
+                }
+            }
+            finally { refreshGate.Release(); }
+        }
+
         async Task<List<AppRow>> SearchCore(string query, CancellationToken ct)
         {
-            ct.ThrowIfCancellationRequested();
-            var folder = Path.Combine(Root, "Files");
-            Directory.CreateDirectory(folder);
-            var cache = Path.Combine(folder, "AppsList.txt");
-            if (!File.Exists(cache) && !String.IsNullOrEmpty(store.Settings.Current) && Directory.Exists(locator.CurrentRoot))
-            {
-                var bundled = Directory.GetFiles(locator.CurrentRoot, "AppsList.txt", SearchOption.AllDirectories).FirstOrDefault();
-                if (bundled != null) File.Copy(bundled, cache);
-            }
-            if (!catalogChecked && utcNow() >= nextCatalogAttemptUtc)
-            {
-                try
-                {
-                    using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                    {
-                        timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                        using (var response = await http.GetAsync("https://raw.githubusercontent.com/kda2495/IPA_Downloader/refs/heads/main/Files/AppsList.txt", timeout.Token))
-                        {
-                            response.EnsureSuccessStatusCode();
-                            var content = await response.Content.ReadAsStringAsync();
-                            if (content.Length > 2000000 || ToolResponse.ParseCatalog(content).Count == 0) throw new IOException("Неожиданный формат каталога.");
-                            AtomicFile.WriteUtf8(cache, content);
-                            catalogChecked = true;
-                            Log("Каталог приложений обновлён из исходного репозитория.");
-                        }
-                    }
-                } catch (OperationCanceledException)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    Log("Каталог: таймаут обновления, используется сохранённая копия.");
-                } catch (Exception e)
-                {
-                    Log("Каталог: используется сохранённая копия. " + e.Message);
-                }
-                // Ошибка не отключает обновления до перезапуска; короткая пауза не задерживает каждый поиск.
-                if (!catalogChecked) nextCatalogAttemptUtc = utcNow().AddSeconds(30);
-            }
-            var customPath = Path.Combine(folder, "AppsListCustom.txt");
+            // If startup is already fetching a fresh copy, searches can use the saved one.
+            var cache = CatalogPath;
+            await RefreshCore(ct, !File.Exists(cache));
+            var customPath = Path.Combine(CatalogFolder, "AppsListCustom.txt");
             var custom = ReadCatalog(customPath);
             var catalog = ReadCatalog(cache);
             ct.ThrowIfCancellationRequested();

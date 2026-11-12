@@ -30,6 +30,65 @@ public sealed class CoreTests
  }
  [Fact] public void CatalogRecoveryAndAtomicImportContracts()
  { using var folder = new TempFolder(); ReliabilityContract.Run(folder.Path); }
+ sealed class SlowCatalog : HttpMessageHandler
+ {
+  public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+  public readonly TaskCompletionSource<string> Reply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+  public int Calls;
+  protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+  {
+   Interlocked.Increment(ref Calls);
+   Started.TrySetResult();
+   return new(System.Net.HttpStatusCode.OK) { Content = new StringContent(await Reply.Task.WaitAsync(ct)) };
+  }
+ }
+ [Fact] public async Task CatalogSearchUsesSavedCopyDuringStartupDownload()
+ {
+  using var folder = new TempFolder();
+  var store = new SettingsStore(folder.Path);
+  var files = Directory.CreateDirectory(Path.Combine(store.Root, "Files"));
+  File.WriteAllText(Path.Combine(files.FullName, "AppsList.txt"), "Saved app: 100001");
+  using var handler = new SlowCatalog();
+  using var http = new HttpClient(handler);
+  var catalog = new AppCatalog(store, new ToolLocator(store), http, () => DateTime.UtcNow);
+  var ct = TestContext.Current.CancellationToken;
+  var refresh = catalog.RefreshAsync(ct);
+  try
+  {
+   await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+   var saved = await catalog.SearchAsync("app", ct).WaitAsync(TimeSpan.FromSeconds(2), ct);
+   Assert.Equal("Saved app", Assert.Single(saved).Name);
+  }
+  finally { handler.Reply.TrySetResult("New app: 100001"); await refresh; }
+  Assert.Equal("New app", Assert.Single(await catalog.SearchAsync("app", ct)).Name);
+  Assert.Equal(1, handler.Calls);
+ }
+ [Fact] public async Task IpaCacheSeparatesSameSizeCaseDistinctFiles()
+ {
+  using var folder = new TempFolder();
+  var first = Path.Combine(folder.Path, "App.ipa");
+  var second = Path.Combine(folder.Path, "app.ipa");
+  static void WriteIpa(string path, string name)
+  {
+   using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+   using var writer = new StreamWriter(zip.CreateEntry("iTunesMetadata.plist", CompressionLevel.NoCompression).Open());
+   writer.Write($"<plist><dict><key>itemName</key><string>{name}</string></dict></plist>");
+  }
+  WriteIpa(first, "First");
+  if (File.Exists(second)) return; // This volume treats the names as the same path.
+  WriteIpa(second, "Other");
+  var timestamp = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+  File.SetLastWriteTimeUtc(first, timestamp);
+  File.SetLastWriteTimeUtc(second, timestamp);
+  Assert.Equal(new FileInfo(first).Length, new FileInfo(second).Length);
+  var local = new LocalAppRepository(folder.Path);
+  for (int scan = 0; scan < 2; scan++)
+  {
+   var rows = await local.ListAsync(TestContext.Current.CancellationToken);
+   Assert.Equal("First", Assert.Single(rows, x => x.Path == first).AppName);
+   Assert.Equal("Other", Assert.Single(rows, x => x.Path == second).AppName);
+  }
+ }
  [Fact] public async Task DownloadProgressAndCancellationContracts()
  { using var folder = new TempFolder(); await DownloadMeterContract.RunAsync(folder.Path); }
  [Fact] public void DeviceTransportAndInstallationContracts()

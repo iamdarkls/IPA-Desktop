@@ -16,9 +16,10 @@ namespace IpaDesktop
     /// <summary>Импорт, просмотр и удаление локальных IPA с проверкой путей и кэшем метаданных.</summary>
     public sealed class LocalAppRepository : ILocalApps
     {
+        static readonly StringComparer PathComparer = RuntimePlatform.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         readonly string folder;
         readonly object gate = new object();
-        readonly Dictionary<string, Tuple<long, long, IpaDetails>> metadataCache = new Dictionary<string, Tuple<long, long, IpaDetails>>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, Tuple<long, long, IpaDetails>> metadataCache = new Dictionary<string, Tuple<long, long, IpaDetails>>(StringComparer.Ordinal);
         public LocalAppRepository(string folder)
         {
             this.folder = Path.GetFullPath(folder);
@@ -52,7 +53,7 @@ namespace IpaDesktop
                     catch (DirectoryNotFoundException) { }
                 }
                 StorageAnalysis.Mark(rows);
-                var present = new HashSet<string>(rows.Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+                var present = new HashSet<string>(rows.Select(x => x.Path), StringComparer.Ordinal);
                 foreach (var missing in metadataCache.Keys.Where(x => !present.Contains(x)).ToArray()) metadataCache.Remove(missing);
                 return rows.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
                 }
@@ -67,7 +68,7 @@ namespace IpaDesktop
                 {
                     ct.ThrowIfCancellationRequested();
                     var target = Path.Combine(folder, Path.GetFileName(path));
-                    if (String.Equals(Path.GetFullPath(path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase)) continue;
+                    if (PathComparer.Equals(Path.GetFullPath(path), Path.GetFullPath(target))) continue;
                     if (File.Exists(target)) throw new IOException("Файл уже существует: " + Path.GetFileName(path));
                     await AtomicFile.CopyAsync(path, target, ct).ConfigureAwait(false);
                 }
@@ -77,7 +78,7 @@ namespace IpaDesktop
         public void Delete(string file)
         {
             var path = Path.GetFullPath(file);
-            if (!String.Equals(Path.GetDirectoryName(path), folder, RuntimePlatform.Windows?StringComparison.OrdinalIgnoreCase:StringComparison.Ordinal) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
+            if (!PathComparer.Equals(Path.GetDirectoryName(path), folder) || !String.Equals(Path.GetExtension(path), ".ipa", StringComparison.OrdinalIgnoreCase)) throw new IOException("Файл не относится к папке IPA.");
             if (!File.Exists(path)) return;
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("Удаление ссылок не поддерживается.");
             RuntimePlatform.Trash(path);

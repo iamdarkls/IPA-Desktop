@@ -37,7 +37,6 @@
     <Setter Property="Background" Value="{DynamicResource CanvasBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="FontFamily" Value="Segoe UI" />
   </Style>
   <Style Selector="Button">
     <Setter Property="Height" Value="36" />

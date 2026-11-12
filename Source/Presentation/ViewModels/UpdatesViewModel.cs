@@ -13,6 +13,7 @@ namespace IpaDesktop
     public sealed partial class UpdatesViewModel : FeatureViewModel
     {
         Release guiRelease;
+        readonly SemaphoreSlim guiCheck = new(1, 1);
         readonly ISettingsStore settings;
         readonly IToolUpdates toolUpdates;
         readonly IGuiUpdates guiUpdates;
@@ -64,30 +65,30 @@ namespace IpaDesktop
             {
                 SystemIntegration.Open(AppInfo.ReleasesUrl + "/tag/" + EngineUpdater.GuardedEngineTag);
             });
-            CheckDeviceUpdateCommand = Command(delegate
-            {
-                Work("Проверка инструментов для iPhone…", ct => UpdateDevices(ct, false));
-            });
+            CheckDeviceUpdateCommand = Command(() => Work("Проверка инструментов для iPhone…", ct => UpdateDevices(ct)));
             RollbackDevicesCommand = AsyncCommand(async delegate
             {
                 if (!await desktop.Interaction.Confirm("Откат инструментов", "Вернуть предыдущий комплект для iPhone и отключить его автообновление?")) return;
-                try { toolUpdates.RollbackDeviceTools(); StateView(); ApplyActions(); }
-                catch (Exception e) { Error(e); }
+                await desktop.RunWorkAsync("Откат инструментов для iPhone…", _ =>
+                {
+                    toolUpdates.RollbackDeviceTools();
+                    return Task.CompletedTask;
+                });
             });
             OpenDeviceReleasesCommand = Command(delegate
             {
                 SystemIntegration.Open(AppInfo.ReleasesUrl + "?q=device-tools");
             });
-            CheckUpdateCommand = Command(delegate
-            {
-                Work("Проверка обновлений…", ct => Update(ct, false));
-            });
+            CheckUpdateCommand = Command(() => Work("Проверка обновлений движка…", UpdateEngine));
             RollbackCommand = AsyncCommand(async delegate
             {
                 if (await desktop.Interaction.Confirm("Откат", "Вернуть предыдущий движок и отключить автообновление?"))
                 {
-                    toolUpdates.Rollback();
-                    StateView();
+                    await desktop.RunWorkAsync("Откат движка…", _ =>
+                    {
+                        toolUpdates.Rollback();
+                        return Task.CompletedTask;
+                    });
                 }
             });
 
@@ -95,24 +96,71 @@ namespace IpaDesktop
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
         {
-            AutoUpdateEnabled = AutoUpdateDeviceToolsEnabled = CheckGuiUpdatesEnabled = !busy;
+            CheckGuiUpdatesEnabled = !busy;
+            AutoUpdateEnabled = AutoUpdateDeviceToolsEnabled = RuntimePlatform.Windows && !busy;
             InstallGuiUpdateEnabled = !busy && guiRelease != null;
             RollbackDevicesEnabled = !busy && !String.IsNullOrEmpty(settings.Settings.PreviousDeviceCurrent);
         }
-        public async Task Update(CancellationToken ct, bool startup)
+        bool EngineCurrent(string tag) =>
+            settings.Settings.Source == EngineUpdater.SourceRepository &&
+            String.Equals(tag, settings.Settings.Version, StringComparison.Ordinal) &&
+            !String.IsNullOrEmpty(settings.Settings.Current);
+
+        internal void RefreshEngineState()
         {
-            if (!RuntimePlatform.Windows) { Log("На этой системе движок обновляется вместе с IPA Desktop."); await CheckGui(ct); return; }
-            var release = await toolUpdates.Check(ct);
-            if (settings.Settings.Source == EngineUpdater.SourceRepository && String.Equals(release.tag_name, settings.Settings.Version, StringComparison.Ordinal) && !String.IsNullOrEmpty(settings.Settings.DeviceCurrent))
+            EngineVersion = "Движок: " + (settings.Settings.Version ?? "не установлен");
+            EngineUpdateNeeded = RuntimePlatform.Windows && !EngineCurrent(EngineUpdater.GuardedEngineTag);
+        }
+
+        async Task UpdateEngine(CancellationToken ct)
+        {
+            if (!RuntimePlatform.Windows)
             {
-                Log("Установлен актуальный релиз " + release.tag_name);
+                Log("На этой системе движок обновляется вместе с IPA Desktop.");
+                await CheckGui(ct);
                 return;
             }
-            if (!startup && !await desktop.Interaction.Confirm("Обновление движка", "Установить официальный релиз " + release.tag_name + "? Текущая версия будет сохранена для отката.")) return;
-            await toolUpdates.Install(release, ct);
-            if (startup) Log("Автоматическое обновление завершено.");
+            var release = await toolUpdates.Check(ct);
+            if (EngineCurrent(release.tag_name)) { Log("Установлен актуальный релиз " + release.tag_name); return; }
+            if (await desktop.Interaction.Confirm("Обновление движка", "Установить релиз " + release.tag_name + "? Текущая версия будет сохранена для отката."))
+                await toolUpdates.Install(release, ct);
         }
-        public async Task UpdateDevices(CancellationToken ct, bool startup)
+
+        internal async Task CheckAutomaticUpdates(CancellationToken ct)
+        {
+            Release engine = null, devices = null;
+            async Task CheckEngine(CancellationToken token) { engine = await toolUpdates.Check(token); }
+            async Task CheckDevices(CancellationToken token)
+            {
+                devices = await toolUpdates.CheckDeviceTools(token);
+                DescribeDeviceRelease(devices);
+            }
+            await Task.WhenAll(
+                settings.Settings.AutoUpdate && EngineUpdateNeeded
+                    ? desktop.CheckStartup("Проверка движка", CheckEngine, ct) : Task.CompletedTask,
+                settings.Settings.AutoUpdateDeviceTools
+                    ? desktop.CheckStartup("Проверка инструментов для iPhone", CheckDevices, ct) : Task.CompletedTask);
+            if ((engine == null || EngineCurrent(engine.tag_name)) &&
+                (devices == null || toolUpdates.DeviceToolsCurrent(devices))) return;
+
+            await desktop.ApplyAutomaticUpdates(async token =>
+            {
+                if (engine != null && settings.Settings.AutoUpdate && !EngineCurrent(engine.tag_name))
+                    await desktop.CheckStartup("Автоматическое обновление движка", t => toolUpdates.Install(engine, t), token);
+                if (devices != null && settings.Settings.AutoUpdateDeviceTools && !toolUpdates.DeviceToolsCurrent(devices))
+                    await desktop.CheckStartup("Автоматическое обновление инструментов для iPhone", t => UpdateDevices(t, devices), token);
+            }, ct);
+        }
+
+        bool DescribeDeviceRelease(Release release)
+        {
+            DeviceReleaseNotes = release.body ?? "Описание изменений отсутствует.";
+            bool current = toolUpdates.DeviceToolsCurrent(release);
+            DeviceUpdateStatus = (current ? "Установлен актуальный комплект " : "Доступен комплект ") + release.tag_name;
+            return current;
+        }
+
+        async Task UpdateDevices(CancellationToken ct, Release automatic = null)
         {
             DeviceUpdateStatus = "Проверяем доступную версию…";
             try
@@ -124,16 +172,13 @@ namespace IpaDesktop
                     DeviceReleaseNotes = guiRelease?.body ?? "Инструменты на macOS и Linux обновляются вместе с программой.";
                     return;
                 }
-                var release = await toolUpdates.CheckDeviceTools(ct);
-                DeviceReleaseNotes = release.body ?? "Описание изменений отсутствует.";
-                DeviceUpdateStatus = "Доступен комплект " + release.tag_name;
-                if (toolUpdates.DeviceToolsCurrent(release))
+                var release = automatic ?? await toolUpdates.CheckDeviceTools(ct);
+                if (DescribeDeviceRelease(release))
                 {
-                    DeviceUpdateStatus = "Установлен актуальный комплект " + release.tag_name;
                     Log("Наш комплект для iPhone актуален: " + release.tag_name);
                     return;
                 }
-                if (!startup && !await desktop.Interaction.Confirm("Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.\n\n" + (release.body ?? "Описание изменений отсутствует."))) return;
+                if (automatic == null && !await desktop.Interaction.Confirm("Обновление инструментов", "Обновить комплект для iPhone до " + release.tag_name + "? Предыдущий комплект будет сохранён для отката.\n\n" + (release.body ?? "Описание изменений отсутствует."))) return;
                 await toolUpdates.InstallDeviceTools(release, ct);
                 RefreshInstalledTools();
                 DeviceUpdateStatus = "Комплект " + release.tag_name + " установлен: контрольная сумма и запуск утилит проверены.";
@@ -143,13 +188,19 @@ namespace IpaDesktop
         }
         public async Task CheckGui(CancellationToken ct)
         {
-            guiRelease = await guiUpdates.Check(ct);
-            string text = guiRelease == null ? "Установлена актуальная версия " + AppInfo.Version : "Доступна версия " + guiRelease.tag_name;
-            GuiVersionStatus = text;
-            InstallGuiUpdateLabel = guiRelease == null ? "Установить обновление" : "Обновить до " + guiRelease.tag_name;
-            UpdateNotice = guiRelease == null ? "" : text + " — вкладка «Настройки»";
-            UpdateNoticeVisible = guiRelease != null;
-            Log(text);
+            await guiCheck.WaitAsync(ct);
+            try
+            {
+                guiRelease = await guiUpdates.Check(ct);
+                string text = guiRelease == null ? "Установлена актуальная версия " + AppInfo.Version : "Доступна версия " + guiRelease.tag_name;
+                GuiVersionStatus = text;
+                InstallGuiUpdateLabel = guiRelease == null ? "Установить обновление" : "Обновить до " + guiRelease.tag_name;
+                UpdateNotice = guiRelease == null ? "" : text + " — вкладка «Настройки»";
+                UpdateNoticeVisible = guiRelease != null;
+                Log(text);
+                RefreshActions();
+            }
+            finally { guiCheck.Release(); }
         }
     }
 }
