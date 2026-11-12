@@ -79,7 +79,7 @@ def check(rid):
  with tempfile.TemporaryDirectory(prefix='ipa-cached-auth-') as folder:
   folder=Path(folder)
   with zipfile.ZipFile(BASE/'native-sources.zip') as z:
-   for name in ['main.cpp','appstore.cpp','http_client.cpp','account_safety.h']:(folder/name).write_bytes(z.read('ipatool/'+name))
+   for name in ['main.cpp','appstore.cpp','http_client.cpp','account_safety.h','raw_ipa_cache.h','path_utf8.h']:(folder/name).write_bytes(z.read('ipatool/'+name))
   subprocess.run([sys.executable,'Tools/AccountSafety/test_auth.py',str(folder)],check=True)
  print('PASS: native cache identity, checksums, CLI, placeholders and authentication safeguards')
 

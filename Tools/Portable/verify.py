@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='ipa-platform-') as folder:
   subprocess.run([str(native/tool),'--version'],check=True,timeout=15)
  assert '--placeholders' in subprocess.check_output([str(native/'ideviceinstaller'),'--help'],text=True)
  assert subprocess.check_output([str(native/'ipatool'),'account-safety-info'],text=True).strip()=='IPA-DESKTOP-AUTH-SAFETY/1'
+ assert '--ipa-desktop-cache' in subprocess.check_output([str(native/'ipatool'),'--help'],text=True,timeout=15)
  manifest=json.loads((native/'device-tools.json').read_text());assert manifest['schema']==1 and manifest['eventProtocol']==1 and 'libplist' in manifest['components']
  data=root/'data';data.mkdir()
  (data/'state.json').write_text(json.dumps({'Current':'legacy','DeviceCurrent':'devices','AutoUpdate':False,'SoundsEnabled':False,'CheckGuiUpdates':False,'AutoUpdateDeviceTools':False}))

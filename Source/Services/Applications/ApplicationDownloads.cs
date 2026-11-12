@@ -19,12 +19,14 @@ namespace IpaDesktop
         readonly IAppToolClient tools;
         readonly string folder;
         readonly TimeProvider clock;
+        readonly string rawCache;
         public Action<string> Transfer { get; set; }
-        public ApplicationDownloads(IAppToolClient tools, string folder, TimeProvider clock = null)
+        public ApplicationDownloads(IAppToolClient tools, string folder, TimeProvider clock = null, string rawCache = null)
         {
             this.tools = tools;
             this.folder = folder;
             this.clock=clock??TimeProvider.System;
+            this.rawCache = rawCache;
             Transfer = delegate { };
         }
         /// <summary>Запускает скачивание с получением лицензии и отдельным назначением для каждого запроса.</summary>
@@ -41,6 +43,7 @@ namespace IpaDesktop
             {
                 "download", "-i", item.ID, "--purchase", "-o", destination
             };
+            if (!String.IsNullOrEmpty(rawCache)) arguments.AddRange(new[] { "--ipa-desktop-cache", rawCache });
             if (item.VersionID != null) arguments.AddRange(new[]
             {
                 "--external-version-id", item.VersionID

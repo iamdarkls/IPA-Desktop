@@ -86,6 +86,43 @@ def patch_store_adi(store):
     return store
 
 
+def patch_raw_ipa_cache(main, store):
+    for_header = '#include "path_utf8.h"'
+    main = replace_once(main, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
+    store = replace_once(store, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
+    main = replace_once(main, '        cmd_download(args);', """        raw_ipa_cache::directory = ipt::fs_path(get(args, "ipa-desktop-cache", ""));
+        cmd_download(args);""")
+    main = replace_once(main, '  download:             -b/--bundle-id', """  --ipa-desktop-cache   Cache original iOS archives in this local folder.
+  download:             -b/--bundle-id""")
+    store = replace_once(store, """    int64_t rangeStart = file_size(tmpDest);
+    m_http.download(downloadURL, tmpDest, rangeStart, progress);
+
+    verify_and_report(tmpDest);
+
+    apply_patches(item, acc, tmpDest, dest, sinfs);
+    fs::remove(ipt::fs_path(tmpDest));""", """    // Only an authorized, personalized App Store response can unlock reuse
+    // of the original CDN bytes. Never cache or reuse a finished IPA.
+    const bool licensed = std::any_of(sinfs.begin(), sinfs.end(),
+        [](const Sinf& sinf) { return !sinf.data.empty(); });
+    const auto cacheEntry = licensed ? raw_ipa_cache::entry(songId, md5Expected) : fs::path{};
+    const auto tempPath = ipt::fs_path(tmpDest);
+    const bool reused = raw_ipa_cache::restore(cacheEntry, tempPath, [&] {
+        return ascii_iequals(md5_file_hex(tmpDest), md5Expected);
+    });
+    if (reused) {
+        std::cerr << "IPA_RAW_CACHE_HIT\\n";
+    } else {
+        int64_t rangeStart = file_size(tmpDest);
+        m_http.download(downloadURL, tmpDest, rangeStart, progress);
+        verify_and_report(tmpDest);
+    }
+
+    apply_patches(item, acc, tmpDest, dest, sinfs);
+    if (!reused) raw_ipa_cache::remember(tempPath, cacheEntry);
+    fs::remove(tempPath);""")
+    return main, store
+
+
 def patch(root, pin_file=None):
     root = Path(root)
     main = (root/'main.cpp').read_text(encoding='utf-8')
@@ -106,6 +143,8 @@ def patch(root, pin_file=None):
     store = replace_once(store, 'acc.password.set(       password);', 'acc.password.set(""); // Never retain the Apple password in the saved session.')
     if native:
         store = patch_store_adi(store)
+        main, store = patch_raw_ipa_cache(main, store)
+        (root/'raw_ipa_cache.h').write_bytes(Path(__file__).with_name('raw_ipa_cache.h').read_bytes())
     else:
         store = patch_legacy_store(store)
     # HTTP transport also retries on curl timeouts, even when AppStore itself does not.

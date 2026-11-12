@@ -1,4 +1,4 @@
-# Guarded ipatool 1.3.1.1
+# Guarded ipatool 1.3.1.2
 
 Based on Sorvigolova/ipatool 1.3.1 at the immutable revision in `pins.json`. MIT upstream credit/license is retained. This is a local policy patch, not a claim that Apple will accept the login or never restrict an account.
 

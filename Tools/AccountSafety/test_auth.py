@@ -145,4 +145,22 @@ bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::stri
     assert 'acc.password.set(""); // Never retain' in store
     print('PASS: saved session never writes or loads the Apple password')
 
-if __name__=='__main__': run(sys.argv[1])
+def test_raw_ipa_cache(root):
+    root = Path(root)
+    store = (root/'appstore.cpp').read_text(encoding='utf-8')
+    if 'raw_ipa_cache::restore' not in store:
+        return
+    start = store.index('    // Only an authorized, personalized App Store response')
+    end = store.index('    return {dest, sinfs};', start)
+    fixture = Path(__file__).with_name('raw_ipa_cache_fixture.cpp').read_text()
+    with tempfile.TemporaryDirectory(prefix='ipa-raw-cache-') as folder:
+        folder = Path(folder)
+        source, binary = folder/'cache.cpp', folder/'cache.exe'
+        source.write_text(fixture.replace('// ACTUAL_IOS_TRANSFER', store[start:end]), encoding='utf-8')
+        subprocess.run(['g++', '-std=c++20', '-O0', '-I'+str(root), str(source), '-o', str(binary)], check=True)
+        subprocess.run([str(binary), str(folder)], check=True, timeout=15)
+
+
+if __name__ == '__main__':
+    run(sys.argv[1])
+    test_raw_ipa_cache(sys.argv[1])

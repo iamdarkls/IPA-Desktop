@@ -17,7 +17,7 @@ namespace IpaDesktop
     public sealed class EngineUpdater : IToolUpdates
     {
         public const string SourceRepository = AppInfo.Repository;
-        public const string GuardedEngineVersion = "1.3.1.1";
+        public const string GuardedEngineVersion = "1.3.1.2";
         public const string GuardedEngineTag = "ipatool-guard-v" + GuardedEngineVersion;
         public const string DeviceRepository = AppInfo.Repository;
         public const string DeviceTagPrefix = "device-tools-v";

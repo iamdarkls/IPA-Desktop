@@ -131,7 +131,7 @@ namespace IpaDesktop
             Devices = new DeviceService(runner, locator);
             LocalFiles = new LocalAppRepository(Downloads);
             AppSets = new AppSetStore(root, Downloads);
-            ApplicationDownloads = new ApplicationDownloads(tools, Downloads);
+            ApplicationDownloads = new ApplicationDownloads(tools, Downloads, rawCache: Path.Combine(settings.Root, "Cache", "IPA"));
         }
         public void Save()
         {

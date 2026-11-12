@@ -2,6 +2,8 @@
   "Tools/AccountSafety/pins.json",
   "Tools/AccountSafety/patch.py",
   "Tools/AccountSafety/account_safety.h",
+  "Tools/AccountSafety/raw_ipa_cache.h",
+  "Tools/AccountSafety/raw_ipa_cache_fixture.cpp",
   "Tools/AccountSafety/cfg_smoke.cpp",
   "Tools/AccountSafety/test_auth.py",
   "Tools/AccountSafety/transport_fixture.cpp",
