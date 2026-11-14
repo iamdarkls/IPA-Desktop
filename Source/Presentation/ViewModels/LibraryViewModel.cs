@@ -19,7 +19,7 @@ public sealed partial class LibraryViewModel : FeatureViewModel
         DeviceAppsCommand = Command(OpenInstalled);
         PurchaseHistoryCommand = AsyncCommand(OpenPurchases);
         NetworkSettingsCommand = AsyncCommand(async () => await desktop.Interaction.ShowNetwork(desktop.CreateNetworkSettings()));
-        desktop.Queue.CanVerify = row => row.Kind == "Установка" && row.State is QueueItemState.Uncertain or QueueItemState.Interrupted && desktop.CanVerifyPhone(row.Batch.TargetKey);
+        desktop.Queue.CanVerify = row => desktop.CanUseBatchAccount(row.Batch) && row.Kind == "Установка" && row.State is QueueItemState.Uncertain or QueueItemState.Interrupted && desktop.CanVerifyPhone(row.Batch.TargetKey);
         desktop.Queue.VerifyRequested = row => _ = desktop.RunAsyncCommand(() => Verify(row));
     }
     DeviceRow Selected() => desktop.Files.DeviceList.SelectedItem as DeviceRow;

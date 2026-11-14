@@ -32,6 +32,25 @@ public sealed class QueueViewModelTests
   queue.Start("Установка",seeds,"first","First phone",_=>{});queue.Begin(1);queue.Result(null);
   Assert.Equal(QueueItemState.Succeeded,first.State);queue.Selected=first;Assert.False(queue.ResumeCommand.CanExecute(null));
  }
+ [Fact] public void ArchivedBatchStaysInHistoryWithoutResumingOrBeingOverwritten()
+ {
+  using var folder=new TempFolder();
+  var queue=new OperationQueueViewModel();queue.CanResumeBatch=_=>true;
+  var seeds=new[]{new QueueSeed("ipa","App","1.0")};
+  queue.Start("Установка",seeds,"phone","iPhone",_=>throw new Exception(),accountKey:"client");
+  queue.Begin(1);queue.Stop("Обрыв",false);
+  queue.ArchiveSession();
+  Assert.Empty(queue.VisibleItems);Assert.Equal(0,queue.PendingCount);
+  var store=new QueueArchiveStore(folder.Path);store.Save(queue);
+  var restored=new OperationQueueViewModel();restored.CanResumeBatch=_=>true;
+  restored.Restore(store.Load(),(_,_)=>throw new Exception());
+  Assert.Empty(restored.VisibleItems);restored.ShowHistory=true;
+  var archived=Assert.Single(restored.VisibleItems);restored.Selected=archived;
+  Assert.False(restored.ResumeCommand.CanExecute(null));
+  restored.Start("Установка",seeds,"phone","iPhone",_=>{},accountKey:"client");
+  restored.Begin(1);restored.Result(null);
+  Assert.Equal(QueueItemState.Uncertain,archived.State);
+ }
  [Fact] public void CancelPreservesMeasuredProgressAndBlocksLateOutputAndClearingDuringWork()
  {
   var queue=new OperationQueueViewModel();queue.CanResumeBatch=_=>true;

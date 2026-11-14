@@ -45,14 +45,22 @@ namespace IpaDesktop
             LogoutCommand = AsyncCommand(async delegate
             {
                 if (!await desktop.Interaction.Confirm("Выход", "Выйти из текущей сессии ipatool?")) return;
-                Work("Выход…", async delegate (CancellationToken ct)
-                {
-                    await accounts.RevokeAsync(ct);
-                    signedIn = false;
-                    desktop.SetAccountIdentity(null);
-                    AccountLabel = "Вход не выполнен";
-                });
+                await desktop.RunWorkAsync("Выход…", Revoke);
             });
+            NextClientCommand = AsyncCommand(async () =>
+            {
+                if (!await desktop.Interaction.Confirm("Следующий клиент",
+                    "Завершить текущую сессию? Незавершённые задачи останутся только в истории. Кэш, IPA и наборы сохранятся.")) return;
+                if (await desktop.RunWorkAsync("Завершение сессии клиента…", Revoke))
+                    desktop.ResetClientWorkspace();
+            });
+        }
+        async Task Revoke(CancellationToken ct)
+        {
+            await accounts.RevokeAsync(ct);
+            signedIn = false;
+            desktop.SetAccountIdentity(null);
+            AccountLabel = "Вход не выполнен";
         }
         /// <summary>Пересчитывает доступность действий по состоянию выбора и выполняемой операции.</summary>
         public override void RefreshActions()
@@ -65,7 +73,8 @@ namespace IpaDesktop
             AccountSafetyStatusVisible = !String.IsNullOrEmpty(safety);
             LoginEnabled = !busy && (!signedIn || needsLogin);
             if (needsLogin) AccountLabel = "Загрузки остановлены — проверьте аккаунт и войдите заново";
-            LogoutEnabled = !busy && signedIn;
+            LogoutEnabled = !busy && (signedIn || desktop.AccountKey != null);
+            NextClientVisible = signedIn || desktop.AccountKey != null;
         }
         /// <summary>Запрашивает актуальный auth info и обновляет состояние входа только по успешному ответу.</summary>
         public async Task Account(CancellationToken ct)

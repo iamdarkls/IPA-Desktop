@@ -407,14 +407,19 @@ namespace IpaDesktop
             });
         }
         /// <summary>Подтверждает выбранное устройство и запускает последовательную установку снимка очереди.</summary>
-        internal Task StartInstall(List<LocalRow> rows, QueueBatchViewModel resumeBatch = null, string expectedDevice = null) => desktop.RunAsyncCommand(() => StartInstallCore(rows, resumeBatch, expectedDevice));
-        async Task StartInstallCore(List<LocalRow> rows, QueueBatchViewModel resumeBatch, string expectedDevice)
+        internal Task StartInstall(List<LocalRow> rows, QueueBatchViewModel resumeBatch = null, string expectedDevice = null,
+            string expectedAccount = null, string accountEmail = null, IReadOnlyDictionary<string, string> sources = null, int cacheCount = 0) =>
+            desktop.RunAsyncCommand(() => StartInstallCore(rows, resumeBatch, expectedDevice, expectedAccount ?? resumeBatch?.AccountKey, accountEmail, sources, cacheCount));
+        async Task StartInstallCore(List<LocalRow> rows, QueueBatchViewModel resumeBatch, string expectedDevice,
+            string expectedAccount, string accountEmail, IReadOnlyDictionary<string, string> sources, int cacheCount)
         {
             var device = DeviceList.SelectedItem as DeviceRow;
             if (device == null || rows.Count == 0) throw new Exception("Выберите устройство и IPA для установки.");
             if (busy) return;
             if (expectedDevice != null && !String.Equals(ConnectionKey(device), expectedDevice, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Выбран другой iPhone. Повторите подготовку набора.");
             if (resumeBatch != null && !CanResume(resumeBatch.TargetKey)) throw new Exception("Для продолжения восстановите связь с тем же iPhone.");
+            if (resumeBatch != null && !desktop.CanUseBatchAccount(resumeBatch)) return;
+            if (expectedAccount != null && expectedAccount != desktop.AccountKey) throw new InvalidOperationException("Apple Account сменился. Подготовьте набор заново.");
             var account = desktop.CurrentAccountEmail;
             var mismatched = rows.Where(row => account != null && LocalFileAccounts.Normalize(row.AppleAccount).Length != 0 &&
                 !LocalFileAccounts.Matches(row, account)).ToList();
@@ -435,21 +440,31 @@ namespace IpaDesktop
                     resumeBatch = null; // Prepared copies are new files with their own queue identity.
                 }
             }
-            var summary = SummarizeInstall(rows);
+            var summary = sources == null ? SummarizeInstall(rows) : String.Join(Environment.NewLine, rows.Select(row =>
+                row.DisplayName + " · " + (row.Version ?? "версия не указана") + " · " + sources[row.Path]));
             int unknown = rows.Count(row => LocalFileAccounts.Normalize(row.AppleAccount).Length == 0);
             if (unknown > 0) summary += "\n\nВладелец не определён для IPA: " + unknown + ".";
-            if (!await desktop.Interaction.Confirm("Установка", "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?\n\n" + summary)) return;
-            if (DeviceList.SelectedItem is not DeviceRow selected || ConnectionKey(selected) != ConnectionKey(device)) return;
+            var header = "Установить IPA (" + rows.Count + ") на " + device.DisplayLabel + "?";
+            if (accountEmail != null || expectedAccount != null)
+                header += "\nApple Account: " + (accountEmail ?? account);
+            if (resumeBatch?.Items.Any(row => row.State is QueueItemState.Uncertain or QueueItemState.Interrupted) == true)
+                header += "\nПеред повтором проверьте результат прерванных установок на iPhone.";
+            if (!await desktop.Interaction.Confirm("Установка", header + "\n\n" + summary)) return;
+            if (DeviceList.SelectedItem is not DeviceRow selected || ConnectionKey(selected) != ConnectionKey(device))
+                throw new InvalidOperationException("Выбранный iPhone изменился. Выберите исходное устройство и повторите.");
+            if (resumeBatch != null && !desktop.Queue.CanResumeBatch(resumeBatch)) return;
             await desktop.RunWorkAsync("Установка IPA…", async delegate (CancellationToken ct)
             {
-                desktop.StartReport("Установка", rows.Count, () => StartInstall(failedInstalls.Snapshot()));
+                if (expectedAccount != null) await desktop.RequireAccountAsync(ct, expectedAccount);
+                desktop.StartReport("Установка", rows.Count, null);
                 QueueBatchViewModel batch = null;
                 batch = desktop.Queue.Start("Установка", rows.Select(row => Seed(row)), ConnectionKey(device), device.DisplayLabel,
-                    keys => _ = StartInstall(rows.Where(row => keys.Contains(row.Path)).ToList(), batch), resumeBatch);
-                await CheckSupport(ct);
-                await EnsureConnection(device, ct);
+                    keys => _ = desktop.RunAsyncCommand(() => desktop.ResumeStoredBatch(batch, keys)), resumeBatch, expectedAccount, cacheCount);
+                desktop.AttachInstallationReport(batch);
                 try
                 {
+                    await CheckSupport(ct);
+                    await EnsureConnection(device, ct);
                     var result = await BatchRunner.Run(rows,
                         (row, token) => deviceService.InstallAsync(device, row, ShowConnection, token),
                         (row, index) => { desktop.BeginQueue("Установка", index, rows.Count, row.DisplayName); Log("Установка " + row.DisplayName); },
@@ -457,7 +472,7 @@ namespace IpaDesktop
                         (row, error) => { desktop.ReportItem(row.DisplayName, error); failedInstalls.Add(row); Log("Ошибка установки " + row.DisplayName + ": " + error.Message); },
                         null, ct);
                     desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
-                    if (result.Failed.Count > 0) throw new Exception("Не удалось установить: " + String.Join(", ", result.Failed.Select(x => x.DisplayName)) + ". Кнопка «Повторить ошибки» повторит только эти IPA.");
+                    if (result.Failed.Count > 0) throw new Exception("Не удалось установить: " + String.Join(", ", result.Failed.Select(x => x.DisplayName)) + ". Продолжить можно из очереди.");
                 }
                 catch (DeviceConnectionException error)
                 {
@@ -531,6 +546,14 @@ namespace IpaDesktop
             ClearInstallEnabled = !busy && installChosen.Count > 0;
             InstallFilesEnabled = !busy && installChosen.Count > 0 && connectionAvailable;
             DeviceList.IsEnabled = !busy;
+        }
+        internal void ResetClientSelection()
+        {
+            installChosen.Clear(); failedInstalls.Clear();
+            Files.SelectedItems.Clear();
+            DeviceList.SelectedItem = null;
+            FileAccount.SelectedItem = FileAccount.Items?.Cast<LocalFileAccount>().FirstOrDefault();
+            RefreshInstallChosen();
         }
         void RefreshInstallChosen()
         {

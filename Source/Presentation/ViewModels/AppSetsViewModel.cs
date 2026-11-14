@@ -104,42 +104,62 @@ namespace IpaDesktop
         {
             if (busy) return;
             var sets = Selected(); var phone = desktop.Files.DeviceList.SelectedItem as DeviceRow;
-            if (sets.Count == 0 || phone == null) throw new InvalidOperationException("Выберите наборы и iPhone во вкладке «iPhone и IPA».");
+            if (sets.Count == 0 || phone == null) throw new InvalidOperationException("Выберите наборы и iPhone.");
             var target = phone.ID + "|" + phone.Network;
+            var requestedAccount = desktop.AccountKey;
             AppRow[] apps = null; string account = null; AppSetInstallationPlan plan = null;
             if (!await desktop.RunWorkAsync("Подготовка набора…", async ct =>
             {
-                account = await desktop.RequireAccountAsync(ct);
+                account = await desktop.RequireAccountAsync(ct, requestedAccount);
                 apps = await Task.Run(() => appSetStore.ResolveMany(sets), ct);
                 plan = AppSetInstallationPlan.Build(apps, await localApps.ListAsync(ct), account);
             })) return;
-            if (!await desktop.Interaction.Confirm("Подготовка установки набора", phone.DisplayLabel + "\nApple Account: " + account + "\n\n" + plan.Preview + "\n\nИспользовать эти локальные версии и скачать недостающие? Перед установкой будет отдельное подтверждение.")) return;
             var expectedAccount = desktop.AccountKey;
+            if (!await desktop.Interaction.Confirm("Подготовка установки набора", phone.DisplayLabel + "\nApple Account: " + account + "\n\n" +
+                plan.Preview + "\n\nПодготовить IPA? Установка начнётся только после отдельного подтверждения.")) return;
+            var sources = plan.Local.ToDictionary(row => row.Path, _ => "Готовый IPA найден", StringComparer.Ordinal);
+            int cacheCount = 0;
             if (plan.Missing.Count > 0)
             {
-                if (!await desktop.RunWorkAsync("Загрузка недостающих приложений набора…", async ct =>
+                if (!await desktop.RunWorkAsync("Подготовка недостающих IPA…", async ct =>
                 {
                     await desktop.RequireAccountAsync(ct, expectedAccount);
-                    desktop.StartReport("Скачивание", plan.Missing.Count, () => Task.CompletedTask);
+                    desktop.StartReport("Скачивание", plan.Missing.Count, null);
+                    desktop.SelectedTab = 2;
                     QueueBatchViewModel batch = null;
                     batch = desktop.Queue.Start("Скачивание", plan.Missing.Select(x => new QueueSeed(x.ID + "@latest", x.Name, "Последняя доступная")), null, "Apple Account · " + DesktopViewModel.AccountHint(account),
                         keys => _ = desktop.RunAsyncCommand(() => desktop.ResumeStoredBatch(batch, keys)), null, expectedAccount);
+                    var prepared = new Dictionary<string, string>(StringComparer.Ordinal);
                     var result = await BatchRunner.Run(plan.Missing, async (app, token) =>
                     {
                         var path = await downloads.DownloadFileAsync(new DownloadItem { ID = app.ID, Name = app.Name }, token);
                         if (!System.IO.File.Exists(path)) throw new System.IO.IOException("Движок не создал IPA для " + app.Name);
-                    }, (app, index) => desktop.BeginQueue("Скачивание", index, plan.Missing.Count, app.Name), app => desktop.ReportItem(app.Name, null), (app, error) => desktop.ReportItem(app.Name, error), null, ct);
+                        prepared.Add(app.ID, path);
+                    }, (app, index) => desktop.BeginQueue("Скачивание", index, plan.Missing.Count, app.Name),
+                        app => desktop.ReportItem(app.Name, null), (app, error) => desktop.ReportItem(app.Name, error), null, ct);
                     desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
-                    if (result.Failed.Count > 0) throw new InvalidOperationException("Часть набора не скачалась. Установка не запущена. Продолжите загрузку в очереди и подготовьте набор снова.");
+                    if (result.Failed.Count > 0) throw new InvalidOperationException("Часть набора не подготовилась. Продолжите загрузку в очереди, затем снова откройте набор.");
+                    var local = (await localApps.ListAsync(ct)).ToDictionary(row => row.Path, StringComparer.Ordinal);
+                    foreach (var (app, index) in plan.Missing.Select((app, index) => (app, index)))
+                    {
+                        if (!local.TryGetValue(prepared[app.ID], out var row) || row.AppStoreID != app.ID || !LocalFileAccounts.Matches(row, account))
+                            throw new InvalidOperationException("Не удалось подтвердить приложение и владельца нового IPA: " + app.Name);
+                        bool cached = batch.Items[index].TransferPhase == OperationQueueViewModel.CachePhase;
+                        if (cached) cacheCount++;
+                        sources.Add(row.Path, cached ? "Собран из кэша" :
+                            batch.Items[index].TransferPhase == OperationQueueViewModel.DownloadPhase ? "Скачан из App Store" : "IPA подготовлен");
+                        plan.Local.Add(row);
+                    }
                 })) return;
             }
-            if (!await desktop.RunWorkAsync("Проверка готовности набора…", async ct =>
-            {
-                await desktop.RequireAccountAsync(ct, expectedAccount);
-                plan = AppSetInstallationPlan.Build(apps, await localApps.ListAsync(ct), account);
-                if (plan.Missing.Count > 0) throw new InvalidOperationException("Не все IPA найдены с метаданными исходного аккаунта. Автоматическая установка набора остановлена.");
-            })) return;
-            await desktop.StartSetInstallation(plan.Local, target);
+            desktop.SelectedTab = 3;
+            await desktop.StartSetInstallation(plan.Local, target, expectedAccount, account, sources, cacheCount);
+        }
+        internal void ResetClientSelection()
+        {
+            AppSets.SelectedItems.Clear();
+            SetName = ""; SetStatus = "";
+            Preview();
         }
         void DeleteSelected()
         {

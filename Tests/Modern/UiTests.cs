@@ -231,11 +231,11 @@ public sealed class UiTests
   }
   finally{window.Close();}
  }
- static void AddAccountMetadata(LocalRow row)
+ static void AddAccountMetadata(LocalRow row, int id = 123)
  {
   using var zip=System.IO.Compression.ZipFile.Open(row.Path,System.IO.Compression.ZipArchiveMode.Update);
   using var writer=new StreamWriter(zip.CreateEntry("iTunesMetadata.plist").Open());
-  writer.Write("<plist><dict><key>itemId</key><integer>123</integer><key>appleId</key><string>fixture@example.com</string><key>softwareVersionBundleId</key><string>com.fixture</string><key>bundleShortVersionString</key><string>1.0</string></dict></plist>");
+  writer.Write($"<plist><dict><key>itemId</key><integer>{id}</integer><key>appleId</key><string>fixture@example.com</string><key>softwareVersionBundleId</key><string>com.fixture</string><key>bundleShortVersionString</key><string>1.0</string></dict></plist>");
  }
  [AvaloniaFact] public async Task DeviceLibraryAndResultVerificationRequireExplicitConfirmation()
  {
@@ -260,7 +260,9 @@ public sealed class UiTests
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa("Set");AddAccountMetadata(row);
   var binaries=Path.Combine(fixture.Engine.Root,"Versions/fixture/"+RuntimePlatform.ToolFolder);File.WriteAllText(Path.Combine(binaries,RuntimePlatform.ToolName("ipatool.exe")),"fixture");
-  fixture.Engine.AppSets.AddApps("Local set",new[]{new AppRow{ID="123",Name="Set"}});
+  var remote=fixture.Ipa("Remote");AddAccountMetadata(remote,456);
+  fixture.Runner.PreparedIpa=Path.Combine(fixture.Engine.Root,"download-fixture.ipa");File.Move(remote.Path,fixture.Runner.PreparedIpa);
+  fixture.Engine.AppSets.AddApps("Local set",new[]{new AppRow{ID="123",Name="Set"},new AppRow{ID="456",Name="Remote"}});
   var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   async Task Confirm(string title)
   {
@@ -269,9 +271,20 @@ public sealed class UiTests
   }
   try
   {
+   Find<TabItem>(window,"FilesTab").IsSelected=true;
    var phones=Find<ComboBox>(window,"DeviceList");phones.ItemsSource=new[]{fixture.Device};phones.SelectedIndex=0;
    Click(window,"InstallSet");await Confirm("Подготовка установки набора");await Wait(()=>window.OwnedWindows.Any(x=>x.Title=="Установка"));Assert.Equal(0,fixture.Runner.Installs);
-   await Confirm("Установка");await Wait(()=>!Busy(desktop)&&fixture.Runner.Installs==1);Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
+   var confirmation=window.OwnedWindows.Single(x=>x.Title=="Установка");
+   var text=String.Join(" ",confirmation.GetLogicalDescendants().OfType<TextBlock>().Select(x=>x.Text));
+   Assert.Contains("fixture@example.com",text);Assert.Contains(fixture.Device.DisplayLabel,text);Assert.Contains("Готовый IPA найден",text);Assert.Contains("Собран из кэша",text);
+   await Confirm("Установка");await Wait(()=>!Busy(desktop)&&fixture.Runner.Installs==2);
+   Assert.Contains("из кэша: 1",desktop.Model.NoticeText);
+   var installed=desktop.Model.Queue.Items.First(item=>item.Kind=="Установка");
+   Assert.Equal(QueueItemState.Succeeded,installed.State);Assert.Equal(desktop.Model.AccountKey,installed.Batch.AccountKey);
+   Click(window,"NextClient");await Confirm("Следующий клиент");
+   await Wait(()=>desktop.Model.Status=="Готово к следующему клиенту");
+   Assert.Null(desktop.Model.AccountKey);Assert.Empty(desktop.Model.Queue.VisibleItems);Assert.True(installed.Batch.Archived);
+   Assert.Single(fixture.Engine.AppSets.Load());Assert.True(File.Exists(row.Path));
   }
   finally{window.Close();}
  }
@@ -313,13 +326,14 @@ public sealed class UiTests
    Click(window,"InstallFiles");await ConfirmInstall(2);Assert.Equal(2,fixture.Runner.Installs);
    Assert.Equal(new[]{QueueItemState.Succeeded,QueueItemState.Uncertain,QueueItemState.Paused},desktop.Model.Queue.Items.Select(x=>x.State));
    Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   Assert.False(Find<Button>(window,"NoticeRetry").IsEnabled);Assert.Contains("1 из 3 установлены",desktop.Model.NoticeText);
    fixture.Runner.DisconnectAt=0;await DesktopContract.ScanDevices(desktop);
    Assert.Equal(PhoneStatus.Ready,desktop.Model.Device.Status);Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
    var original=(DeviceRow)devices.SelectedItem;
    devices.ItemsSource=new[]{new DeviceRow{ID="different",Name="Другой iPhone"}};devices.SelectedIndex=0;
    Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
    devices.ItemsSource=new[]{original};devices.SelectedIndex=0;Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
-   Click(window,"ResumeQueue");await ConfirmInstall(4);Assert.Equal(4,fixture.Runner.Installs);
+   Click(window,"NoticeRetry");await ConfirmInstall(4);Assert.Contains("3 из 3 установлены",desktop.Model.NoticeText);Assert.Equal(4,fixture.Runner.Installs);
    Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
   }
   finally{window.Close();}

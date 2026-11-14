@@ -22,12 +22,16 @@ public sealed partial class AccountViewModel
     public OperationCommand AccountSafetyReviewCommand { get; private set; }
     public OperationCommand LoginCommand { get; private set; }
     public OperationCommand AccountInfoCommand { get; private set; }
+    bool nextClientVisible;
+    public bool NextClientVisible { get => nextClientVisible; private set => Set(ref nextClientVisible, value); }
+    public OperationCommand NextClientCommand { get; private set; }
     public OperationCommand LogoutCommand { get; private set; }
     public override void ConfigureCommands()
     {
         AccountSafetyReviewCommand?.SetAvailability(() => !busy && AccountSafetyReviewEnabled);
         LoginCommand?.SetAvailability(() => !busy && LoginEnabled);
         AccountInfoCommand?.SetAvailability(() => !busy && true);
+        NextClientCommand?.SetAvailability(() => !busy && LogoutEnabled);
         LogoutCommand?.SetAvailability(() => !busy && LogoutEnabled);
     }
     public override void RefreshCommands()
@@ -36,6 +40,7 @@ public sealed partial class AccountViewModel
         LoginCommand?.Refresh();
         AccountInfoCommand?.Refresh();
         LogoutCommand?.Refresh();
+        NextClientCommand?.Refresh();
     }
 
 }

@@ -24,11 +24,23 @@ namespace IpaDesktop
         OperationReport activeReport;
         OperationReport lastReport;
         Func<Task> noticeRetry;
+        QueueBatchViewModel noticeResumeBatch;
+        QueueBatchViewModel reportBatch;
+        public string NoticeRetryLabel => noticeResumeBatch == null ? "Повторить ошибки" : "Продолжить оставшиеся";
+        bool CanContinueNotice(QueueBatchViewModel batch) => batch.Items.Any(x => x.State != QueueItemState.Succeeded) && Queue.CanResumeBatch(batch);
+        Task ContinueNotice(QueueBatchViewModel batch) => ResumeStoredBatch(batch,
+            batch.Items.Where(x => x.State != QueueItemState.Succeeded).Select(x => x.Seed.Key).ToArray());
+        internal void AttachInstallationReport(QueueBatchViewModel batch) => reportBatch = batch;
+        internal void ClearClientReport()
+        {
+            lastReport = null; noticeRetry = null; noticeResumeBatch = null; reportBatch = null;
+            OperationNoticeVisible = false;
+        }
         /// <summary>Фиксирует самостоятельный снимок очереди и её действие повтора.</summary>
         internal void StartReport(string kind, int total, Func<Task> retry)
         {
             activeReport = new OperationReport { Kind = kind, Total = total };
-            noticeRetry = retry;
+            noticeRetry = retry; noticeResumeBatch = null; reportBatch = null;
             OperationNoticeVisible = false;
         }
         internal void ReportItem(string name, Exception error)
@@ -40,7 +52,18 @@ namespace IpaDesktop
         {
             if (lastReport == null) return;
             var names = String.Join(", ", lastReport.Items.Where(x => !x.Success).Take(1).Select(x => x.Name + ": " + x.ShortError));
-            NoticeText = lastReport.Summary + (names.Length == 0 ? "" : " · " + names);
+            bool installation = reportBatch != null && lastReport == activeReport;
+            if (installation)
+            {
+                var done = reportBatch.Items.Count(x => x.State == QueueItemState.Succeeded);
+                var remaining = reportBatch.Items.Count - done;
+                NoticeText = done + " из " + reportBatch.Items.Count + " установлены" +
+                    (reportBatch.CacheCount > 0 ? " · из кэша: " + reportBatch.CacheCount : "") +
+                    (remaining > 0 ? " · осталось: " + remaining : "");
+                noticeResumeBatch = remaining > 0 ? reportBatch : null;
+            }
+            else NoticeText = lastReport.Summary + (names.Length == 0 ? "" : " · " + names);
+            Changed(nameof(NoticeRetryLabel));
             NoticeTextTip = lastReport.Details;
             var failure = lastReport.Items.LastOrDefault(x => !x.Success);
             NoticeCause = failure?.Cause;
@@ -50,7 +73,7 @@ namespace IpaDesktop
             bool errors = lastReport.Failed > 0 || !String.IsNullOrEmpty(lastReport.StopReason);
             OperationNoticeBackground = errors ? "#38232C" : lastReport.Canceled ? "#383122" : "#173529";
             OperationNoticeBorder = errors ? "#E17B8B" : lastReport.Canceled ? "#D7BC79" : "#6AB893";
-            NoticeRetryVisible = errors && noticeRetry != null;
+            NoticeRetryVisible = noticeResumeBatch != null || (errors && noticeRetry != null);
             OperationNoticeVisible = true;
             ApplyActions();
         }
@@ -87,13 +110,14 @@ namespace IpaDesktop
         {
             string phase = text switch
             {
-                "IPA_RAW_CACHE_HIT" => "Собираем из кэша",
-                "IPA_RAW_CACHE_MISS" => "Скачиваем с App Store",
+                "IPA_RAW_CACHE_HIT" => OperationQueueViewModel.CachePhase,
+                "IPA_RAW_CACHE_MISS" => OperationQueueViewModel.DownloadPhase,
                 _ => null
             };
             if (phase != null)
             {
                 var item = Queue.CurrentItem;
+                if (item?.Kind == "Скачивание") item.RecordTransfer(phase);
                 Interaction.Post(() => Queue.SetPhase(item, phase));
                 journalBuffer.Add(phase);
                 return;
@@ -127,8 +151,8 @@ namespace IpaDesktop
             Log(e.Message);
             var failure = ErrorLocalizer.Describe(e);
             Status = failure.Title;
-            if (activeReport != null && e is DeviceConnectionException) activeReport.StopReason = failure.Description;
-            if (activeReport == null || (activeReport.Failed == 0 && activeReport.Succeeded == 0))
+            if (activeReport != null && (e is DeviceConnectionException || reportBatch != null)) activeReport.StopReason = failure.Description;
+            if (activeReport == null || (reportBatch == null && activeReport.Failed == 0 && activeReport.Succeeded == 0))
             {
                 lastReport = new OperationReport { Kind = "Операция", Total = 1 };
                 lastReport.Add(activeReport == null ? "Ошибка операции" : activeReport.Kind, e);

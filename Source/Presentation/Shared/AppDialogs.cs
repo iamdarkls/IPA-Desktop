@@ -60,7 +60,7 @@ public static class AppDialogs
     {
         var dialog = Create(owner, title, 560, 330);
         var layout = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("*,Auto") };
-        layout.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        layout.Children.Add(new ScrollViewer { Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap } });
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var no = Action("Отмена", IconKind.Close); no.IsCancel = true; no.IsDefault = true;
         var yes = Action("Продолжить", IconKind.Check, primary: true);

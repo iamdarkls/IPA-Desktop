@@ -55,9 +55,23 @@ public sealed partial class DesktopViewModel
         try { queueStore.Save(Queue); Queue.StorageStatus = "История сохранена. После перезапуска подтвердите аккаунт или связь с исходным iPhone."; }
         catch (Exception) { Queue.StorageStatus = "Не удалось сохранить историю. Проверьте место и доступ к папке программы."; }
     }
+    internal void ResetClientWorkspace()
+    {
+        Queue.ArchiveSession();
+        search.ResetClientSelection();
+        files.ResetClientSelection();
+        appSets.ResetClientSelection();
+        ClearClientReport();
+        ConnectionNoticeVisible = false;
+        SelectedTab = 0;
+        Status = "Готово к следующему клиенту";
+        ApplyActions();
+    }
+    internal bool CanUseBatchAccount(QueueBatchViewModel batch) =>
+        !batch.Archived && (batch.AccountKey == null || (!protection.RequiresLogin && batch.AccountKey == AccountKey));
     internal async Task ResumeStoredBatch(QueueBatchViewModel batch, IReadOnlyCollection<string> keys)
     {
-        if (IsBusy) return;
+        if (IsBusy || IsClosing || !Queue.CanResumeBatch(batch)) return;
         var seeds = batch.Items.Where(x => keys.Contains(x.Seed.Key) && x.State != QueueItemState.Succeeded).Select(x => x.Seed).ToList();
         if (batch.Kind == "Скачивание")
         {
@@ -80,10 +94,12 @@ public sealed partial class DesktopViewModel
                 if (seed.FileSize > 0 && (file.Length != seed.FileSize || file.LastWriteTimeUtc.Ticks != seed.ModifiedTicks)) throw new IOException("IPA изменился после сохранения очереди: " + seed.Name + ". Добавьте его заново.");
                 rows.Add(row);
             }
-            await files.StartInstall(rows, batch);
+            if (Queue.CanResumeBatch(batch)) await files.StartInstall(rows, batch);
         }
     }
-    internal Task StartSetInstallation(List<LocalRow> rows, string target) => files.StartInstall(rows, null, target);
+    internal Task StartSetInstallation(List<LocalRow> rows, string target, string accountKey, string account,
+        IReadOnlyDictionary<string, string> sources, int cacheCount) =>
+        files.StartInstall(rows, expectedDevice: target, expectedAccount: accountKey, accountEmail: account, sources: sources, cacheCount: cacheCount);
     internal bool CanVerifyPhone(string key) => files.CanResume(key);
     internal void ReportDeviceFailure(DeviceRow phone, DeviceConnectionException error) => files.MarkConnectionLost(phone, error);
     internal void ResolveVerifiedFile(string path) => files.ResolveVerified(path);

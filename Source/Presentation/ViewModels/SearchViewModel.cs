@@ -202,6 +202,13 @@ namespace IpaDesktop
 
         }
         /// <summary>Возвращает текущий выбор, а при пустой очереди — независимый снимок последнего пакета.</summary>
+        internal void ResetClientSelection()
+        {
+            chosen.Clear(); lastDownloads.Clear(); failedDownloads.Clear();
+            Apps.SelectedItems.Clear();
+            Query = ""; SearchSet = ""; SearchSetStatus = "";
+            RefreshChosen();
+        }
         internal List<DownloadItem> SelectedDownloads()
         {
             return chosen.Count > 0 ? chosen.Snapshot() : lastDownloads.Select(x => new DownloadItem { ID = x.ID, Name = x.Name, VersionID = x.VersionID }).ToList();

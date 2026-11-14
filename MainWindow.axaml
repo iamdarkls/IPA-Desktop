@@ -32,6 +32,7 @@
       <TextBlock x:Name="UpdateNotice" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,0,8" Text="{CompiledBinding Updates.UpdateNotice}" IsVisible="{CompiledBinding Updates.UpdateNoticeVisible}" />
       <WrapPanel x:Name="AccountActions">
         <Button x:Name="Login" ui:ActionIcon.Kind="User" Content="Войти в Apple Account" Classes="primary" IsEnabled="{CompiledBinding Account.LoginEnabled}" Command="{CompiledBinding Account.LoginCommand}" />
+        <Button x:Name="NextClient" ui:ActionIcon.Kind="Logout" Content="Следующий клиент" IsVisible="{CompiledBinding Account.NextClientVisible}" Command="{CompiledBinding Account.NextClientCommand}" />
         <Button x:Name="OpenFolder" ui:ActionIcon.Kind="Folder" Content="Папка IPA" Command="{CompiledBinding OpenFolderCommand}" />
         <Button x:Name="ShowJournal" Content="Журнал" ui:ActionIcon.Kind="Journal" Command="{CompiledBinding ShowJournalCommand}" />
         <Button x:Name="MoreAccount" Content="Ещё" ui:ActionIcon.Kind="List">
@@ -280,6 +281,7 @@
             <WrapPanel Grid.Row="1">
               <Button x:Name="ResumeQueue" Content="Продолжить оставшиеся" ui:ActionIcon.Kind="Refresh" Classes="primary" Command="{CompiledBinding Queue.ResumeCommand}" />
               <Button Content="Проверить на iPhone" ui:ActionIcon.Kind="Check" Command="{CompiledBinding Queue.VerifyCommand}" />
+              <CheckBox Content="История клиентов" IsChecked="{CompiledBinding Queue.ShowHistory, Mode=TwoWay}" Margin="0,0,8,8" />
               <Button Content="Убрать готовые" ui:ActionIcon.Kind="Clear" Command="{CompiledBinding Queue.ClearCompletedCommand}" />
               <Button x:Name="MoreQueue" Content="Ещё" ui:ActionIcon.Kind="List">
                 <Button.Flyout>
@@ -302,7 +304,7 @@
           </StackPanel>
           <Border Classes="table-frame" Grid.Row="2">
             <Grid>
-              <DataGrid x:Name="OperationQueue" ItemsSource="{CompiledBinding Queue.Items}" SelectedItem="{CompiledBinding Queue.Selected, Mode=TwoWay}" SelectionMode="Single" RowHeight="56">
+              <DataGrid x:Name="OperationQueue" ItemsSource="{CompiledBinding Queue.VisibleItems}" SelectedItem="{CompiledBinding Queue.Selected, Mode=TwoWay}" SelectionMode="Single" RowHeight="56">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="2*" MinWidth="140" />
                   <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="*" MinWidth="90" />
@@ -356,7 +358,9 @@
                   </ListBox.ItemTemplate>
                 </ListBox>
                 <TextBlock x:Name="SetPreview" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,12" MaxHeight="85" TextTrimming="CharacterEllipsis" Text="{CompiledBinding AppSets.SetPreview}" />
-                <Button x:Name="InstallSet" Content="Установить наборы…" ui:ActionIcon.Kind="Phone" Classes="primary" IsEnabled="{CompiledBinding AppSets.InstallSetEnabled}" Command="{CompiledBinding AppSets.InstallSetCommand}" />
+                <TextBlock Text="iPhone для установки" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,4" />
+                <ComboBox x:Name="SetDeviceList" DisplayMemberBinding="{Binding DisplayLabel}" PlaceholderText="Выберите iPhone" Margin="0,0,0,8" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
+                <Button x:Name="InstallSet" Content="Подготовить и установить…" ui:ActionIcon.Kind="Phone" Classes="primary" IsEnabled="{CompiledBinding AppSets.InstallSetEnabled}" Command="{CompiledBinding AppSets.InstallSetCommand}" />
                 <Button x:Name="UseSet" ui:ActionIcon.Kind="Download" Classes="primary" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.UseSetEnabled}" Content="{CompiledBinding AppSets.UseSetLabel}" Command="{CompiledBinding AppSets.UseSetCommand}" />
                 <Button x:Name="EditSet" ui:ActionIcon.Kind="Edit" Content="Редактировать набор…" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.EditSetEnabled}" Command="{CompiledBinding AppSets.EditSetCommand}" />
                 <Button x:Name="DeleteSet" ui:ActionIcon.Kind="Trash" Classes="danger" Margin="0,0,0,12" IsEnabled="{CompiledBinding AppSets.DeleteSetEnabled}" Content="{CompiledBinding AppSets.DeleteSetLabel}" Command="{CompiledBinding AppSets.DeleteSetCommand}" />
@@ -508,7 +512,7 @@
         <DockPanel>
           <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" Command="{CompiledBinding DismissNoticeCommand}" />
           <Button x:Name="NoticeDetails" ui:ActionIcon.Kind="Info" Classes="toolbar" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" Command="{CompiledBinding NoticeDetailsCommand}" />
-          <Button x:Name="NoticeRetry" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="Повторить ошибки" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" IsVisible="{CompiledBinding NoticeRetryVisible}" IsEnabled="{CompiledBinding NoticeRetryEnabled}" Command="{CompiledBinding NoticeRetryCommand}" />
+          <Button x:Name="NoticeRetry" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="{CompiledBinding NoticeRetryLabel}" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" IsVisible="{CompiledBinding NoticeRetryVisible}" IsEnabled="{CompiledBinding NoticeRetryEnabled}" Command="{CompiledBinding NoticeRetryCommand}" />
           <StackPanel Spacing="4">
             <TextBlock x:Name="NoticeText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="13" Text="{CompiledBinding NoticeText}" ToolTip.Tip="{CompiledBinding NoticeTextTip}" />
             <TextBlock x:Name="NoticeCause" FontSize="12" TextWrapping="Wrap" Foreground="#C7CFDC" Text="{CompiledBinding NoticeCause}" IsVisible="{CompiledBinding NoticeCauseVisible}" />

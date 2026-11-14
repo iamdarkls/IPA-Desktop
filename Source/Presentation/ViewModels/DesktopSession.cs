@@ -76,8 +76,10 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         if (storage != null) storage.RefreshActions();
         library?.RefreshActions();
         ArchiveCache?.RefreshActions();
-        NoticeRetryEnabled = !IsBusy && noticeRetry != null && lastReport != null && lastReport.Failed > 0 &&
-            (lastReport.Kind == "Скачивание" ? Search.RetryDownloadsEnabled : Files.RetryInstallsEnabled);
+        NoticeRetryEnabled = !IsBusy && (noticeResumeBatch != null
+            ? CanContinueNotice(noticeResumeBatch)
+            : noticeRetry != null && lastReport != null && lastReport.Failed > 0 &&
+              (lastReport.Kind == "Скачивание" ? Search.RetryDownloadsEnabled : Files.RetryInstallsEnabled));
         ShowLastReportEnabled = lastReport != null;
         Queue.Refresh();
         foreach (var feature in Features) feature?.RefreshCommands();
@@ -185,16 +187,16 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         }));
         account.Initialize(); search.Initialize(); files.Initialize(); files.InitializeDeviceCommands();
         updates.Initialize(); storage.Initialize(); appSets.Initialize(); library.Initialize();
-        Queue.CanResumeBatch = batch => batch.Kind == "Скачивание"
-            ? !protection.RequiresLogin && AccountKey != null && batch.AccountKey == AccountKey
-            : files.CanResume(batch.TargetKey);
+        Queue.CanResumeBatch = batch => CanUseBatchAccount(batch) &&
+            (batch.Kind == "Скачивание" ? batch.AccountKey != null : files.CanResume(batch.TargetKey));
         ConfigureQueueStorage();
         Updates.GuiVersionStatus = "Установлена версия " + AppInfo.Version;
         StateView(); RefreshFiles();
         Func<Task> showReport = () => lastReport == null ? Task.CompletedTask : Interaction.ShowText("Итог операции", lastReport.Details);
         ShowLastReportCommand = AsyncCommand(showReport); NoticeDetailsCommand = AsyncCommand(showReport);
         DismissNoticeCommand = Command(() => OperationNoticeVisible = false);
-        NoticeRetryCommand = AsyncCommand(() => !IsBusy && noticeRetry != null ? noticeRetry() : Task.CompletedTask);
+        NoticeRetryCommand = AsyncCommand(() => !NoticeRetryEnabled ? Task.CompletedTask :
+            noticeResumeBatch != null ? ContinueNotice(noticeResumeBatch) : noticeRetry());
         ExportDiagnosticsCommand = AsyncCommand(ExportDiagnostics);
         OpenFolderCommand = Command(() => SystemIntegration.Open(paths.Downloads));
         journalTimer = Tasks.Own(Interaction.Repeat(TimeSpan.FromMilliseconds(150), () =>

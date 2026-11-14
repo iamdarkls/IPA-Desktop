@@ -11,6 +11,7 @@ public sealed class PairingRunner : IProcessRunner
  public readonly Queue<(string Command,string Reply)> Pairing=new();
  public bool NetworkBroken, WrongDevice, FailFirstInstall, FailAllInstalls, DisconnectInstall;
  public int Installs, DisconnectAt;
+ public string PreparedIpa;
  public string InventoryXml="<plist><array/></plist>";
  public string FreeSpace;
  public bool ServiceUnavailable;
@@ -21,6 +22,11 @@ public sealed class PairingRunner : IProcessRunner
   ct.ThrowIfCancellationRequested();var name=(Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe"));Calls.Add((name,args.ToArray()));
   string output="SUCCESS";int code=0;
   if(name=="ipatool.exe"&&args.Take(2).SequenceEqual(new[]{"auth","info"}))return Task.FromResult(new Result{Code=0,Output="{\"success\":true,\"email\":\"fixture@example.com\"}"});
+  if(name=="ipatool.exe" && args.FirstOrDefault()=="download" && PreparedIpa != null)
+  {
+   File.Copy(PreparedIpa, args[Array.IndexOf(args,"-o")+1]);Log("IPA_RAW_CACHE_HIT");
+   return Task.FromResult(new Result{Code=0,Output="{\"success\":true}"});
+  }
   if(name=="ideviceinstaller.exe"&&args.Contains("--help"))return Task.FromResult(new Result{Code=0,Output="--placeholders --xml list install --network"});
   if(name=="ideviceinstaller.exe"&&args.Contains("list"))return Task.FromResult(new Result{Code=ServiceUnavailable?1:0,Output=ServiceUnavailable?"No device found":InventoryXml});
   if(name=="ideviceinfo.exe"&&args.Contains("TotalDataAvailable"))return Task.FromResult(new Result{Code=0,Output=FreeSpace??"unknown"});

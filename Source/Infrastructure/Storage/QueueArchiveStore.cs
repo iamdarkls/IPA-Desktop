@@ -16,6 +16,8 @@ public sealed class QueueBatchArchive
     public string TargetKey { get; set; }
     public string TargetLabel { get; set; }
     public string AccountKey { get; set; }
+    public int CacheCount { get; set; }
+    public bool Archived { get; set; }
     public List<QueueItemArchive> Items { get; set; } = new();
 }
 public sealed class QueueItemArchive
@@ -51,7 +53,7 @@ public sealed class QueueArchiveStore
     {
         if(queue.Items.Count>5000)throw new IOException("В очереди больше 5000 записей. Уберите готовые элементы.");
         var archive=new QueueArchive{Batches=queue.Items.GroupBy(x=>x.Batch).Select(g=>new QueueBatchArchive{
-            Kind=g.Key.Kind,TargetKey=g.Key.TargetKey,TargetLabel=g.Key.TargetLabel,AccountKey=g.Key.AccountKey,
+            Kind=g.Key.Kind,TargetKey=g.Key.TargetKey,TargetLabel=g.Key.TargetLabel,AccountKey=g.Key.AccountKey,CacheCount=g.Key.CacheCount,Archived=g.Key.Archived,
             Items=g.Select(x=>new QueueItemArchive{Seed=x.Seed,State=x.State,Percent=x.ProgressText=="—"?null:x.Progress,Detail=x.Detail?.Substring(0,Math.Min(3000,x.Detail.Length))}).ToList()
         }).ToList()};
         var content=JsonCodec.Serialize(archive);if(content.Length>15000000)throw new IOException("История очереди слишком велика. Уберите готовые элементы.");
