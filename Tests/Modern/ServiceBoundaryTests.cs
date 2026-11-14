@@ -93,10 +93,13 @@ public sealed class ServiceBoundaryTests
         Assert.Null(await desktop.PrepareInstallCopies(rows));
     }
     [Fact]
-    public async Task ClearingArchiveCacheDoesNotTouchFinishedIpasOrUnrelatedFiles()
+    public async Task DisablingCachePreservesArchivesAndClearingLeavesFinishedIpas()
     {
         using var folder = new TempFolder();
-        var cache = new IpaArchiveCache(folder.Path);
+        var engine = new Engine(folder.Path, new RecordingProcessRunner(), new InstalledAppleSupportProbe());
+        var services = engine.CreateDesktopServices();
+        var cache = services.ArchiveCache;
+        await using var desktop = new DesktopViewModel(services, new NoWindowInteraction());
         Directory.CreateDirectory(cache.Folder);
         var original = Path.Combine(cache.Folder, "123-" + new string('a', 32) + ".raw");
         var unrelated = Path.Combine(cache.Folder, "unrelated.raw");
@@ -104,7 +107,15 @@ public sealed class ServiceBoundaryTests
         File.WriteAllText(original, "original"); File.WriteAllText(unrelated, "unrelated"); File.WriteAllText(finished, "finished");
         var ct = TestContext.Current.CancellationToken;
         Assert.Equal(new FileInfo(original).Length, await cache.SizeAsync(ct));
-        await cache.TrimAsync(0, ct);
+        desktop.ArchiveCache.Limit = 0;
+        await desktop.ArchiveCache.SaveCommand.ExecuteAsync();
+        Assert.Equal(0, new SettingsStore(folder.Path).Settings.IpaCacheGiB);
+        Assert.True(File.Exists(original));
+        await desktop.ArchiveCache.RefreshUsage(ct);
+        Assert.Contains("Кэш отключён", desktop.ArchiveCache.Usage);
+        await desktop.ArchiveCache.ClearCommand.ExecuteAsync(); // The interaction declines confirmation.
+        Assert.True(File.Exists(original));
+        await cache.ClearAsync(ct);
         Assert.Equal(0, await cache.SizeAsync(ct));
         Assert.True(File.Exists(unrelated)); Assert.True(File.Exists(finished));
     }

@@ -39,12 +39,18 @@ public sealed class ArchiveCacheViewModel : FeatureViewModel
         ClearCommand = AsyncCommand(async () =>
         {
             if (!await desktop.Interaction.Confirm("Очистить кэш IPA", "Удалить исходные архивы из кэша? Готовые IPA в библиотеке сохранятся.")) return;
-            await desktop.RunWorkAsync("Очистка кэша IPA…", ct => cache.TrimAsync(0, ct));
+            await desktop.RunWorkAsync("Очистка кэша IPA…", cache.ClearAsync);
         });
     }
     internal async Task RefreshUsage(CancellationToken ct)
     {
-        try { Usage = "Занято: " + StorageAnalysis.Bytes(await cache.SizeAsync(ct)) + " · Лимит: " + settings.Settings.IpaCacheGiB + " ГиБ"; }
+        try
+        {
+            var bytes = await cache.SizeAsync(ct);
+            var limit = settings.Settings.IpaCacheGiB;
+            Usage = "Занято: " + StorageAnalysis.Bytes(bytes) +
+                (limit == 0 ? " · Кэш отключён" : " · Лимит: " + limit + " ГиБ");
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         { Usage = "Не удалось прочитать кэш. Проверьте доступ к папке данных."; }

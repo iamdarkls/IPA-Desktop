@@ -421,7 +421,7 @@
                     <Button Content="Сохранить лимит" Command="{CompiledBinding ArchiveCache.SaveCommand}" />
                     <Button Content="Очистить кэш" ui:ActionIcon.Kind="Trash" Command="{CompiledBinding ArchiveCache.ClearCommand}" />
                   </WrapPanel>
-                  <TextBlock Text="Лимит в ГиБ. 0 отключает кэш. Готовые IPA в библиотеке сохраняются при очистке." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
+                  <TextBlock Text="0 отключает кэш и сохраняет архивы. Положительный лимит может удалить старые записи. «Очистить кэш» удаляет только исходные архивы; готовые IPA остаются в библиотеке." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
                 </StackPanel>
               </Border>
               <Border Background="{DynamicResource SurfaceBrush}" Classes="card" Padding="20" Margin="0,0,0,20">

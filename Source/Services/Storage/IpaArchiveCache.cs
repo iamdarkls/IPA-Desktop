@@ -35,9 +35,13 @@ public sealed class IpaArchiveCache
         }
         return bytes;
     }, ct);
-    public Task TrimAsync(int limitGiB, CancellationToken ct) => Task.Run(() =>
+    // Zero disables caching; clearing stored archives is a separate action.
+    public Task TrimAsync(int limitGiB, CancellationToken ct) => limitGiB <= 0
+        ? Task.CompletedTask : RemoveExcessAsync(Math.Min(limitGiB, MaxGiB) * GiB, ct);
+    public Task ClearAsync(CancellationToken ct) => RemoveExcessAsync(0, ct);
+
+    Task RemoveExcessAsync(long remaining, CancellationToken ct) => Task.Run(() =>
     {
-        long remaining = Math.Clamp(limitGiB, 0, MaxGiB) * GiB;
         foreach (var file in Entries().OrderByDescending(x => x.LastWriteTimeUtc))
         {
             ct.ThrowIfCancellationRequested();
