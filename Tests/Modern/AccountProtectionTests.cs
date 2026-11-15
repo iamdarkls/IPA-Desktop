@@ -36,6 +36,7 @@ public sealed class AccountProtectionTests
 
     [Theory]
     [InlineData("purchase error: your password has changed",FailureCode.PasswordChanged)]
+    [InlineData("Error: session expired. Please log in again.",FailureCode.PasswordChanged)]
     [InlineData("This Apple Account has been locked for security reasons",FailureCode.AccountRestricted)]
     [InlineData("authentication failed",FailureCode.Credentials)]
     [InlineData("terms and conditions",FailureCode.Terms)]

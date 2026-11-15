@@ -1,15 +1,16 @@
 {
   "repository": "https://github.com/Sorvigolova/ipatool.git",
-  "revision": "f421e613d1de69b82119cbc257469afe619d7e82",
-  "version": "1.3.1.3",
-  "tag": "ipatool-guard-v1.3.1.3",
+  "revision": "a1c333e6036c258415643835a3c4823ba46ee888",
+  "version": "1.3.2.1",
+  "tag": "ipatool-guard-v1.3.2.1",
   "files": {
-    "main.cpp": "ae25830cade649cb4ccecb40c0e93e91ebfc2413469db0b7a44bd8954ab258c5",
-    "appstore.cpp": "da74b212fa47283d80cd69ac7ec1d1abb0c9c994eb0a172e002293d0859cde24",
-    "http_client.cpp": "588b9483169fb8c8eb7a11b532d524ce740f281930d0cc30813cdb65eaf65add",
+    "main.cpp": "7bd357484b4d01a00a04dab7b5ab21362a516d0a0a4f8e3be580d02028c8ca99",
+    "appstore.cpp": "4d82fa44741302caf075a9c9265a1db7ee10b2a51807e720d8c4e552f0d63a15",
+    "http_client.cpp": "ed3449c94e6ce794dfd21bcac9467df17bc67642a77c81aeaae85807b569fa23",
     "CMakeLists.txt": "7d589d2f1039a900e21b50afefd75a308564fef574e0839f4fccfbafcfa8e851",
     "StoreAgentMachine.cpp": "eb39ffcbb2c984aec7d6cc8a84c8dc06b68a0c58007530d34614b241f1c0b9b9",
-    "sap_resources.rc": "50788aae5696f0c773941c0669d68beab2b71ec58a7bbe1a0d4a09161d46a98e"
+    "sap_resources.rc": "50788aae5696f0c773941c0669d68beab2b71ec58a7bbe1a0d4a09161d46a98e",
+    "http_client.h": "403ede04f539c5980cd10026a5544ee7ac4c89cc196aef1c763ad1fe5050ba6a"
   },
-  "upstream_tag": "1.3.1"
+  "upstream_tag": "1.3.2"
 }

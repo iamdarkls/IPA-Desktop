@@ -230,6 +230,50 @@ public sealed class UiTests(DesktopUiSession session)
   }
   finally{window.Close();}
  });
+ [Fact]
+ public Task ExpiredSessionPausesDownloadsAndResumesFromTheFailedIpa() => session.Run(async () =>
+ {
+  using var folder = new TempFolder();
+  var runner = new RecordingProcessRunner
+  {
+   DownloadFailure = args => args.Contains("456") ? "Error: session expired. Please log in again." : null
+  };
+  var engine = Backend(folder.Path, runner);
+  var desktop = new Desktop(engine, false); var window = desktop.Window; window.Show();
+  try
+  {
+   await ClickAsync(window, "AccountInfo");
+   desktop.Model.Search.StartDownloads(new List<DownloadItem>
+   {
+    new() { ID = "123", Name = "Already downloaded" },
+    new() { ID = "456", Name = "Interrupted download" },
+    new() { ID = "789", Name = "Waiting download" }
+   });
+   await Wait(() => !Busy(desktop));
+   var items = desktop.Model.Queue.Items;
+   Assert.Equal(new[] { QueueItemState.Succeeded, QueueItemState.Failed, QueueItemState.Paused }, items.Select(row => row.State));
+   Assert.True(Find<Button>(window, "Login").IsEnabled);
+   Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   await ClickAsync(window, "AccountInfo");
+   Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+
+   using (engine.AccountRequests.Enter(true, TestContext.Current.CancellationToken))
+    engine.AccountRequests.LoginSucceeded();
+   runner.SessionEmail = "other@example.com";
+   await ClickAsync(window, "AccountInfo");
+   Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   runner.SessionEmail = "test@example.com";
+   runner.DownloadFailure = null;
+   await ClickAsync(window, "AccountInfo");
+   Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
+   desktop.Model.Queue.ResumeCommand.Execute(null);
+   await Wait(() => !Busy(desktop));
+   Assert.All(items, row => Assert.Equal(QueueItemState.Succeeded, row.State));
+   var downloads = runner.Calls.Where(args => args.Length > 0 && args[0] == "download");
+   Assert.Equal(new[] { "123", "456", "456", "789" }, downloads.Select(args => args[Array.IndexOf(args, "-i") + 1]));
+  }
+  finally { window.Close(); }
+ });
  static void AddAccountMetadata(LocalRow row, int id = 123)
  {
   using var zip=System.IO.Compression.ZipFile.Open(row.Path,System.IO.Compression.ZipArchiveMode.Update);

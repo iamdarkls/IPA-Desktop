@@ -2,6 +2,8 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -34,8 +36,22 @@ void curl_slist_free_all(curl_slist*) {}
 void load_cookies(CURL*,const std::string&) {}
 void save_cookies(CURL*,const std::string&) {}
 bool is_retryable_curl(CURLcode code) { return code==CURLE_OPERATION_TIMEDOUT; }
+namespace ipt {
+std::filesystem::path fs_path(const std::string& value) { return value; }
+}
+// ACTUAL_CLEAR_COOKIES
 // ACTUAL_PERFORM
 int main() {
+#ifdef IPA_TEST_CLEAR_COOKIES
+  m_cookieFile="fixture-cookies";
+  { std::ofstream stale(m_cookieFile); stale << "old session"; }
+  clear_cookies();
+  assert(!std::filesystem::exists(m_cookieFile));
+  clear_cookies(); // A fresh profile may have no cookie file.
+  m_cookieFile.clear();
+  clear_cookies();
+  std::cout<<"PASS: stale cookies removed before explicit login\n";
+#endif
   for(int code:{CURLE_OPERATION_TIMEDOUT,CURLE_COULDNT_RESOLVE_HOST,CURLE_COULDNT_RESOLVE_PROXY,55,56}) {
     calls=0;result=code;bool failed=false;
     try { perform("POST","https://buy.itunes.apple.com/auth","fixture-password",{}); } catch(const std::runtime_error&) {failed=true;}

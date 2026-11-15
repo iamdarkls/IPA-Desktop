@@ -145,6 +145,12 @@ def patch(root, pin_file=None):
     store = replace_once(store, 'acc.password.set(       password);', 'acc.password.set(""); // Never retain the Apple password in the saved session.')
     if native:
         store = patch_store_adi(store)
+        if pins['upstream_tag'] == '1.3.2':
+            store = replace_once(store, '" requesting silent re-login"', '" explicit sign-in required"')
+            # A 401 on the regenerated-kbsync retry must stop the queue too.
+            retry_handler = '            } catch (const std::exception& e) {\n                if (m_debug) fprintf(stderr, "[DEBUG] kbsync regeneration failed'
+            store = replace_once(store, retry_handler,
+                                 '            } catch (const PasswordTokenExpired&) {\n                throw;\n' + retry_handler)
         main, store = patch_raw_ipa_cache(main, store)
         (root/'raw_ipa_cache.h').write_bytes(Path(__file__).with_name('raw_ipa_cache.h').read_bytes())
     else:

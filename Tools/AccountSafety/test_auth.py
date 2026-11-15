@@ -102,7 +102,7 @@ void prov_log(const std::string&) {}
 void prov_add_md(std::map<std::string,std::string>& headers, uint64_t, const char*) {
     if (provisionings) headers["X-Apple-AMD"]="proof";
 }
-bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::string&, const char*) {
+bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::string&, const std::string&) {
     const auto action=res.headers.find("x-apple-amd-action");
     const auto challenge=res.headers.find("x-apple-amd-data");
     if (action==res.headers.end() || action->second!="SP" ||
@@ -123,6 +123,28 @@ bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::stri
   bool missing=false;try{login();}catch(const IpaError&){missing=true;}
   assert(missing && m_http.calls==1 && provisionings==1);
   m_http={};Account account;""")
+    if ' explicit sign-in required' in store:
+        login_start, _, login_end = function_span(store, 'Account AppStore::login(')
+        explicit_login = store[login_start:login_end]
+        assert explicit_login.index('m_http.clear_cookies();') < explicit_login.index('get_guid()')
+        post_start, _, post_end = function_span(store, 'HttpResponse AppStore::prov_post(')
+        prelude += r"""
+struct PasswordTokenExpired:std::exception {};
+void debug_dump_request(const char*, const char*, const std::string&, const std::map<std::string,std::string>&, const std::string&) {}
+void debug_dump_response(const char*, const HttpResponse&) {}
+"""
+        prelude += store[post_start:post_end].replace('AppStore::prov_post', 'prov_post', 1)
+        cases = cases.replace('  m_http={};Account account;', r"""
+  m_http={{{HttpResponse{401},{} }},0};
+  bool expired=false;
+  try { prov_post("volumeStoreDownload","fixture","",{},1,"guid","token",""); }
+  catch (const PasswordTokenExpired&) { expired=true; }
+  assert(expired && m_http.calls==1);
+  m_http={{{HttpResponse{403},{} }},0};
+  assert(prov_post("volumeStoreDownload","fixture","",{},1,"guid","token","").statusCode==403);
+  assert(m_http.calls==1);
+  std::cout<<"PASS: commerce 401 signals expired session once; 403 remains a store refusal\n";
+  m_http={};Account account;""")
     login='void login(std::string authCode="") {\nstd::string email="fixture", password="fixture", guid="fixture", baseEndpoint="'+endpoint+'";\n'+store[opening+1:end]+'}\n'
     start,_,end=function_span(main,'static bool silent_relogin(')
     # Exercise actual patched native control flow, not a second implementation of its retry policy.
@@ -136,10 +158,14 @@ bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::stri
     perform='HttpResponse perform(const std::string& method,const std::string& url,const std::string& body,const std::map<std::string,std::string>& reqHeaders) '+http[opening:end]
     transport=Path(__file__).with_name('transport_fixture.cpp').read_text().replace('// ACTUAL_PERFORM',perform)
     with tempfile.TemporaryDirectory(prefix='ipa-http-auth-') as temporary:
+        if 'void HttpClient::clear_cookies() const' in http:
+            _, opening, end = function_span(http, 'void HttpClient::clear_cookies() const')
+            clear = 'void clear_cookies() ' + http[opening:end]
+            transport = transport.replace('// ACTUAL_CLEAR_COOKIES', '#define IPA_TEST_CLEAR_COOKIES\n' + clear)
         source=Path(temporary)/'transport.cpp';binary=Path(temporary)/'transport.exe'
         source.write_text(transport,encoding='utf-8')
         subprocess.run(['g++','-std=c++20','-O0',str(source),'-o',str(binary)],check=True)
-        subprocess.run([str(binary)],check=True,timeout=15)
+        subprocess.run([str(binary)],check=True,timeout=15,cwd=temporary)
     assert 'j["password"]            = "";' in main
     assert 'acc.password.set(""); // Ignore passwords' in main
     assert 'acc.password.set(""); // Never retain' in store

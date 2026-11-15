@@ -40,6 +40,7 @@ public sealed class RecordingProcessRunner : IProcessRunner
     public string LastWorkingDirectory;
     public bool FailInstall;
     public bool FailDownload;
+    public Func<string[], string> DownloadFailure;
     public string SessionEmail="test@example.com";
     public string DeviceIds="00008030-0000111ABC000DEF\n00008030-0000111ABC000ABC\n";
     public bool HoldDiscovery,FailDiscovery;
@@ -67,8 +68,11 @@ public sealed class RecordingProcessRunner : IProcessRunner
             if (CancelInstall != null) { CancelInstall.Cancel(); ct.ThrowIfCancellationRequested(); }
             if (FailInstall) return Task.FromResult(new Result { Code = 1, Output = "fixture install failure" });
         }
-        if (FailDownload && args.Length > 0 && args[0] == "download")
-            return Task.FromResult(new Result { Code = 1, Output = "ERROR: fixture download failure" });
+        if (args.Length > 0 && args[0] == "download")
+        {
+            var failure = DownloadFailure?.Invoke(args) ?? (FailDownload ? "ERROR: fixture download failure" : null);
+            if (failure != null) return Task.FromResult(new Result { Code = 1, Output = failure });
+        }
         string output = "{\"success\":true}";
         if ((Path.GetFileName(exe)+(RuntimePlatform.Windows?"":".exe")) == "idevice_id.exe")
             output = DeviceIds;
