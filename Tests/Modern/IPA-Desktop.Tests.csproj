@@ -4,10 +4,9 @@
     <ProjectReference Include="../../IPA-Desktop.csproj" />
     <ProjectReference Include="../LoginFixture/LoginFixture.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
-    <!-- Avalonia.Headless.XUnit calls the xUnit 3.2 discovery API; xUnit 4 fails UI discovery. -->
-    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" PrivateAssets="all" />
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.101" PrivateAssets="all" />
     <!-- Pin newer transitive test dependencies; these do not ship with the app. -->
     <PackageReference Include="Microsoft.ApplicationInsights" Version="3.2.0" PrivateAssets="all" />

@@ -13,13 +13,13 @@
 | Tmds.DBus.Protocol | 0.95.2 |
 | System.ServiceProcess.ServiceController / System.Windows.Extensions | 11.0.0 |
 | Microsoft.NET.Test.Sdk / xunit.runner.visualstudio | 18.12.0 / 4.0.1 |
-| xunit.v3 / Microsoft.Testing.Platform | 3.2.2 / 1.9.1 |
+| xunit.v3 / Microsoft.Testing.Platform | 4.0.3 / 2.5.2 |
 | xunit.analyzers | 2.3.0 |
 | actions/setup-dotnet | 6.1.0 |
 
 ## Проверенные исключения
 
-**xUnit 4.0.3:** сборка успешна после перехода на новый ParallelizationAttribute, но Avalonia.Headless.XUnit 12.1.6 выдаёт ошибку при обнаружении UI-тестов: MissingMethodException в Xunit.v3.TestIntrospectionHelper.GetTestCaseDetails. Поэтому остаются xUnit 3.2.2 и совместимая с ним ветка Microsoft.Testing.Platform 1.9.1. Обновление допускается после поддержки нового API адаптером Avalonia; отключать или заменять UI-тесты ради номера версии не нужно.
+**UI-тесты с xUnit 4:** коллекция Desktop UI запускает тесты через `HeadlessUnitTestSession` из `Avalonia.Headless`. Диспетчер выполняет тест и завершает отложенные операции интерфейса до закрытия приложения. `Avalonia.Headless.XUnit 12.1.6` использует старый API обнаружения тестов xUnit 3.
 
 **Avalonia.Angle.Windows.Natives:** версия 2.2.0.20230930 снята с публикации в NuGet (listed=false). Более высокий номер из flat-container не означает актуальный рекомендуемый выпуск. Используется пакет 2.1.27548.20260419, который выбирает Avalonia; стандартный аудит NuGet не предлагает его обновлять.
 

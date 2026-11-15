@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Headless.XUnit;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Interactivity;
@@ -13,7 +12,7 @@ using Xunit;
 namespace IpaDesktop.Tests;
 
 [Collection("Desktop UI")]
-public sealed class UiTests
+public sealed class UiTests(DesktopUiSession session)
 {
  static T Find<T>(Window window,string name) where T:Control => window.FindControl<T>(name) ?? window.GetLogicalDescendants().OfType<T>().First(x=>x.Name==name);
  static void Click(Window window,string name)
@@ -53,8 +52,8 @@ public sealed class UiTests
             finally { Cleanup.TrySetResult(); await Release.Task; }
         }
     }
-    [AvaloniaFact]
-    public async Task ClosingMainWindowCancelsChildProbeAndWaitsForItsCleanup()
+    [Fact]
+    public Task ClosingMainWindowCancelsChildProbeAndWaitsForItsCleanup() => session.Run(async () =>
     {
         using var folder = new TempFolder(); var network = new HeldNetwork();
         var window = new MainWindow(); var interaction = new AvaloniaDesktopInteraction(window);
@@ -76,8 +75,8 @@ public sealed class UiTests
             Assert.Equal(0, model.Tasks.PendingCount);
         }
         finally { network.Release.TrySetResult(); await model.ShutdownAsync(); window.Close(); }
-    }
- [AvaloniaFact] public async Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales()
+    });
+ [Fact] public Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales() => session.Run(async () =>
  {
   using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;
   var content=(Control)window.Content;window.Content=null;var scaled=new LayoutTransformControl { Child=content };window.Content=scaled;window.Show();
@@ -119,8 +118,8 @@ public sealed class UiTests
    Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task QueueSetsAndMinimumLayoutRemainUsable()
+ });
+ [Fact] public Task QueueSetsAndMinimumLayoutRemainUsable() => session.Run(async () =>
  {
   using var folder=new TempFolder();var backend=Backend(folder.Path);var desktop=new Desktop(backend,false);var window=desktop.Window;window.Show();
   try
@@ -190,8 +189,8 @@ public sealed class UiTests
    desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(30);Assert.Equal("1233",count.Text);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task JournalReopensWithHistoryAndMoreMenuKeepsActionsAvailable()
+ });
+ [Fact] public Task JournalReopensWithHistoryAndMoreMenuKeepsActionsAvailable() => session.Run(async () =>
  {
   using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;window.Show();
   try
@@ -213,8 +212,8 @@ public sealed class UiTests
    Assert.Equal(desktop.Model.Device.SupportMessage,Find<TextBlock>(window,"AppleSupportStatus").Text);deviceMore.Flyout.Hide();
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task RestartedDownloadQueueWaitsForOriginalAccountAndRestoresItsResumeAction()
+ });
+ [Fact] public Task RestartedDownloadQueueWaitsForOriginalAccountAndRestoresItsResumeAction() => session.Run(async () =>
  {
   using var folder=new TempFolder();var runner=new RecordingProcessRunner();var engine=Backend(folder.Path,runner);
   var first=new Desktop(engine,false);first.Window.Show();await ClickAsync(first.Window,"AccountInfo");
@@ -230,14 +229,14 @@ public sealed class UiTests
    Assert.Contains(runner.Calls,x=>x.Length>0&&x[0]=="download");
   }
   finally{window.Close();}
- }
+ });
  static void AddAccountMetadata(LocalRow row, int id = 123)
  {
   using var zip=System.IO.Compression.ZipFile.Open(row.Path,System.IO.Compression.ZipArchiveMode.Update);
   using var writer=new StreamWriter(zip.CreateEntry("iTunesMetadata.plist").Open());
   writer.Write($"<plist><dict><key>itemId</key><integer>{id}</integer><key>appleId</key><string>fixture@example.com</string><key>softwareVersionBundleId</key><string>com.fixture</string><key>bundleShortVersionString</key><string>1.0</string></dict></plist>");
  }
- [AvaloniaFact] public async Task DeviceLibraryAndResultVerificationRequireExplicitConfirmation()
+ [Fact] public Task DeviceLibraryAndResultVerificationRequireExplicitConfirmation() => session.Run(async () =>
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa("Library");AddAccountMetadata(row);
   fixture.Runner.InventoryXml="<plist><array><dict><key>CFBundleIdentifier</key><string>com.fixture</string><key>CFBundleDisplayName</key><string>Library fixture</string><key>CFBundleShortVersionString</key><string>1.0</string><key>iTunesMetadata</key><dict><key>itemId</key><integer>123</integer></dict></dict></array></plist>";
@@ -255,8 +254,8 @@ public sealed class UiTests
    await Wait(()=>!Busy(desktop));Assert.Equal(QueueItemState.Succeeded,desktop.Model.Queue.Items.Single().State);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task SetWizardReusesOnlyMatchingLocalIpaAndConfirmsBeforeInstalling()
+ });
+ [Fact] public Task SetWizardReusesOnlyMatchingLocalIpaAndConfirmsBeforeInstalling() => session.Run(async () =>
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa("Set");AddAccountMetadata(row);
   var binaries=Path.Combine(fixture.Engine.Root,"Versions/fixture/"+RuntimePlatform.ToolFolder);File.WriteAllText(Path.Combine(binaries,RuntimePlatform.ToolName("ipatool.exe")),"fixture");
@@ -287,12 +286,12 @@ public sealed class UiTests
    Assert.Single(fixture.Engine.AppSets.Load());Assert.True(File.Exists(row.Path));
   }
   finally{window.Close();}
- }
+ });
  public static bool IsWindows => OperatingSystem.IsWindows();
- [AvaloniaTheory]
+ [Theory]
  [InlineData(false)]
  [InlineData(true)]
- public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa(bool matchingBuild)
+ public Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa(bool matchingBuild) => session.Run(async () =>
  {
   using var fixture=new PairingFixture();var rows=new[]{fixture.Ipa("One"),fixture.Ipa("Second","<key>CFBundleIdentifier</key><string>com.fixture.two</string><key>CFBundleShortVersionString</key><string>1.0</string><key>CFBundleVersion</key><string>7</string>"),fixture.Ipa("Three")};
   fixture.Runner.DisconnectAt=2;var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
@@ -341,8 +340,8 @@ public sealed class UiTests
    Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task ConnectionFailureBlocksRetryUntilSelectedPhoneAnswersAgain()
+ });
+ [Fact] public Task ConnectionFailureBlocksRetryUntilSelectedPhoneAnswersAgain() => session.Run(async () =>
  {
   using var fixture=new PairingFixture();var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   try
@@ -361,8 +360,8 @@ public sealed class UiTests
    Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task TrustRequestIsVisibleAndAutomaticallyCompletesAfterConfirmation()
+ });
+ [Fact] public Task TrustRequestIsVisibleAndAutomaticallyCompletesAfterConfirmation() => session.Run(async () =>
  {
   using var fixture=new PairingFixture();fixture.Runner.WaitForTrust=true;var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   try
@@ -374,8 +373,8 @@ public sealed class UiTests
    fixture.Runner.Trusted=true;await Wait(()=>!Busy(desktop));Assert.Contains("готов",Find<TextBlock>(window,"ConnectionTitle").Text);Assert.Equal(0,fixture.Runner.Installs);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task CanceledTrustWaitKeepsInstallationBlockedUntilConnectionIsChecked()
+ });
+ [Fact] public Task CanceledTrustWaitKeepsInstallationBlockedUntilConnectionIsChecked() => session.Run(async () =>
  {
   using var fixture=new PairingFixture();fixture.Runner.WaitForTrust=true;var row=fixture.Ipa();var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   try
@@ -389,8 +388,8 @@ public sealed class UiTests
    Click(window,"CheckConnection");await Wait(()=>!Busy(desktop));Assert.True(Find<Button>(window,"InstallFiles").IsEnabled, "title="+Find<TextBlock>(window,"ConnectionTitle").Text+" chosen="+Find<ItemsControl>(window,"ChosenFiles").ItemCount+" device="+devices.SelectedItem+" check="+Find<Button>(window,"CheckConnection").IsEnabled);
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task AutomaticDiscoveryPreservesIdentityAndStopsBeforeWork()
+ });
+ [Fact] public Task AutomaticDiscoveryPreservesIdentityAndStopsBeforeWork() => session.Run(async () =>
  {
   using var folder=new TempFolder();var runner=new RecordingProcessRunner{DeviceIds="00008030-0000111ABC000DEF"};var desktop=new Desktop(Backend(folder.Path,runner),false);var window=desktop.Window;window.Show();
   try
@@ -408,13 +407,13 @@ public sealed class UiTests
    runner.HoldDiscovery=false;
   }
   finally{window.Close();}
- }
- [AvaloniaFact] public async Task ClosingWindowCancelsPendingDiscovery()
+ });
+ [Fact] public Task ClosingWindowCancelsPendingDiscovery() => session.Run(async () =>
  {
   using var folder=new TempFolder();var runner=new RecordingProcessRunner{HoldDiscovery=true};var desktop=new Desktop(Backend(folder.Path,runner),false);var window=desktop.Window;window.Show();
   var scan=DesktopContract.ScanDevices(desktop);window.Close();await Wait(()=>!window.IsVisible);Assert.True(scan.IsCompleted);Assert.True(runner.CanceledDiscoveries>0);
- }
- [AvaloniaFact] public async Task LoginRetriesMasksClearsAndConfirmsTwoFactor()
+ });
+ [Fact] public Task LoginRetriesMasksClearsAndConfirmsTwoFactor() => session.Run(async () =>
  {
   using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var owner=desktop.Window;owner.Show();
   try
@@ -430,8 +429,8 @@ public sealed class UiTests
    Assert.True(await result);Assert.Equal("fixture@example.com",login.SignedInEmail);Assert.Equal("",login.PasswordBox.Text);
   }
   finally{owner.Close();}
- }
- [AvaloniaFact] public async Task VersionMetadataDoesNotLoseMultiSelection()
+ });
+ [Fact] public Task VersionMetadataDoesNotLoseMultiSelection() => session.Run(async () =>
  {
   using var folder=new TempFolder();var owner=new Desktop(Backend(folder.Path),false).Window;owner.Show();
   try
@@ -445,5 +444,5 @@ public sealed class UiTests
    Assert.True(await result);Assert.Equal(2,dialog.SelectedIDs.Count);
   }
   finally{owner.Close();}
- }
+ });
 }
