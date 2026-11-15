@@ -1,6 +1,6 @@
 """Run the packaged GUI and native commands on its actual host OS without Apple accounts."""
 from pathlib import Path
-import json,subprocess,tempfile,sys,os,zipfile,stat
+import json,plistlib,subprocess,tempfile,sys,os,zipfile
 archive=Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix='ipa-platform-') as folder:
  root=Path(folder);stage=root/'package';stage.mkdir()
@@ -10,6 +10,12 @@ with tempfile.TemporaryDirectory(prefix='ipa-platform-') as folder:
    p=stage/entry.filename
    if p.is_file():p.chmod((entry.external_attr>>16)&0o777 or 0o644)
  package=stage/('IPA-Desktop.app' if sys.platform=='darwin' else 'IPA-Desktop');base=package/'Contents/MacOS' if sys.platform=='darwin' else package
+ if sys.platform=='darwin':
+  with (package/'Contents/Info.plist').open('rb') as info:
+   icon_name=plistlib.load(info)['CFBundleIconFile']
+  icon=package/'Contents/Resources'/icon_name
+  subprocess.run(['/usr/bin/sips','-g','pixelWidth','-g','pixelHeight',str(icon)],check=True,timeout=15)
+  subprocess.run(['/usr/bin/codesign','--verify','--deep','--strict',str(package)],check=True,timeout=15)
  native=base/'native'
  for tool in ['idevice_id','ideviceinfo','ideviceinstaller','idevicepair','ipa-device-events']:
   subprocess.run([str(native/tool),'--version'],check=True,timeout=15)
