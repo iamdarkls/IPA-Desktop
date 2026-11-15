@@ -26,7 +26,7 @@ public sealed partial class DesktopViewModel
             batch = Queue.Start("Скачивание", variants.Select(group =>
                 new QueueSeed(group.Key.AppStoreID + "@" + group.Key.ExternalVersionID, group.First().DisplayName, "ID " + group.Key.ExternalVersionID)),
                 null, "Apple Account · " + AccountHint(email), keys => _ = RunAsyncCommand(() => ResumeStoredBatch(batch, keys)), null, expectedAccount);
-            var result = await BatchRunner.Run(variants, async (group, token) =>
+            var result = await BatchRunner.RunDownloads(variants, group => group.Key.AppStoreID, async (group, token) =>
             {
                 var original = group.First();
                 var path = await downloads.DownloadFileAsync(new DownloadItem {
@@ -40,7 +40,7 @@ public sealed partial class DesktopViewModel
                 foreach (var row in group) copies.Add(row.Path, copy);
             }, (group, index) => BeginQueue("Скачивание", index, variants.Count, group.First().DisplayName),
                 group => ReportItem(group.First().DisplayName, null),
-                (group, error) => ReportItem(group.First().DisplayName, error), null, ct);
+                (group, error) => ReportItem(group.First().DisplayName, error), ct);
             CompleteQueue(result.Succeeded, result.Failed.Count);
             if (result.Failed.Count != 0)
                 throw new InvalidOperationException("Не все копии подтверждены. Установка не запущена; подробности в очереди.");

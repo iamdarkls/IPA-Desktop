@@ -48,6 +48,15 @@ namespace IpaDesktop
             Queue.Result(error);
             if (activeReport != null) activeReport.Add(name, error);
         }
+        internal void ShowRecoveredInstallation(QueueBatchViewModel batch)
+        {
+            StartReport("Установка", batch.Items.Count, null);
+            AttachInstallationReport(batch);
+            foreach (var item in batch.Items.Where(item => item.State == QueueItemState.Succeeded))
+                activeReport.Add(item.Name, null);
+            lastReport = activeReport;
+            RenderNotice();
+        }
         void RenderNotice()
         {
             if (lastReport == null) return;
@@ -68,7 +77,8 @@ namespace IpaDesktop
             var failure = lastReport.Items.LastOrDefault(x => !x.Success);
             NoticeCause = failure?.Cause;
             NoticeCauseVisible = failure != null;
-            NoticeRemedy = failure == null ? lastReport.StopReason : "Что сделать: " + failure.Remedy;
+            NoticeRemedy = !String.IsNullOrEmpty(lastReport.StopReason) ? lastReport.StopReason :
+                failure == null ? "" : "Что сделать: " + failure.Remedy;
             NoticeRemedyVisible = failure != null || !String.IsNullOrEmpty(lastReport.StopReason);
             bool errors = lastReport.Failed > 0 || !String.IsNullOrEmpty(lastReport.StopReason);
             OperationNoticeBackground = errors ? "#38232C" : lastReport.Canceled ? "#383122" : "#173529";
@@ -83,6 +93,7 @@ namespace IpaDesktop
         {
             queueProgress.Begin(kind, index, total, app);
             Queue.Begin(index);
+            if (kind == "Скачивание") Log("App Store · запрашиваем разрешение и данные загрузки (" + index + "/" + total + ").");
             Status = kind + " " + index + "/" + total + ": " + app;
             RenderQueue();
         }
@@ -132,7 +143,8 @@ namespace IpaDesktop
             do { chunk = journalBuffer.Drain(); AppendJournal(chunk); } while (all && chunk.Length > 0);
         }
         void ShowJournal() { FlushJournal(true); Interaction.ShowJournal(this); }
-        async Task ExportDiagnostics()
+        Task PreviewDiagnostics() => Interaction.ShowText("Диагностика без личных данных", BuildDiagnosticReport());
+        string BuildDiagnosticReport()
         {
             FlushJournal(true);
             List<string> privateValues;
@@ -141,7 +153,11 @@ namespace IpaDesktop
             var email = Account.AccountLabel;
             if (email?.Contains("@") == true) privateValues.Add(email);
             foreach (var device in Files.DeviceList.Items.Cast<DeviceRow>()) { privateValues.Add(device.ID); privateValues.Add(device.Name); }
-            var report = DiagnosticReport.Create(JournalText, settings.Settings.Version ?? "not installed", (settings.Settings.DeviceVersion ?? "not installed") + Environment.NewLine + Updates.DeviceComponents, privateValues);
+            return DiagnosticReport.Create(JournalText, settings.Settings.Version ?? "not installed", (settings.Settings.DeviceVersion ?? "not installed") + Environment.NewLine + Updates.DeviceComponents, privateValues);
+        }
+        async Task ExportDiagnostics()
+        {
+            var report = BuildDiagnosticReport();
             if (!await Interaction.ExportText("IPA-Desktop-diagnostic-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt", report)) return;
             Log("Отчёт диагностики сохранён.");
         }
@@ -151,7 +167,7 @@ namespace IpaDesktop
             Log(e.Message);
             var failure = ErrorLocalizer.Describe(e);
             Status = failure.Title;
-            if (activeReport != null && (e is DeviceConnectionException || reportBatch != null)) activeReport.StopReason = failure.Description;
+            if (activeReport != null && (e is DeviceConnectionException or AppleAccountException || reportBatch != null)) activeReport.StopReason = failure.Description + "\nЧто сделать: " + failure.Remedy;
             if (activeReport == null || (reportBatch == null && activeReport.Failed == 0 && activeReport.Succeeded == 0))
             {
                 lastReport = new OperationReport { Kind = "Операция", Total = 1 };

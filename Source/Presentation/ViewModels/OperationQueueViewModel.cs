@@ -111,11 +111,13 @@ public sealed class OperationQueueViewModel : ObservableObject
     public Func<QueueItemViewModel, bool> CanVerify { get; set; } = _ => false;
     public DelegateCommand VerifyCommand { get; }
     public void ClearHistory() { if (busy) return; Items.Clear(); Selected = null; active = Array.Empty<QueueItemViewModel>(); current = null; Refresh(); PersistRequested?.Invoke(); }
-    public void AcceptInstalled(QueueItemViewModel item)
+    public void AcceptInstalled(QueueItemViewModel item, bool automatic = false)
     {
         if (item.Kind != "Установка") throw new InvalidOperationException();
-        foreach (var row in Items.Where(x => !x.Batch.Archived && x.Kind == item.Kind && x.Batch.AccountKey == item.Batch.AccountKey && x.Batch.TargetKey == item.Batch.TargetKey && x.Seed.Key == item.Seed.Key))
-            row.Update(QueueItemState.Succeeded, "Нужная версия найдена на iPhone; пользователь подтвердил завершение.", 100);
+        foreach (var row in Items.Where(x => !x.Batch.Archived && (!automatic || x.Batch == item.Batch) && x.Kind == item.Kind && x.Batch.AccountKey == item.Batch.AccountKey && x.Batch.TargetKey == item.Batch.TargetKey && x.Seed.Key == item.Seed.Key))
+            row.Update(QueueItemState.Succeeded, automatic
+                ? "Версия и сборка подтверждены на исходном iPhone."
+                : "Нужная версия найдена на iPhone; пользователь подтвердил завершение.", 100);
         Refresh(); PersistRequested?.Invoke();
     }
     public void Restore(QueueArchive archive, Action<QueueBatchViewModel, IReadOnlyCollection<string>> resume)

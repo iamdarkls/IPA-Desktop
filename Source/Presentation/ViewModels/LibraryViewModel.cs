@@ -71,12 +71,11 @@ public sealed partial class LibraryViewModel : FeatureViewModel
             if (file == null) throw new IOException("Исходного IPA нет в папке программы. Без него результат нельзя достоверно сравнить.");
             var info = new FileInfo(file.Path);
             if (row.Seed.FileSize > 0 && (info.Length != row.Seed.FileSize || info.LastWriteTimeUtc.Ticks != row.Seed.ModifiedTicks)) throw new IOException("IPA изменился после создания очереди. Добавьте его заново.");
-            var expected = IpaMetadata.ReadDetails(file.Path);
             await devices.ValidateReadyAsync(phone, ct); var apps = await devices.ApplicationsAsync(phone, ct);
-            var installed = apps.FirstOrDefault(x => String.Equals(x.BundleID, expected.BundleID, StringComparison.OrdinalIgnoreCase));
-            var difference = DeviceApplications.Compare(expected, installed);
+            var installed = apps.FirstOrDefault(x => String.Equals(x.BundleID, file.BundleID, StringComparison.OrdinalIgnoreCase));
+            var difference = DeviceApplications.Compare(file, installed);
             if (difference != null) { await desktop.Interaction.ShowText("Проверка результата", difference + "\nОчередь не изменена."); return; }
-            if (await desktop.Interaction.Confirm("Версия найдена на iPhone", file.DisplayName + " · " + expected.Version + " · сборка " + expected.Build + "\nНужная версия присутствует на выбранном iPhone. Пропустить повторную установку этого IPA?"))
+            if (await desktop.Interaction.Confirm("Версия найдена на iPhone", file.DisplayName + " · " + file.Version + " · сборка " + file.Build + "\nНужная версия присутствует на выбранном iPhone. Пропустить повторную установку этого IPA?"))
             { desktop.Queue.AcceptInstalled(row); desktop.ResolveVerifiedFile(file.Path); }
         });
     }

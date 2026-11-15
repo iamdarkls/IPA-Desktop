@@ -28,7 +28,6 @@ public abstract class FeatureViewModel : ObservableObject
     protected void Error(Exception error) => desktop.Error(error);
     protected void ApplyActions() => desktop.ApplyActions();
     protected void StateView() => desktop.StateView();
-    protected void RefreshLocalFiles() => desktop.RefreshFiles();
     public abstract void RefreshActions();
     public abstract void ConfigureCommands();
     public abstract void RefreshCommands();

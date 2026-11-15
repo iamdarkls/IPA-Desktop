@@ -420,6 +420,43 @@ namespace IpaDesktop
             if (resumeBatch != null && !CanResume(resumeBatch.TargetKey)) throw new Exception("Для продолжения восстановите связь с тем же iPhone.");
             if (resumeBatch != null && !desktop.CanUseBatchAccount(resumeBatch)) return;
             if (expectedAccount != null && expectedAccount != desktop.AccountKey) throw new InvalidOperationException("Apple Account сменился. Подготовьте набор заново.");
+            string recoveryDetail = "";
+            if (resumeBatch != null)
+            {
+                var uncertain = resumeBatch.Items.Where(item => item.State is QueueItemState.Uncertain or QueueItemState.Interrupted)
+                    .ToDictionary(item => item.Seed.Key, StringComparer.Ordinal);
+                if (rows.Any(row => uncertain.ContainsKey(row.Path)))
+                {
+                    int verified = 0;
+                    var remaining = new List<string>();
+                    if (!await desktop.RunWorkAsync("Сверка результатов на исходном iPhone…", async ct =>
+                    {
+                        ILookup<string, LibraryApp> installed;
+                        try
+                        {
+                            await deviceService.ValidateReadyAsync(device, ct);
+                            installed = (await deviceService.ApplicationsAsync(device, ct))
+                                .ToLookup(app => app.BundleID, StringComparer.OrdinalIgnoreCase);
+                        }
+                        catch (DeviceConnectionException error) { MarkConnectionLost(device, error); throw; }
+                        foreach (var row in rows)
+                        {
+                            if (!uncertain.TryGetValue(row.Path, out var item)) continue;
+                            var difference = DeviceApplications.Compare(row, installed[row.BundleID].FirstOrDefault(), requireBuild: true);
+                            if (difference != null) { remaining.Add(row.DisplayName + ": " + difference); continue; }
+                            desktop.Queue.AcceptInstalled(item, automatic: true);
+                            ResolveVerified(row.Path);
+                            verified++;
+                        }
+                        desktop.ShowRecoveredInstallation(resumeBatch);
+                    })) return;
+                    rows = rows.Where(row => !uncertain.TryGetValue(row.Path, out var item) || item.State != QueueItemState.Succeeded).ToList();
+                    if (rows.Count == 0) return;
+                    if (verified > 0) recoveryDetail += "\nПроверено и пропущено: " + verified + ".";
+                    if (remaining.Count > 0)
+                        recoveryDetail += "\nТребуют ручного повтора:\n" + String.Join("\n", remaining);
+                }
+            }
             var account = desktop.CurrentAccountEmail;
             var mismatched = rows.Where(row => account != null && LocalFileAccounts.Normalize(row.AppleAccount).Length != 0 &&
                 !LocalFileAccounts.Matches(row, account)).ToList();
@@ -448,7 +485,8 @@ namespace IpaDesktop
             if (accountEmail != null || expectedAccount != null)
                 header += "\nApple Account: " + (accountEmail ?? account);
             if (resumeBatch?.Items.Any(row => row.State is QueueItemState.Uncertain or QueueItemState.Interrupted) == true)
-                header += "\nПеред повтором проверьте результат прерванных установок на iPhone.";
+                header += "\nТолько выбранные оставшиеся IPA будут установлены.";
+            header += recoveryDetail;
             if (!await desktop.Interaction.Confirm("Установка", header + "\n\n" + summary)) return;
             if (DeviceList.SelectedItem is not DeviceRow selected || ConnectionKey(selected) != ConnectionKey(device))
                 throw new InvalidOperationException("Выбранный iPhone изменился. Выберите исходное устройство и повторите.");
@@ -476,10 +514,7 @@ namespace IpaDesktop
                 }
                 catch (DeviceConnectionException error)
                 {
-                    blockedConnections.Add(ConnectionKey(device));
-                    ShowConnection(new(error.Failure.Title, error.Failure.Remedy, false));
-                    verifiedConnections.Remove(ConnectionKey(device));
-                    desktop.Device.SetState(PhoneStatus.Lost, error.Failure.Remedy);
+                    MarkConnectionLost(device, error);
                     throw;
                 }
             });

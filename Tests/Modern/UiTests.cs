@@ -289,9 +289,12 @@ public sealed class UiTests
   finally{window.Close();}
  }
  public static bool IsWindows => OperatingSystem.IsWindows();
- [AvaloniaFact] public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa()
+ [AvaloniaTheory]
+ [InlineData(false)]
+ [InlineData(true)]
+ public async Task InstallationQueueRecoversSamePhoneAndSkipsCompletedIpa(bool matchingBuild)
  {
-  using var fixture=new PairingFixture();var rows=new[]{fixture.Ipa("One"),fixture.Ipa("Two"),fixture.Ipa("Three")};
+  using var fixture=new PairingFixture();var rows=new[]{fixture.Ipa("One"),fixture.Ipa("Second","<key>CFBundleIdentifier</key><string>com.fixture.two</string><key>CFBundleShortVersionString</key><string>1.0</string><key>CFBundleVersion</key><string>7</string>"),fixture.Ipa("Three")};
   fixture.Runner.DisconnectAt=2;var desktop=new Desktop(fixture.Engine,false);var window=desktop.Window;window.Show();
   async Task ConfirmInstall(int expectedInstalls)
   {
@@ -327,13 +330,14 @@ public sealed class UiTests
    Assert.Equal(new[]{QueueItemState.Succeeded,QueueItemState.Uncertain,QueueItemState.Paused},desktop.Model.Queue.Items.Select(x=>x.State));
    Assert.Equal(PhoneStatus.Lost,desktop.Model.Device.Status);Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
    Assert.False(Find<Button>(window,"NoticeRetry").IsEnabled);Assert.Contains("1 из 3 установлены",desktop.Model.NoticeText);
+   if(matchingBuild) fixture.Runner.InventoryXml="<plist><array><dict><key>CFBundleIdentifier</key><string>com.fixture.two</string><key>CFBundleShortVersionString</key><string>1.0</string><key>CFBundleVersion</key><string>7</string></dict></array></plist>";
    fixture.Runner.DisconnectAt=0;await DesktopContract.ScanDevices(desktop);
    Assert.Equal(PhoneStatus.Ready,desktop.Model.Device.Status);Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
    var original=(DeviceRow)devices.SelectedItem;
    devices.ItemsSource=new[]{new DeviceRow{ID="different",Name="Другой iPhone"}};devices.SelectedIndex=0;
    Assert.False(desktop.Model.Queue.ResumeCommand.CanExecute(null));
    devices.ItemsSource=new[]{original};devices.SelectedIndex=0;Assert.True(desktop.Model.Queue.ResumeCommand.CanExecute(null));
-   Click(window,"NoticeRetry");await ConfirmInstall(4);Assert.Contains("3 из 3 установлены",desktop.Model.NoticeText);Assert.Equal(4,fixture.Runner.Installs);
+   Click(window,"NoticeRetry");await ConfirmInstall(matchingBuild?3:4);Assert.Contains("3 из 3 установлены",desktop.Model.NoticeText);
    Assert.All(desktop.Model.Queue.Items,x=>Assert.Equal(QueueItemState.Succeeded,x.State));
   }
   finally{window.Close();}

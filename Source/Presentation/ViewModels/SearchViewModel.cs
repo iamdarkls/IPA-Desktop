@@ -234,7 +234,7 @@ namespace IpaDesktop
                 batch = desktop.Queue.Start("Скачивание", rows.Select(row => new QueueSeed(row.Key, row.Name,
                     row.VersionID == null ? "Последняя доступная" : "ID " + row.VersionID)), null, "Apple Account · " + DesktopViewModel.AccountHint(accountEmail),
                     keys => StartDownloads(rows.Where(row => keys.Contains(row.Key)).ToList(), false, batch), resumeBatch, desktop.AccountKey);
-                var result = await BatchRunner.Run(rows,
+                var result = await BatchRunner.RunDownloads(rows, row => row.ID,
                     (row, token) => downloads.DownloadAsync(row, token),
                     (row, index) => { desktop.BeginQueue("Скачивание", index, rows.Count, row.Name); Log("В очереди: " + row.Label); },
                     row =>
@@ -249,7 +249,7 @@ namespace IpaDesktop
                         desktop.ReportItem(row.Name, error);
                         failedDownloads.AddVariant(new AppRow { ID = row.ID, Name = row.Name }, row.VersionID);
                         Log("Не удалось скачать " + row.Name + ": " + error.Message);
-                    }, RefreshLocalFiles, ct);
+                    }, ct);
                 desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
                 if (result.Failed.Count > 0) throw new Exception("Не удалось скачать: " + String.Join(", ", result.Failed.Select(x => x.Name)) + ". Кнопка «Повторить ошибки» повторит только эти приложения.");
             });

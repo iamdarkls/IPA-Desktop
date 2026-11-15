@@ -37,6 +37,7 @@ public sealed partial class DesktopViewModel
     public OperationCommand NoticeDetailsCommand { get; private set; }
     public OperationCommand DismissNoticeCommand { get; private set; }
     public OperationCommand NoticeRetryCommand { get; private set; }
+    public OperationCommand CopyDiagnosticsCommand { get; private set; }
     public OperationCommand ExportDiagnosticsCommand { get; private set; }
     public OperationCommand OpenFolderCommand { get; private set; }
     public OperationCommand ResetQueueHistoryCommand { get; private set; }

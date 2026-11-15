@@ -130,13 +130,13 @@ namespace IpaDesktop
                     batch = desktop.Queue.Start("Скачивание", plan.Missing.Select(x => new QueueSeed(x.ID + "@latest", x.Name, "Последняя доступная")), null, "Apple Account · " + DesktopViewModel.AccountHint(account),
                         keys => _ = desktop.RunAsyncCommand(() => desktop.ResumeStoredBatch(batch, keys)), null, expectedAccount);
                     var prepared = new Dictionary<string, string>(StringComparer.Ordinal);
-                    var result = await BatchRunner.Run(plan.Missing, async (app, token) =>
+                    var result = await BatchRunner.RunDownloads(plan.Missing, app => app.ID, async (app, token) =>
                     {
                         var path = await downloads.DownloadFileAsync(new DownloadItem { ID = app.ID, Name = app.Name }, token);
                         if (!System.IO.File.Exists(path)) throw new System.IO.IOException("Движок не создал IPA для " + app.Name);
                         prepared.Add(app.ID, path);
                     }, (app, index) => desktop.BeginQueue("Скачивание", index, plan.Missing.Count, app.Name),
-                        app => desktop.ReportItem(app.Name, null), (app, error) => desktop.ReportItem(app.Name, error), null, ct);
+                        app => desktop.ReportItem(app.Name, null), (app, error) => desktop.ReportItem(app.Name, error), ct);
                     desktop.CompleteQueue(result.Succeeded, result.Failed.Count);
                     if (result.Failed.Count > 0) throw new InvalidOperationException("Часть набора не подготовилась. Продолжите загрузку в очереди, затем снова откройте набор.");
                     var local = (await localApps.ListAsync(ct)).ToDictionary(row => row.Path, StringComparer.Ordinal);

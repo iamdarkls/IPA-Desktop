@@ -511,6 +511,8 @@
       <Border x:Name="OperationNotice" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="{CompiledBinding OperationNoticeVisible}" Background="{CompiledBinding OperationNoticeBackground}" BorderBrush="{CompiledBinding OperationNoticeBorder}">
         <DockPanel>
           <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" Command="{CompiledBinding DismissNoticeCommand}" />
+          <Button Classes="toolbar" Content="Следующий клиент" DockPanel.Dock="Right" Margin="6,0,0,0" IsVisible="{CompiledBinding Account.NextClientVisible}" Command="{CompiledBinding Account.NextClientCommand}" />
+          <Button ui:ActionIcon.Kind="Export" Classes="toolbar" Content="Скопировать диагностику…" DockPanel.Dock="Right" Margin="6,0,0,0" Command="{CompiledBinding CopyDiagnosticsCommand}" />
           <Button x:Name="NoticeDetails" ui:ActionIcon.Kind="Info" Classes="toolbar" Content="Подробнее…" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" Command="{CompiledBinding NoticeDetailsCommand}" />
           <Button x:Name="NoticeRetry" ui:ActionIcon.Kind="Refresh" Classes="toolbar" Content="{CompiledBinding NoticeRetryLabel}" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" IsVisible="{CompiledBinding NoticeRetryVisible}" IsEnabled="{CompiledBinding NoticeRetryEnabled}" Command="{CompiledBinding NoticeRetryCommand}" />
           <StackPanel Spacing="4">

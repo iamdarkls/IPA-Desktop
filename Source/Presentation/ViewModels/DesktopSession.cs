@@ -198,6 +198,7 @@ public sealed partial class DesktopViewModel : IDisposable, IAsyncDisposable
         NoticeRetryCommand = AsyncCommand(() => !NoticeRetryEnabled ? Task.CompletedTask :
             noticeResumeBatch != null ? ContinueNotice(noticeResumeBatch) : noticeRetry());
         ExportDiagnosticsCommand = AsyncCommand(ExportDiagnostics);
+        CopyDiagnosticsCommand = AsyncCommand(PreviewDiagnostics);
         OpenFolderCommand = Command(() => SystemIntegration.Open(paths.Downloads));
         journalTimer = Tasks.Own(Interaction.Repeat(TimeSpan.FromMilliseconds(150), () =>
         {

@@ -67,11 +67,11 @@ public sealed class PairingFixture : IDisposable
   Client=new DeviceCommandClient(Runner,new ToolLocator(store));Engine=new Engine(folder.Path,Runner,new InstalledAppleSupportProbe());
   Engine.Settings.SoundsEnabled=false;Engine.Settings.CheckGuiUpdates=false;
  }
- public LocalRow Ipa(string name="one")
+ public LocalRow Ipa(string name="one", string metadata = "")
  {
   var path=Path.Combine(Engine.Downloads,name+".ipa");using var zip=ZipFile.Open(path,ZipArchiveMode.Create);
   using var writer=new StreamWriter(zip.CreateEntry("Payload/Test.app/Info.plist").Open());
-  writer.Write("<plist><dict><key>MinimumOSVersion</key><string>16.0</string><key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array></dict></plist>");
+  writer.Write("<plist><dict>" + metadata + "<key>MinimumOSVersion</key><string>16.0</string><key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array></dict></plist>");
   return new(){Path=path};
  }
  public void Dispose()=>folder.Dispose();

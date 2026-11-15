@@ -28,7 +28,9 @@ public sealed partial class DesktopViewModel
     }
     internal async Task<string> RequireAccountAsync(CancellationToken ct, string expected = null)
     {
+        Log("App Store · проверяем сохранённую сессию ipatool.");
         var email = await accounts.GetEmailAsync(ct);
+        Log("App Store · сохранённая сессия прочитана. Доступ к загрузке ещё не проверен.");
         SetAccountIdentity(email); RegisterPrivate(email);
         if (expected != null && expected != AccountKey) throw new InvalidOperationException("Очередь создана для другого Apple Account. Войдите в исходный аккаунт или создайте новую очередь.");
         return email;
@@ -85,11 +87,12 @@ public sealed partial class DesktopViewModel
         }
         else
         {
-            var available = await localApps.ListAsync(LifetimeToken); var rows = new List<LocalRow>();
+            var comparer = RuntimePlatform.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var available = (await localApps.ListAsync(LifetimeToken)).ToDictionary(row => row.Path, comparer);
+            var rows = new List<LocalRow>();
             foreach (var seed in seeds)
             {
-                var row = available.FirstOrDefault(x => String.Equals(x.Path, seed.Key, StringComparison.OrdinalIgnoreCase));
-                if (row == null) throw new IOException("IPA больше нет в папке приложения: " + seed.Name + ". Добавьте файл заново.");
+                if (!available.TryGetValue(seed.Key, out var row)) throw new IOException("IPA больше нет в папке приложения: " + seed.Name + ". Добавьте файл заново.");
                 var file = new FileInfo(row.Path);
                 if (seed.FileSize > 0 && (file.Length != seed.FileSize || file.LastWriteTimeUtc.Ticks != seed.ModifiedTicks)) throw new IOException("IPA изменился после сохранения очереди: " + seed.Name + ". Добавьте его заново.");
                 rows.Add(row);

@@ -17,6 +17,7 @@ namespace IpaDesktop
             text = text ?? "";
             if (text.Length > 1000000) text = text.Substring(text.Length - 1000000);
             foreach (var value in (privateValues ?? new string[0]).Where(x => !String.IsNullOrWhiteSpace(x) && x.Length >= 3).Distinct().OrderByDescending(x => x.Length)) text = Replace(text, Regex.Escape(value), "[СКРЫТО]");
+            text = Replace(text, @"(https?://[^\s""'<>?#]+)[?#][^\s""'<>]*", "$1?[СКРЫТО]");
             text = Replace(text, @"(?m)^.*(?:Authorization|Cookie|Set-Cookie|X-Apple-[A-Za-z-]+)\s*[:=].*$", "[СКРЫТ ЗАГОЛОВОК]");
             text = Replace(text, @"(""(?:password[^""\r\n]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|verification[_-]?code|passphrase|keychain-passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie|authorization)""\s*:\s*)(?:""(?:\\.|[^""\\])*""|[^,}\r\n]+)", "$1\"[СКРЫТО]\"");
             text = Replace(text, @"(<key>\s*(?:password[^<]*|token|access[_-]?token|refresh[_-]?token|auth[_-]?code|passphrase|secret|kbsync|dsid|directoryServicesID|hardwareID|udid|guid|cookie)\s*</key>\s*<(?:string|data|integer)>)[\s\S]*?(</(?:string|data|integer)>)", "$1[СКРЫТО]$2");

@@ -3,6 +3,25 @@ namespace IpaDesktop.Tests;
 
 public sealed class QueueViewModelTests
 {
+ [Fact] public async Task TwoDistinctEmptyStoreResponsesPauseBeforeTheNextApp()
+ {
+  var attempted = new List<string>();
+  var ct = TestContext.Current.CancellationToken;
+  var error = await Assert.ThrowsAsync<AppleAccountException>(() => BatchRunner.RunDownloads(
+   new[]{"123","123","456","789"}, id => id,
+   (id,_) => { attempted.Add(id); return Task.FromException(new IOException("invalid response: empty songList")); },
+   (_,_) => {}, _ => {}, (_,_) => {}, ct));
+  Assert.Equal(new[]{"123","123","456"},attempted);
+  Assert.Equal(FailureCode.EmptyCatalog,error.Failure.Code);
+ }
+ [Fact] public void DiagnosticReportMasksStoreCredentialsAndSignedLinks()
+ {
+  var report = DiagnosticReport.Redact("owner@example.com\npasswordToken=secret-value\nhttps://store.example.com/ipa?sig=secret-signature", null);
+  Assert.DoesNotContain("owner@example.com", report);
+  Assert.DoesNotContain("secret-value", report);
+  Assert.DoesNotContain("secret-signature", report);
+  Assert.Contains("https://store.example.com/ipa", report);
+ }
  [Fact] public async Task DisconnectKeepsSuccessAndUnstartedRowsAndResumesOnlyAfterRecovery()
  {
   var queue=new OperationQueueViewModel();bool ready=false;string[] resumed=null;

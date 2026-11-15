@@ -47,6 +47,12 @@ public static class DeviceApplications
         }
         return rows.GroupBy(x=>x.BundleID,StringComparer.OrdinalIgnoreCase).Select(g=>g.OrderBy(x=>x.Placeholder).First()).OrderBy(x=>x.Name).ToList();
     }
+    public static string Compare(LocalRow expected, LibraryApp installed, bool requireBuild = false)
+    {
+        if (requireBuild && (String.IsNullOrWhiteSpace(expected.Version) || String.IsNullOrWhiteSpace(expected.Build)))
+            return "В IPA не указана точная версия или номер сборки.";
+        return Compare(new IpaDetails { BundleID = expected.BundleID, Build = expected.Build, Version = expected.Version }, installed);
+    }
     public static string Compare(IpaDetails expected, LibraryApp installed)
     {
         if(String.IsNullOrWhiteSpace(expected.BundleID) || (String.IsNullOrWhiteSpace(expected.Version) && String.IsNullOrWhiteSpace(expected.Build)))return "Недостаточно метаданных IPA для достоверного сравнения.";
