@@ -146,6 +146,9 @@ def patch(root, pin_file=None):
     if native:
         store = patch_store_adi(store)
         if pins['upstream_tag'] == '1.3.2':
+            store = replace_once(store, '    m_http.clear_cookies();',
+                                 '    // Keep the challenge cookies while submitting the requested 2FA code.\n'
+                                 '    if (authCode.empty()) m_http.clear_cookies();')
             store = replace_once(store, '" requesting silent re-login"', '" explicit sign-in required"')
             # A 401 on the regenerated-kbsync retry must stop the queue too.
             retry_handler = '            } catch (const std::exception& e) {\n                if (m_debug) fprintf(stderr, "[DEBUG] kbsync regeneration failed'

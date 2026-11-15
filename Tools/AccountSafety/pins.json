@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/Sorvigolova/ipatool.git",
   "revision": "a1c333e6036c258415643835a3c4823ba46ee888",
-  "version": "1.3.2.1",
-  "tag": "ipatool-guard-v1.3.2.1",
+  "version": "1.3.2.2",
+  "tag": "ipatool-guard-v1.3.2.2",
   "files": {
     "main.cpp": "7bd357484b4d01a00a04dab7b5ab21362a516d0a0a4f8e3be580d02028c8ca99",
     "appstore.cpp": "4d82fa44741302caf075a9c9265a1db7ee10b2a51807e720d8c4e552f0d63a15",

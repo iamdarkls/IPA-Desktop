@@ -44,7 +44,9 @@ namespace IpaDesktop
             PasswordBox = SecretBox(1024); credentials.Children.Add(PasswordBox); body.Children.Add(credentials);
             codePanel = new StackPanel { IsVisible = false, Margin = new Thickness(0, 16, 0, 0) };
             codePanel.Children.Add(Note("Подтвердите вход на доверенном устройстве Apple и введите шестизначный код.", 0));
-            CodeBox = SecretBox(6); codePanel.Children.Add(CodeBox); body.Children.Add(codePanel);
+            CodeBox = SecretBox(6); codePanel.Children.Add(CodeBox);
+            codePanel.Children.Add(Note("Если уведомление исчезло, оставьте это окно открытым и получите код на другом доверенном устройстве Apple или в настройках iPhone.", 6));
+            body.Children.Add(codePanel);
             Status = new TextBlock { Text = "Введите данные для входа.", TextWrapping = TextWrapping.Wrap, MinHeight = 46, Margin = new Thickness(0, 14, 0, 8), Foreground = Brush("#AFC6E7") };
             body.Children.Add(Status);
             body.Children.Add(Note("Пароль и код не передаются в командной строке и не записываются в журнал IPA Desktop. Защищённый движок сохраняет сессию без пароля Apple Account. Кнопка «Выйти» удаляет сохранённую сессию.", 12));

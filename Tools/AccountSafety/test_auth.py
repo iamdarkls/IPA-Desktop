@@ -28,6 +28,8 @@ PlistDict decoded;
 struct FakeHttp {
   std::vector<std::pair<HttpResponse,PlistDict>> replies; int calls=0;
   std::map<std::string,std::string> lastHeaders;
+  int cookieClears=0;
+  void clear_cookies() { ++cookieClears; }
   HttpResponse post(const std::string&,const std::string&,const std::map<std::string,std::string>& headers) {
     lastHeaders=headers;
     if(calls>=int(replies.size())) { ++calls; throw IpaError("unexpected repeated password POST"); }
@@ -126,7 +128,9 @@ bool prov_handle(const char*, const HttpResponse& res, uint64_t, const std::stri
     if ' explicit sign-in required' in store:
         login_start, _, login_end = function_span(store, 'Account AppStore::login(')
         explicit_login = store[login_start:login_end]
-        assert explicit_login.index('m_http.clear_cookies();') < explicit_login.index('get_guid()')
+        _, login_opening, _ = function_span(explicit_login, 'Account AppStore::login(')
+        cookie_setup = explicit_login[login_opening + 1:explicit_login.index('    std::string guid = get_guid();')]
+        prelude += '\nvoid prepare_login_cookies(const std::string& authCode) {\n' + cookie_setup + '}\n'
         post_start, _, post_end = function_span(store, 'HttpResponse AppStore::prov_post(')
         prelude += r"""
 struct PasswordTokenExpired:std::exception {};
@@ -135,6 +139,14 @@ void debug_dump_response(const char*, const HttpResponse&) {}
 """
         prelude += store[post_start:post_end].replace('AppStore::prov_post', 'prov_post', 1)
         cases = cases.replace('  m_http={};Account account;', r"""
+  m_http={};
+  prepare_login_cookies("");
+  assert(m_http.cookieClears==1);
+  prepare_login_cookies("123456");
+  assert(m_http.cookieClears==1);
+  prepare_login_cookies("");
+  assert(m_http.cookieClears==2);
+  std::cout<<"PASS: new login clears stale cookies; 2FA continuation keeps challenge cookies\n";
   m_http={{{HttpResponse{401},{} }},0};
   bool expired=false;
   try { prov_post("volumeStoreDownload","fixture","",{},1,"guid","token",""); }
