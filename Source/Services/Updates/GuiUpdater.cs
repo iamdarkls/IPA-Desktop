@@ -2,10 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +40,7 @@ namespace IpaDesktop
                 using (var h = Client()) using (var response = await h.GetAsync("https://api.github.com/repos/" + AppInfo.Repository + "/releases/latest", timeout.Token))
                 {
                     response.EnsureSuccessStatusCode();
-                    var r = JsonCodec.Deserialize<Release> (await response.Content.ReadAsStringAsync());
+                    var r = JsonCodec.Deserialize<Release>(await response.Content.ReadAsStringAsync(timeout.Token));
                     return ParseVersion(r.tag_name) > new Version(CurrentVersion) ? r : null;
                 }
             }
@@ -55,7 +53,7 @@ namespace IpaDesktop
             if (matches.Length != 1) throw new InvalidDataException("В релизе нет единственного ZIP для "+RuntimePlatform.Rid+".");
             var asset = matches[0];
             string expected = AppInfo.ReleasesUrl + "/download/" + release.tag_name + "/" + asset.name;
-            if (asset.browser_download_url != expected || asset.size <= 0 || asset.size > 128 * 1024 * 1024 || asset.digest == null || !System.Text.RegularExpressions.Regex.IsMatch(asset.digest, "^sha256:[0-9a-fA-F]{64}$")) throw new InvalidDataException("Не удалось проверить источник, размер или SHA-256 обновления.");
+            if (asset.browser_download_url != expected || asset.size <= 0 || asset.size > 128 * 1024 * 1024 || !ReleaseArchiveDownload.HasSha256(asset.digest)) throw new InvalidDataException("Не удалось проверить источник, размер или SHA-256 обновления.");
             return asset;
         }
         /// <summary>Извлекает только проверенные файлы манифеста с ограничением размера и проверкой структуры.</summary>
@@ -64,13 +62,14 @@ namespace IpaDesktop
             using (var archive = ZipFile.OpenRead(zip))
             {
                 long total = 0;
-                var selected = new Dictionary<string, ZipArchiveEntry>();
+                var entries = archive.Entries.ToLookup(e => e.FullName.Replace('\\', '/'), StringComparer.Ordinal);
+                var selected = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
                 foreach (var name in PackageFiles)
                 {
-                    var entries = archive.Entries.Where(e => e.FullName.Replace('\\', '/') == name).ToArray();
-                    if (entries.Length != 1 || entries[0].Length == 0 || entries[0].Length > 128 * 1024 * 1024) throw new InvalidDataException("Неполный пакет обновления: " + name);
-                    selected.Add(name, entries[0]);
-                    total += entries[0].Length;
+                    var matches = entries[name].ToArray();
+                    if (matches.Length != 1 || matches[0].Length == 0 || matches[0].Length > 128 * 1024 * 1024) throw new InvalidDataException("Неполный пакет обновления: " + name);
+                    selected.Add(name, matches[0]);
+                    total += matches[0].Length;
                     if (total > 256 * 1024 * 1024) throw new InvalidDataException("Пакет слишком велик.");
                 }
                 Directory.CreateDirectory(stage);
@@ -101,36 +100,18 @@ namespace IpaDesktop
             string zip = Path.Combine(work, "package.zip"), stage = Path.Combine(work, "stage");
             try
             {
-                using (var h = Client()) using (var response = await h.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead, ct))
-                {
-                    response.EnsureSuccessStatusCode();
-                    using (var input = await response.Content.ReadAsStreamAsync()) using (var output = File.Create(zip))
-                    {
-                        byte[] buffer = new byte[65536];
-                        long total = 0;
-                        int n;
-                        while ((n = await input.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                        {
-                            total += n;
-                            if (total > asset.size) throw new InvalidDataException("Размер обновления не совпал.");
-                            await output.WriteAsync(buffer, 0, n, ct);
-                            progress(total * 100.0 / asset.size);
-                        }
-                        if (total != asset.size) throw new InvalidDataException("Обновление скачалось не полностью.");
-                    }
-                }
-                using (var sha = SHA256.Create()) using (var file = File.OpenRead(zip))
-                {
-                    string digest = BitConverter.ToString(sha.ComputeHash(file)).Replace("-", "");
-                    if (!digest.Equals(asset.digest.Substring(7), StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("SHA-256 обновления не совпал.");
-                }
-                await Task.Run(delegate
+                using (var h = Client())
+                    await ReleaseArchiveDownload.SaveAsync(h, asset, zip, ct, progress);
+
+                var package = await Task.Run(() =>
                 {
                     ct.ThrowIfCancellationRequested();
-                    if(RuntimePlatform.Windows)Extract(zip, stage);else UnixGuiUpdate.Extract(zip,stage);
+                    if (!RuntimePlatform.Windows) return UnixGuiUpdate.Extract(zip, stage);
+                    Extract(zip, stage);
+                    return stage;
                 }, ct);
                 File.Delete(zip);
-                return RuntimePlatform.Windows?stage:Path.Combine(stage,OperatingSystem.IsMacOS()?"IPA-Desktop.app":"IPA-Desktop");
+                return package;
             } catch
             {
                 try
@@ -157,7 +138,7 @@ namespace IpaDesktop
             File.Delete(probe);
             string helper = Path.Combine(Path.GetDirectoryName(stage), "Apply.ps1");
             File.Copy(Path.Combine(target, "Scripts", "Update-App.ps1"), helper);
-            string command = "& " + QuotePS(helper) + " -Stage " + QuotePS(stage) + " -Target " + QuotePS(target) + " -ParentId " + Process.GetCurrentProcess().Id;
+            string command = "& " + QuotePS(helper) + " -Stage " + QuotePS(stage) + " -Target " + QuotePS(target) + " -ParentId " + Environment.ProcessId;
             string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
             Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " + encoded)
             {

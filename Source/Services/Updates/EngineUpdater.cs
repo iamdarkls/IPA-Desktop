@@ -1,14 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Diagnostics;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.IO.Compression;
 
 namespace IpaDesktop
@@ -32,7 +27,7 @@ namespace IpaDesktop
             if (matches.Length != 1) throw new IOException("В релизе ipatool ожидается один Windows x64 ZIP: " + WindowsAssetName);
             ValidateAsset(matches[0], SourceRepository);
             if(matches[0].browser_download_url != "https://github.com/"+SourceRepository+"/releases/download/"+GuardedEngineTag+"/"+WindowsAssetName ||
-                !System.Text.RegularExpressions.Regex.IsMatch(matches[0].digest ?? "", @"^sha256:[0-9a-fA-F]{64}$")) throw new IOException("Нужен архив защищённого движка с SHA-256 от GitHub.");
+                !ReleaseArchiveDownload.HasSha256(matches[0].digest)) throw new IOException("Нужен архив защищённого движка с SHA-256 от GitHub.");
             return matches[0];
         }
         /// <summary>Проверяет допустимый репозиторий и параметры архива перед загрузкой.</summary>
@@ -52,7 +47,7 @@ namespace IpaDesktop
             if (matches.Length != 1) throw new IOException("Не найден однозначный Windows x64 архив нашего комплекта.");
             ValidateAsset(matches[0], DeviceRepository);
             if (!matches[0].browser_download_url.StartsWith("https://github.com/" + DeviceRepository + "/releases/download/" + release.tag_name + "/", StringComparison.Ordinal)) throw new IOException("Архив принадлежит другому релизу.");
-            if (matches[0].digest == null || !System.Text.RegularExpressions.Regex.IsMatch(matches[0].digest, @"^sha256:[0-9a-fA-F]{64}$")) throw new IOException("Для комплекта требуется SHA-256 от GitHub.");
+            if (!ReleaseArchiveDownload.HasSha256(matches[0].digest)) throw new IOException("Для комплекта требуется SHA-256 от GitHub.");
             return matches[0];
         }
         /// <summary>Проверяет наличие обязательных EXE и DLL в указанном комплекте.</summary>
@@ -129,7 +124,7 @@ namespace IpaDesktop
             using (var response = await Http.GetAsync("https://api.github.com/repos/"+SourceRepository+"/releases/tags/"+GuardedEngineTag, ct))
             {
                 response.EnsureSuccessStatusCode();
-                return JsonCodec.Deserialize<Release> (await response.Content.ReadAsStringAsync());
+                return JsonCodec.Deserialize<Release>(await response.Content.ReadAsStringAsync(ct));
             }
         }
         /// <summary>Распаковывает архив с проверкой выходных путей, исключая запись за пределами целевой папки.</summary>
@@ -244,33 +239,14 @@ namespace IpaDesktop
         /// <summary>Скачивает архив с контролем размера, SHA-256 и отменой запроса.</summary>
         async Task Download(Asset asset, string zip, CancellationToken ct)
         {
-            using (var response = await Http.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead, ct))
+            try
             {
-                response.EnsureSuccessStatusCode();
-                using (var input = await response.Content.ReadAsStreamAsync()) using (var output = File.Create(zip))
-                {
-                    var buf = new byte[131072];
-                    int n;
-                    long total = 0;
-                    while ((n = await input.ReadAsync(buf, 0, buf.Length, ct)) > 0)
-                    {
-                        total += n;
-                        if (total > asset.size) throw new IOException("Размер архива не совпадает.");
-                        await output.WriteAsync(buf, 0, n, ct);
-                        Progress(100.0 * total / asset.size);
-                    }
-                    if (total != asset.size) throw new IOException("Архив загружен не полностью.");
-                }
+                await ReleaseArchiveDownload.SaveAsync(Http, asset, zip, ct, value => Progress(value));
             }
-            if (!String.IsNullOrEmpty(asset.digest))
+            catch (InvalidDataException error)
             {
-                if (!asset.digest.StartsWith("sha256:")) throw new IOException("Неизвестный формат контрольной суммы.");
-                using (var sha = SHA256.Create()) using (var f = File.OpenRead(zip))
-                {
-                    var digest = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant();
-                    if (!String.Equals("sha256:" + digest, asset.digest, StringComparison.OrdinalIgnoreCase)) throw new IOException("Контрольная сумма не совпадает.");
-                }
-            } else Log("GitHub не предоставил SHA-256; проверены HTTPS-источник и размер архива.");
+                throw new IOException(error.Message, error);
+            }
         }
         /// <summary>Получает опубликованные релизы комплекта устройства независимо от последнего GUI-релиза.</summary>
         public async Task<Release> CheckDeviceTools(CancellationToken ct)
@@ -284,7 +260,7 @@ namespace IpaDesktop
                     using (var response = await Http.GetAsync("https://api.github.com/repos/" + DeviceRepository + "/releases?per_page=100&page=" + page, timeout.Token))
                     {
                         response.EnsureSuccessStatusCode();
-                        var releases = JsonCodec.Deserialize<Release[]>(await response.Content.ReadAsStringAsync());
+                        var releases = JsonCodec.Deserialize<Release[]>(await response.Content.ReadAsStringAsync(timeout.Token));
                         var found = releases.FirstOrDefault(r => !r.draft && !r.prerelease && r.tag_name != null && r.tag_name.StartsWith(DeviceTagPrefix, StringComparison.Ordinal));
                         if (found != null) { SelectDeviceAsset(found); return found; }
                         if (releases.Length < 100) break;
