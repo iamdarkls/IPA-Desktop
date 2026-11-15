@@ -35,5 +35,15 @@ public sealed class PlatformTests
   Assert.Equal("old",File.ReadAllText(Path.Combine(Directory.GetDirectories(folder.Path,"old app.backup-*").Single(),"version")));
   for(int i=0;i<50&&!File.Exists(marker);i++)await Task.Delay(20);Assert.True(File.Exists(marker));
  }
+ [Fact(SkipUnless=nameof(Unix), Skip="Unix paths")]
+ public void MacUpdaterFindsBundleAndRejectsTranslocatedInstallation()
+ {
+  const string suffix = "IPA Desktop.app/Contents/MacOS";
+  Assert.Equal("/Applications/IPA Desktop.app", UnixGuiUpdate.InstallationTarget("/Applications/" + suffix + "/", true));
+  Assert.Throws<IOException>(() => UnixGuiUpdate.InstallationTarget("/tmp/IPA-Desktop", true));
+  var error = Assert.Throws<IOException>(() =>
+      UnixGuiUpdate.InstallationTarget("/private/var/folders/example/AppTranslocation/id/d/" + suffix, true));
+  Assert.Contains("временной папки", error.Message);
+ }
  public static bool IsLinux=>OperatingSystem.IsLinux();
 }

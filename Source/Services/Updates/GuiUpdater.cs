@@ -45,7 +45,7 @@ namespace IpaDesktop
                 }
             }
         }
-        /// <summary>Выбирает единственный ожидаемый Windows-архив и проверяет его источник.</summary>
+        /// <summary>Выбирает архив текущей платформы и проверяет его источник.</summary>
         public static Asset SelectAsset(Release release)
         {
             var version = ParseVersion(release.tag_name).ToString();
@@ -85,6 +85,7 @@ namespace IpaDesktop
         public static async Task<string> Prepare(Release release, CancellationToken ct, Action<double> progress)
         {
             var asset = SelectAsset(release);
+            if (!RuntimePlatform.Windows) UnixGuiUpdate.CheckInstallation();
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "GuiUpdates");
             Directory.CreateDirectory(root);
             foreach (var dir in Directory.GetDirectories(root, "update-*")) try
@@ -100,8 +101,17 @@ namespace IpaDesktop
             string zip = Path.Combine(work, "package.zip"), stage = Path.Combine(work, "stage");
             try
             {
-                using (var h = Client())
-                    await ReleaseArchiveDownload.SaveAsync(h, asset, zip, ct, progress);
+                try
+                {
+                    using var http = Client();
+                    await ReleaseArchiveDownload.SaveAsync(http, asset, zip, ct, progress);
+                }
+                catch (HttpRequestException error)
+                {
+                    var status = error.StatusCode is { } code ? " (HTTP " + (int)code + ")" : "";
+                    throw new IOException("Не удалось скачать архив обновления с GitHub" + status +
+                        ". Попробуйте скачать его с GitHub Releases через браузер.", error);
+                }
 
                 var package = await Task.Run(() =>
                 {
