@@ -9,7 +9,7 @@ python Scripts/desktop.py test --rid linux-x64
 python Scripts/desktop.py package --rid linux-x64
 ```
 
-Другие RID: `win-x64`, `osx-arm64`, `osx-x64`. Запускайте команды на соответствующей ОС и архитектуре с .NET SDK 10 и компилятором C для приватного PTY (macOS/Linux). Команда test сама собирает fixture/helper и записывает XML xUnit в artifacts/tests/RID. Она не требует полной компиляции ipatool и libimobiledevice.
+Другие RID: `win-x64`, `osx-arm64`, `osx-x64`. Запускайте команды на соответствующей ОС и архитектуре с .NET 11 SDK из `global.json` и компилятором C для приватного PTY (macOS/Linux). Команда test сама собирает fixture/helper и записывает XML xUnit в artifacts/tests/RID. Она не требует полной компиляции ipatool и libimobiledevice.
 
 Перед package на macOS/Linux нужны нативные инструменты. С пустого рабочего каталога:
 

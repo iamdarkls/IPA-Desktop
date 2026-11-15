@@ -115,7 +115,7 @@ public sealed class CoreTests
   using var folder = new TempFolder();
   var root = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory,"../../../../../"));
   var configuration = AppContext.BaseDirectory.Contains("Release")?"Release":"Debug";
-  var fixture = System.IO.Path.Combine(root,"Tests/LoginFixture/bin",configuration,"net10.0/"+RuntimePlatform.ToolName("LoginFixture.exe"));
+  var fixture = System.IO.Path.Combine(root,"Tests/LoginFixture/bin",configuration,"net11.0/"+RuntimePlatform.ToolName("LoginFixture.exe"));
   Assert.True(File.Exists(fixture),fixture); LoginContract.Run(fixture,folder.Path);
  }
 

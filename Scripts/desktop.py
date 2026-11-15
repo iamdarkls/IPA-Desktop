@@ -29,11 +29,11 @@ def tests(rid):
  run(sys.executable,'-m','unittest','discover','-s','Tests/Build','-v')
  run('dotnet','build','Tests/Modern/IPA-Desktop.Tests.csproj','-c','Release','-m:1')
  if rid!='win-x64':
-  destination=ROOT/'Tests/Modern/bin/Release/net10.0/native';destination.mkdir(parents=True,exist_ok=True)
+  destination=ROOT/'Tests/Modern/bin/Release/net11.0/native';destination.mkdir(parents=True,exist_ok=True)
   run('cc','-O2','-Wall','-Wextra','Tools/Portable/ipa-pty.c','-o',destination/'ipa-pty',*(['-lutil'] if rid.startswith('linux') else []))
  reports=ROOT/'artifacts/tests'/rid;reports.mkdir(parents=True,exist_ok=True)
  # Same xUnit suite, direct entry point avoids a second MSBuild/VSTest startup.
- run('dotnet','Tests/Modern/bin/Release/net10.0/IPA-Desktop.Tests.dll','-xml',reports/'tests.xml')
+ run('dotnet','Tests/Modern/bin/Release/net11.0/IPA-Desktop.Tests.dll','-xml',reports/'tests.xml')
 
 def package(rid):
  import shutil

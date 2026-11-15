@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <AssemblyName>IPA-Desktop</AssemblyName>
     <RootNamespace>IpaDesktop</RootNamespace>
     <StartupObject>IpaDesktop.Program</StartupObject>
@@ -19,20 +19,21 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-    <PackageReference Include="HarfBuzzSharp" Version="14.2.1.400" />
-    <PackageReference Include="SkiaSharp" Version="4.154.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.154.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.154.0" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.2.1.400" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="14.2.1.400" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.4.0.101" />
+    <PackageReference Include="SkiaSharp" Version="4.156.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.156.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.156.1" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.101" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="14.4.0.101" />
     <PackageReference Include="MicroCom.Runtime" Version="0.11.7" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
-    <PackageReference Include="System.Windows.Extensions" Version="10.0.14" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="11.0.0" />
+    <PackageReference Include="System.Windows.Extensions" Version="11.0.0" />
     <Compile Include="Source/**/*.cs" />
     <AvaloniaResource Include="Assets/**" />
     <EmbeddedResource Include="package-files.json" LogicalName="IpaDesktop.PackageFiles.json" />

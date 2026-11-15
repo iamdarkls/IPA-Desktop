@@ -37,7 +37,7 @@ def create(publish, destination=None):
                 # Windows reads adjacent .exe.config during activation even for a modern apphost.
                 target.write_text('<?xml version="1.0" encoding="utf-8"?><configuration />\n', encoding='utf-8')
             else:
-                target.write_text('Legacy update compatibility entry. Build from the current repository with .NET 10.\n', encoding='utf-8')
+                target.write_text('Legacy update compatibility entry. Build from the current repository with the .NET SDK specified in global.json.\n', encoding='utf-8')
         for name, source in ALIASES.items():
             shutil.copy2(stage / source, stage / name)
         if (stage / 'IPA-Desktop.exe').stat().st_size > 32 * 1024 * 1024:

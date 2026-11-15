@@ -21,7 +21,9 @@ public static class Program
         }
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
+    internal static AppBuilder CreateAppBuilder() => AppBuilder.Configure<App>().WithInterFont();
+
+    public static AppBuilder BuildAvaloniaApp() => CreateAppBuilder().UsePlatformDetect().LogToTrace();
 }
 
 public sealed partial class App : Application

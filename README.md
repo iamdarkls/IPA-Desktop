@@ -6,7 +6,7 @@
 
 **Поиск, скачивание и установка приложений для iPhone на Windows, macOS и Linux.**
 
-Приложение на C#, Avalonia и .NET 10 с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
+Приложение на C#, Avalonia и .NET 11 с очередями загрузки и установки, наборами по App Store ID и управлением локальными IPA. Вход и скачивание выполняет **ipatool**, работу с iPhone — наш отдельный комплект **device-tools**.
 
 **[Скачать для Windows, macOS и Linux](https://github.com/iamdarkls/IPA-Desktop/releases/latest)** · [История изменений](https://github.com/iamdarkls/IPA-Desktop/releases) · [Сообщить об ошибке](https://github.com/iamdarkls/IPA-Desktop/issues)
 
@@ -117,12 +117,12 @@
 | [Tools/DeviceTools](Tools/DeviceTools) | Независимая сборка инструментов: модули, сценарии и тесты |
 | [Docs](Docs), [changelogs](changelogs) | Архитектура и история выпусков |
 
-Для разработки нужен **.NET 10 SDK**. Целевая платформа этого выпуска — **Windows x64**; перенос на macOS/Linux будет отдельным этапом.
+Для разработки нужен **.NET 11 SDK**. Поддерживаемые платформы: **Windows x64**, **macOS arm64/x64** и **Linux x64**. Команды сборки для каждой платформы приведены в [Docs/BUILD.md](Docs/BUILD.md).
 
 ```powershell
 dotnet restore Tests/Modern/IPA-Desktop.Tests.csproj
 dotnet build Tests/Modern/IPA-Desktop.Tests.csproj -c Release
-dotnet Tests/Modern/bin/Release/net10.0/IPA-Desktop.Tests.dll
+dotnet Tests/Modern/bin/Release/net11.0/IPA-Desktop.Tests.dll
 .\Build.cmd
 python Scripts/package.py artifacts/publish
 ```
@@ -131,7 +131,7 @@ python Scripts/package.py artifacts/publish
 
 [Архитектура и проверки](Docs/ARCHITECTURE.md) · [Сборка и тесты device-tools](Tools/DeviceTools/README.md).
 
-GitHub Actions проверяет Windows-сборку и пакеты обновления перед публикацией. Вход с личным аккаунтом и установку на физический iPhone проверяют отдельно.
+GitHub Actions проверяет сборку, тесты и пакеты для всех поддерживаемых платформ перед публикацией. Вход с личным аккаунтом и установку на физический iPhone проверяют отдельно.
 
 ## Авторы и лицензии
 

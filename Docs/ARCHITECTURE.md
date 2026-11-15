@@ -1,6 +1,6 @@
 # Архитектура IPA Desktop 1.1
 
-Avalonia 12, C# и .NET 10. Платформы: Windows x64, macOS arm64/x64 и Linux x64. Требования готовых пакетов — в [PLATFORMS.md](PLATFORMS.md), команды сборки — в [BUILD.md](BUILD.md).
+Avalonia 12, C# и .NET 11. Платформы: Windows x64, macOS arm64/x64 и Linux x64. Требования готовых пакетов — в [PLATFORMS.md](PLATFORMS.md), команды сборки — в [BUILD.md](BUILD.md).
 
 ## Слои
 
