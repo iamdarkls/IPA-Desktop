@@ -4,11 +4,14 @@ import json,plistlib,subprocess,tempfile,sys,os,zipfile
 archive=Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix='ipa-platform-') as folder:
  root=Path(folder);stage=root/'package';stage.mkdir()
- with zipfile.ZipFile(archive) as z:
-  z.extractall(stage)
-  for entry in z.infolist():
-   p=stage/entry.filename
-   if p.is_file():p.chmod((entry.external_attr>>16)&0o777 or 0o644)
+ if sys.platform=='darwin':
+  subprocess.run(['/usr/bin/ditto','-x','-k',str(archive),str(stage)],check=True,timeout=60)
+ else:
+  with zipfile.ZipFile(archive) as z:
+   z.extractall(stage)
+   for entry in z.infolist():
+    p=stage/entry.filename
+    if p.is_file():p.chmod((entry.external_attr>>16)&0o777 or 0o644)
  package=stage/('IPA-Desktop.app' if sys.platform=='darwin' else 'IPA-Desktop');base=package/'Contents/MacOS' if sys.platform=='darwin' else package
  if sys.platform=='darwin':
   with (package/'Contents/Info.plist').open('rb') as info:

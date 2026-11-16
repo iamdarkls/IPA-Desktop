@@ -51,7 +51,7 @@
         <Button x:Name="AccountSafetyReview" ui:ActionIcon.Kind="Shield" Content="Ограничения входа" IsVisible="{CompiledBinding Account.AccountSafetyReviewVisible}" IsEnabled="{CompiledBinding Account.AccountSafetyReviewEnabled}" Command="{CompiledBinding Account.AccountSafetyReviewCommand}" />
       </WrapPanel>
       <TextBlock x:Name="AccountSafetyStatus" TextWrapping="Wrap" Foreground="#EAC58C" Margin="0,6,0,8" Text="{CompiledBinding Account.AccountSafetyStatus}" IsVisible="{CompiledBinding Account.AccountSafetyStatusVisible}" />
-      <Border x:Name="ConnectionNotice" Classes="connection-card" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10" IsVisible="{CompiledBinding ConnectionNoticeVisible}">
+      <Border x:Name="ConnectionNotice" Classes="connection-card notice-motion" Margin="0,8,0,0" Padding="16,12" Background="#172C40" BorderBrush="#458ACA" BorderThickness="1" CornerRadius="10" IsVisible="{CompiledBinding ConnectionNoticeVisible}">
         <StackPanel Spacing="5">
           <TextBlock x:Name="ConnectionTitle" FontWeight="SemiBold" Foreground="#B8DCFF" Text="{CompiledBinding ConnectionTitle}" />
           <TextBlock x:Name="ConnectionMessage" TextWrapping="Wrap" Foreground="#C3D1E1" FontSize="13" Text="{CompiledBinding ConnectionMessage}" />
@@ -59,6 +59,9 @@
       </Border>
     </StackPanel>
     <TabControl SelectedIndex="{CompiledBinding SelectedTab, Mode=TwoWay}" Classes="navigation" Grid.Row="2" Margin="0,8,0,8">
+      <TabControl.PageTransition>
+        <CrossFade Duration="0:0:0.15" />
+      </TabControl.PageTransition>
       <TabItem x:Name="SearchTab" Header="Поиск" ui:ActionIcon.Kind="Search">
         <Grid Margin="16,12">
           <Grid.RowDefinitions>
@@ -508,7 +511,7 @@
       </TabItem>
     </TabControl>
     <StackPanel Grid.Row="3">
-      <Border x:Name="OperationNotice" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="{CompiledBinding OperationNoticeVisible}" Background="{CompiledBinding OperationNoticeBackground}" BorderBrush="{CompiledBinding OperationNoticeBorder}">
+      <Border x:Name="OperationNotice" Classes="notice-motion" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,0,8" IsVisible="{CompiledBinding OperationNoticeVisible}" Background="{CompiledBinding OperationNoticeBackground}" BorderBrush="{CompiledBinding OperationNoticeBorder}">
         <DockPanel>
           <Button x:Name="DismissNotice" Classes="toolbar" Content="×" DockPanel.Dock="Right" Margin="6,0,0,0" Padding="8,2" ToolTip.Tip="Скрыть уведомление; итог останется доступен" Command="{CompiledBinding DismissNoticeCommand}" />
           <Button Classes="toolbar" Content="Следующий клиент" DockPanel.Dock="Right" Margin="6,0,0,0" IsVisible="{CompiledBinding Account.NextClientVisible}" Command="{CompiledBinding Account.NextClientCommand}" />

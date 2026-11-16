@@ -46,7 +46,10 @@ suffix=('macOS' if mac else 'Linux')+'-'+rid.split('-')[1]
 destination=Path('artifacts/release');destination.mkdir(parents=True,exist_ok=True)
 shutil.copy2('artifacts/unix/native-sources.zip',destination/f'IPA-Desktop-{version}-{rid}-native-sources.zip')
 archive=destination/f'IPA-Desktop-{version}-{suffix}.zip'
-with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
- for p in sorted(root.rglob('*')):
-  if p.is_file():z.write(p,Path(name)/p.relative_to(root))
+if mac:
+ subprocess.run(['/usr/bin/ditto','-c','-k','--sequesterRsrc','--keepParent',str(root),str(archive)],check=True)
+else:
+ with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+  for p in sorted(root.rglob('*')):
+   if p.is_file():z.write(p,Path(name)/p.relative_to(root))
 print(archive)

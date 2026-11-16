@@ -11,7 +11,11 @@ while [ "$count" -lt 60 ];do kill -0 "$parent" 2>/dev/null || break;sleep 1;coun
 if kill -0 "$parent" 2>/dev/null;then exit 75;fi
 backup="$target.backup-$(date +%s)-$$"
 new="$target.update-$$"
-cp -R "$stage" "$new"
+if [ "$(uname -s)" = Darwin ];then
+ /usr/bin/ditto "$stage" "$new"
+else
+ cp -R "$stage" "$new"
+fi
 if ! mv "$target" "$backup";then rm -rf "$new";exit 1;fi
 if ! mv "$new" "$target";then mv "$backup" "$target";exit 1;fi
 if [ -d "$target/Contents/MacOS" ];then

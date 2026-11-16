@@ -16,7 +16,12 @@ public sealed class PlatformTests
  {
   using var folder=new TempFolder();var zip=Path.Combine(folder.Path,"package.zip");var package=OperatingSystem.IsMacOS()?"IPA-Desktop.app/Contents/MacOS/":"IPA-Desktop/";
   using(var archive=ZipFile.Open(zip,ZipArchiveMode.Create))foreach(var name in new[]{"IPA-Desktop","native/ipatool","native/ipa-pty","native/idevice_id","native/ideviceinfo","native/ideviceinstaller","native/idevicepair","Scripts/Update-App.sh"})
-   {using var writer=new StreamWriter(archive.CreateEntry(package+name).Open());writer.Write("fixture");}
+   {
+    var entry = archive.CreateEntry(package + name);
+    if (OperatingSystem.IsMacOS()) entry.ExternalAttributes = 0x81ED << 16;
+    using var writer = new StreamWriter(entry.Open());
+    writer.Write("fixture");
+   }
   var stage=Path.Combine(folder.Path,"stage");UnixGuiUpdate.Extract(zip,stage);
   Assert.True((File.GetUnixFileMode(Path.Combine(stage,package,"IPA-Desktop"))&UnixFileMode.UserExecute)!=0);
   var bad=Path.Combine(folder.Path,"bad.zip");using(var archive=ZipFile.Open(bad,ZipArchiveMode.Create)){using var writer=new StreamWriter(archive.CreateEntry(package+"IPA-Desktop").Open());writer.Write("fixture");}

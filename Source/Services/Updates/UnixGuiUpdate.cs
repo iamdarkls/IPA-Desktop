@@ -1,12 +1,15 @@
 using System;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Diagnostics;
 namespace IpaDesktop;
 public static class UnixGuiUpdate
 {
     public static string Extract(string archive,string stage)
     {
-        EngineUpdater.Extract(archive,stage);
+        if (OperatingSystem.IsMacOS()) ExtractMacBundle(archive, stage);
+        else EngineUpdater.Extract(archive, stage);
         var package=Path.Combine(stage,OperatingSystem.IsMacOS()?"IPA-Desktop.app":"IPA-Desktop");
         var binaries=OperatingSystem.IsMacOS()?Path.Combine(package,"Contents","MacOS"):package;
         var required=new[]{"IPA-Desktop","ipatool","ipa-pty","idevice_id","ideviceinfo","ideviceinstaller","idevicepair"};
@@ -14,11 +17,43 @@ public static class UnixGuiUpdate
         {
             var file=name=="IPA-Desktop"?Path.Combine(binaries,name):Path.Combine(binaries,"native",name);
             if(!File.Exists(file)||new FileInfo(file).Length==0)throw new InvalidDataException("Неполный пакет для "+RuntimePlatform.Rid+": "+name);
-            RuntimePlatform.Executable(file);
+            if (!OperatingSystem.IsMacOS()) RuntimePlatform.Executable(file);
         }
         if(!File.Exists(Path.Combine(binaries,"Scripts","Update-App.sh")))throw new InvalidDataException("В пакете нет помощника обновления.");
         return package;
     }
+    private static void ExtractMacBundle(string archive, string stage)
+    {
+        using (var zip = ZipFile.OpenRead(archive))
+        {
+            if (zip.Entries.Count > 30_000 || zip.Entries.Sum(entry => entry.Length) > 2_000_000_000L)
+                throw new InvalidDataException("Архив превышает допустимый размер.");
+
+            foreach (var entry in zip.Entries)
+            {
+                var parts = entry.FullName.TrimEnd('/').Split('/');
+                var unixType = (entry.ExternalAttributes >> 16) & 0xF000;
+                if ((parts[0] is not ("IPA-Desktop.app" or "__MACOSX")) ||
+                    entry.FullName.Contains('\\') || parts.Any(part => part is "" or "." or "..") ||
+                    unixType is not (0 or 0x4000 or 0x8000))
+                    throw new InvalidDataException("Архив macOS содержит небезопасный путь или тип файла.");
+            }
+        }
+
+        Directory.CreateDirectory(stage);
+        var start = new ProcessStartInfo("/usr/bin/ditto") { UseShellExecute = false };
+        foreach (var argument in new[] { "-x", "-k", archive, stage }) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start) ?? throw new IOException("Не удалось запустить распаковку IPA Desktop.");
+        if (!process.WaitForExit(60_000))
+        {
+            process.Kill();
+            process.WaitForExit();
+            throw new IOException("Время распаковки IPA Desktop истекло.");
+        }
+        if (process.ExitCode != 0)
+            throw new IOException("Не удалось распаковать приложение IPA Desktop для macOS.");
+    }
+
     internal static string InstallationTarget(string baseDirectory, bool macOS)
     {
         var path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDirectory));
