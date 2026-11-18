@@ -1,6 +1,8 @@
 # Общий цикл сборки и проверки
 
-Поддерживаемые RID, runner и имена архивов перечислены в `Tools/Portable/platforms.json`. Локально и в GitHub Actions используется одна точка входа:
+Поддерживаемые RID, runner и имена архивов перечислены в `Tools/Portable/platforms.json`.
+
+Подготовка и публикация релиза IPA Desktop, а также проверка версий Device Tools выполняются на `ubuntu-26.04`. Нативная сборка `linux-x64` использует `ubuntu-24.04`, чтобы сохранить минимальную версию glibc 2.39.
 
 Обе архитектуры macOS собираются на macOS 15, чтобы не повышать требования нативных библиотек из-за новой ОС сборки. Если задание отменено до старта с сообщением `The job was not acquired by Runner of type hosted even after multiple attempts`, проверьте annotations: GitHub может сообщать о нехватке runner Apple Silicon (`capacity constraints`). В этом случае повторяют неуспешные задания после освобождения мощностей, сохраняя проверки всех платформ перед публикацией.
 
