@@ -80,9 +80,16 @@ internal static class PublishedSmoke
                 .Any(text => text.Name == "PART_Count" && text.Text == expectedBadge),
                 "Published queue counter binding failed. Expected " + expectedBadge + " including restored items.");
             var queue = desktop.C<DataGrid>("OperationQueue");
-            await ExpectUi(() => queue.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == pendingName),
-                "Published queue row binding was trimmed.");
-            queue.SelectedItem = operations.Items.Single(item => item.Seed.Key == pendingKey);
+            var pendingRow = operations.Items.Single(item => item.Seed.Key == pendingKey);
+            await ExpectUi(() => queue.IsEffectivelyVisible && queue.GetVisualDescendants().OfType<DataGridRow>().Any(),
+                "Published queue table did not display any rows.");
+            queue.ScrollIntoView(pendingRow, queue.Columns[0]);
+            await ExpectUi(() => queue.GetVisualDescendants().OfType<DataGridRow>()
+                .Where(row => ReferenceEquals(row.DataContext, pendingRow))
+                .SelectMany(row => row.GetVisualDescendants().OfType<TextBlock>())
+                .Any(text => text.Text == pendingName),
+                "Published queue did not render the new operation after scrolling to it.");
+            queue.SelectedItem = pendingRow;
             operations.ResumeCommand.Execute(null);
             if (remaining == null || !remaining.SequenceEqual(new[] { pendingKey }))
                 throw new Exception("Published queue resumed a successful item.");
