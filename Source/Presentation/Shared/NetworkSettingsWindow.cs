@@ -20,11 +20,11 @@ public sealed class NetworkSettingsWindow : Window
         body.Children.Add(new TextBlock{Text="Поддерживаются HTTP, HTTPS и SOCKS5 без сохранения логина и пароля прокси. Маршрут применяется к входу и командам ipatool. Сертификаты TLS проверяются, защитные паузы аккаунта сохраняются.",TextWrapping=Avalonia.Media.TextWrapping.Wrap,FontSize=12});
         var status=new TextBlock{TextWrapping=Avalonia.Media.TextWrapping.Wrap,MaxHeight=130};body.Children.Add(status);
         var buttons=new WrapPanel();var save=AppDialogs.Action("Сохранить",IconKind.Save,true);var test=AppDialogs.Action("Проверить сеть",IconKind.Link);buttons.Children.Add(save);buttons.Children.Add(test);body.Children.Add(buttons);Content=new ScrollViewer{Content=body};
-        ViewBindings.Bind(mode,ComboBox.SelectedIndexProperty,nameof(model.Mode),true);
-        ViewBindings.Bind(mode,Control.IsEnabledProperty,nameof(model.IsEnabled));
-        ViewBindings.Bind(address,TextBox.TextProperty,nameof(model.Address),true);
-        ViewBindings.Bind(address,Control.IsEnabledProperty,nameof(model.AddressEnabled));
-        ViewBindings.Bind(status,TextBlock.TextProperty,nameof(model.Status));
+        ViewBindings.Bind(mode,ComboBox.SelectedIndexProperty,(NetworkSettingsViewModel vm) => vm.Mode,true);
+        ViewBindings.Bind(mode,Control.IsEnabledProperty,(NetworkSettingsViewModel vm) => vm.IsEnabled);
+        ViewBindings.Bind(address,TextBox.TextProperty,(NetworkSettingsViewModel vm) => vm.Address,true);
+        ViewBindings.Bind(address,Control.IsEnabledProperty,(NetworkSettingsViewModel vm) => vm.AddressEnabled);
+        ViewBindings.Bind(status,TextBlock.TextProperty,(NetworkSettingsViewModel vm) => vm.Status);
         save.Command=model.SaveCommand;test.Command=model.TestCommand;
         Closed+=(_,_)=>model.Dispose();
     }

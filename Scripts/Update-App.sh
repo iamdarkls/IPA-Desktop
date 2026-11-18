@@ -6,21 +6,38 @@ target=$2
 parent=$3
 case "$parent" in ''|*[!0-9]*) exit 64;; esac
 [ -d "$stage" ] && [ -d "$target" ] && [ "$target" != / ] || exit 64
+
+restart_app() {
+ if [ -d "$target/Contents/MacOS" ]; then
+  /usr/bin/open -n "$target"
+ else
+  "$target/IPA-Desktop" >/dev/null 2>&1 &
+ fi
+}
+
 count=0
 while [ "$count" -lt 60 ];do kill -0 "$parent" 2>/dev/null || break;sleep 1;count=$((count+1));done
 if kill -0 "$parent" 2>/dev/null;then exit 75;fi
 backup="$target.backup-$(date +%s)-$$"
 new="$target.update-$$"
+trap 'rm -rf "$new"' EXIT
+
 if [ "$(uname -s)" = Darwin ];then
  /usr/bin/ditto "$stage" "$new"
 else
  cp -R "$stage" "$new"
 fi
-if ! mv "$target" "$backup";then rm -rf "$new";exit 1;fi
-if ! mv "$new" "$target";then mv "$backup" "$target";exit 1;fi
-if [ -d "$target/Contents/MacOS" ];then
- /usr/bin/open -n "$target"
-else
- "$target/IPA-Desktop" >/dev/null 2>&1 &
+
+if ! mv "$target" "$backup"; then
+ restart_app
+ exit 1
 fi
-# Keep one rollback copy beside the app; user data lives outside the installation.
+if ! mv "$new" "$target"; then
+ # Only relaunch after the previous bundle is back in place.
+ mv "$backup" "$target"
+ restart_app
+ exit 1
+fi
+
+# Keep the rollback copy beside the app; user data lives outside the installation.
+restart_app

@@ -70,26 +70,41 @@ internal static class PublishedSmoke
             var library=new AppBrowserWindow(window,desktop.Model,"Library fixture",false,()=>true);library.Show(window);
             library.SetRows(new(){new LibraryApp{Name="Published library",ID="123",BundleID="com.fixture",Version="1.0"}},"fixture");await Task.Delay(50);
             if(!library.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Published library"))throw new Exception("Published library binding was trimmed.");
+            library.GetVisualDescendants().OfType<TextBox>().Single(x => x.PlaceholderText?.StartsWith("Поиск по названию") == true).Text = "does not match";
+            if(library.Apps.ItemsSource.Cast<LibraryApp>().Any())throw new Exception("Published library search did not update from the input.");
             library.Close();
             var direct=new ProxyConfiguration(()=>new State{ProxyMode="Direct"});
             if(direct.EnvironmentChanges()["NO_PROXY"]!="*")throw new Exception("Published proxy environment failed.");
             var more=desktop.C<Button>("MoreAccount");more.Flyout.ShowAt(more);await Task.Delay(50);
             if(!desktop.C<Button>("AccountInfo").IsEffectivelyVisible)throw new Exception("Published More menu lost its actions.");
             more.Flyout.Hide();
-            // Exercise a reflection-bound row from the shipping binary, not from a test assembly.
+            // Exercise compiled dialog bindings in the trimmed shipping binary.
             using(var versions=new AppVersionWindow(window,"Smoke","123",new(){new AppVersionRow{ID="100",Version="1.2.3"}},engine.AppVersions,default))
             {
                 var pending=versions.Window.ShowDialog<bool>(window);await Task.Delay(100);
                 if(!versions.Window.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="1.2.3"))throw new Exception("Published version table binding was trimmed.");
+                versions.Window.GetVisualDescendants().OfType<TextBox>().Single(x => x.PlaceholderText?.StartsWith("ID версий") == true).Text = "200";
+                await versions.Model.InsertCommand.ExecuteAsync();
+                if(!versions.Model.Versions.Items.Any(x => x.ID == "200"))throw new Exception("Published manual version input did not update.");
                 versions.Window.Close();await pending;
             }
+            string savedSetName = null;
+            var setEditor = AppSetEditor.Create(window, "Legacy set", sets[0].Apps, (name, _) => savedSetName = name);
+            var edit = setEditor.ShowDialog<bool>(window);
+            await Task.Delay(100);
+            if (!setEditor.GetVisualDescendants().OfType<TextBlock>().Any(x => x.Text == "Fixture"))
+                throw new Exception("Published set editor did not render the app name.");
+            setEditor.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "DraftName").Text = "Updated fixture";
+            await ((AppSetEditorViewModel)setEditor.DataContext).SaveCommand.ExecuteAsync();
+            if (!await edit || savedSetName != "Updated fixture")
+                throw new Exception("Published set editor did not save the bound name.");
             using(var login=new AppleLoginWindow(window,engine.AppleLogin,default))
             {
                 var pending=login.Window.ShowDialog<bool>(window);await Task.Delay(50);
                 if(login.PasswordBox.PasswordChar=='\0')throw new Exception("Published password box is not masked.");
                 login.Window.Close();await pending;
             }
-            File.WriteAllText(Path.Combine(directory,"smoke-ok.txt"),"PASS: published Avalonia startup, settings/sets migration, generated JSON, row binding, private login UI, search, operation queue, More menu and journal window");
+            File.WriteAllText(Path.Combine(directory,"smoke-ok.txt"),"PASS: published Avalonia startup, settings/sets migration, generated JSON, compiled dialog bindings, private login UI, search, operation queue, More menu and journal window");
             ((IClassicDesktopStyleApplicationLifetime)App.Current.ApplicationLifetime).Shutdown(0);
         }
         catch(Exception error)

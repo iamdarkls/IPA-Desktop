@@ -10,10 +10,11 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets/App.ico</ApplicationIcon>
-    <Version>1.3.5</Version>
+    <Version>1.3.6</Version>
     <Description>IPA Desktop: iPhone installation, downloads and operation queue with connection recovery</Description>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026</WarningsAsErrors>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>

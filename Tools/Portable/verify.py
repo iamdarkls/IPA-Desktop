@@ -72,7 +72,13 @@ def verify_gui(base, root):
         'AutoUpdateDeviceTools': False,
     }))
     (data / 'AppSets.json').write_text('[{"Name":"Legacy set","Apps":[{"ID":"123","Name":"Fixture"}]}]')
-    env = dict(os.environ, DOTNET_ROOT=str(root / 'absent-runtime'), AVALONIA_TELEMETRY_OPTOUT='1')
+    run_gui_smoke(base, data)
+
+
+def run_gui_smoke(base, data):
+    for report in ('smoke-ok.txt', 'smoke-error.txt'):
+        (data / report).unlink(missing_ok=True)
+    env = dict(os.environ, DOTNET_ROOT=str(data / 'absent-runtime'), AVALONIA_TELEMETRY_OPTOUT='1')
     result = subprocess.run([base / 'IPA-Desktop', '--smoke-test', data], cwd=base, env=env, timeout=60)
     error = data / 'smoke-error.txt'
     if error.is_file():

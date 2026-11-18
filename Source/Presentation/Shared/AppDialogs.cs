@@ -47,7 +47,7 @@ public static class AppDialogs
         var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
         var model = new TextDialogViewModel(details, value => dialog.Clipboard?.SetTextAsync(value) ?? Task.CompletedTask);
         dialog.DataContext = model;
-        ViewBindings.Bind(status, TextBlock.TextProperty, nameof(model.Status));
+        ViewBindings.Bind(status, TextBlock.TextProperty, (TextDialogViewModel vm) => vm.Status);
         copy.Command = model.CopyCommand;
         var close = Action("Закрыть", IconKind.Close); close.IsCancel = true; close.Command = model.CloseCommand;
         model.CloseRequested += () => dialog.Close();

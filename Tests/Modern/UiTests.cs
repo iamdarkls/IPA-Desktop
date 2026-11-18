@@ -40,6 +40,56 @@ public sealed class UiTests(DesktopUiSession session)
   return engine;
  }
  static bool Busy(Desktop desktop)=>desktop.Model.IsBusy;
+    sealed class AvailableGuiUpdate : IGuiUpdates
+    {
+        public string LaunchedStage { get; private set; }
+
+        public Task<Release> Check(CancellationToken cancellation) =>
+            Task.FromResult(new Release { tag_name = "v99.0.0" });
+
+        public Task<string> Prepare(Release release, CancellationToken cancellation, Action<double> progress)
+        {
+            Assert.Equal("v99.0.0", release.tag_name);
+            progress(100);
+            return Task.FromResult("verified-stage");
+        }
+
+        public void Launch(string stage) => LaunchedStage = stage;
+    }
+
+    [Fact]
+    public Task ConfirmingUpdateFromSettingsLaunchesThePreparedPackageAndClosesTheApp() => session.Run(async () =>
+    {
+        using var folder = new TempFolder();
+        var updates = new AvailableGuiUpdate();
+        var window = new MainWindow();
+        using var interaction = new AvaloniaDesktopInteraction(window);
+        var services = Backend(folder.Path).CreateDesktopServices() with { GuiUpdates = updates };
+        using var model = new DesktopViewModel(services, interaction);
+        window.DataContext = model;
+        interaction.BindMenus(model);
+        window.Show();
+
+        try
+        {
+            Find<TabItem>(window, "SettingsTab").IsSelected = true;
+            await model.Updates.CheckGui(default);
+            var installation = ClickAsync(window, "InstallGuiUpdate");
+            await Wait(() => window.OwnedWindows.Any());
+            var confirmation = Assert.IsType<ConfirmationViewModel>(window.OwnedWindows.Single().DataContext);
+            confirmation.AcceptCommand.Execute(null);
+            await installation;
+            await Wait(() => !window.IsVisible);
+
+            Assert.Equal("verified-stage", updates.LaunchedStage);
+        }
+        finally
+        {
+            await model.ShutdownAsync();
+            window.Close();
+        }
+    });
+
     sealed class HeldNetwork : INetworkDiagnostics
     {
         public readonly TaskCompletionSource Cleanup = new(TaskCreationOptions.RunContinuationsAsynchronously);

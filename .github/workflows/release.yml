@@ -18,6 +18,7 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.release.outputs.version }}
       matrix: ${{ steps.release.outputs.matrix }}
       package: ${{ steps.release.outputs.package }}
       publish: ${{ steps.release.outputs.publish }}
@@ -118,6 +119,17 @@ jobs:
       - name: Package and verify shipping application
         if: needs.prepare.outputs.package == 'true'
         run: python Scripts/desktop.py package --rid ${{ matrix.rid }}
+      - name: Verify macOS update and rollback against a published app
+        if: runner.os == 'macOS' && needs.prepare.outputs.package == 'true'
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PLATFORM: ${{ matrix.suffix }}
+        run: |
+          baseline="$RUNNER_TEMP/ipa-mac-update-baseline"
+          gh release download v1.3.5 --pattern "IPA-Desktop-1.3.5-$PLATFORM.zip" --dir "$baseline" --clobber
+          python Tools/Portable/verify-update.py \
+            "$baseline/IPA-Desktop-1.3.5-$PLATFORM.zip" \
+            "artifacts/release/IPA-Desktop-$VERSION-$PLATFORM.zip"
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
