@@ -85,8 +85,8 @@
           <Border x:Name="AppsFrame" Classes="table-frame" Grid.Row="1" Margin="0,2,0,4">
             <DataGrid x:Name="Apps" SelectionMode="Extended" ItemsSource="{CompiledBinding Search.Apps.Items}" IsEnabled="{CompiledBinding Search.Apps.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Search.Apps.SelectedItems}" ui:RowClickSelection.Command="{CompiledBinding Search.AddRowCommand}">
               <DataGrid.Columns>
-                <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />
-                <DataGridTextColumn Header="App Store ID" Binding="{Binding ID}" Width="180" />
+                <DataGridTextColumn x:DataType="ui:AppRow" Header="Приложение" Binding="{CompiledBinding Name}" Width="*" />
+                <DataGridTextColumn x:DataType="ui:AppRow" Header="App Store ID" Binding="{CompiledBinding ID}" Width="180" />
               </DataGrid.Columns>
             </DataGrid>
           </Border>
@@ -137,11 +137,11 @@
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="ui:DownloadItem">
                       <Border Classes="selection-chip">
                         <StackPanel Orientation="Horizontal">
-                          <TextBlock Text="{Binding Label}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding ID}" />
-                          <Button Content="×" Classes="remove-chip" Tag="{Binding Key}" Background="{DynamicResource RaisedBrush}" ToolTip.Tip="Убрать из выбранного" />
+                          <TextBlock Text="{CompiledBinding Label}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding ID}" />
+                          <Button Content="×" Classes="remove-chip" Tag="{CompiledBinding Key}" Background="{DynamicResource RaisedBrush}" ToolTip.Tip="Убрать из выбранного" />
                         </StackPanel>
                       </Border>
                     </DataTemplate>
@@ -190,7 +190,7 @@
                     </Button.Flyout>
                   </Button>
                 </StackPanel>
-                <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{Binding DisplayLabel}" ToolTip.Tip="Подключённые iPhone определяются автоматически" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
+                <ComboBox x:Name="DeviceList" Grid.Row="1" DisplayMemberBinding="{CompiledBinding DisplayLabel, DataType={x:Type ui:DeviceRow}}" ToolTip.Tip="Подключённые iPhone определяются автоматически" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
                 <TextBlock x:Name="DeviceDetectionStatus" Grid.Row="2" Grid.ColumnSpan="3" IsVisible="{CompiledBinding Device.ShowDetail}" Text="{CompiledBinding Device.Detail}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding Files.DeviceDetectionStatusTip}" />
                 <TextBlock x:Name="PhoneSummary" Grid.Row="2" Grid.ColumnSpan="3" IsVisible="{CompiledBinding Device.HasSummary}" Text="{CompiledBinding Device.Summary}" ToolTip.Tip="{CompiledBinding Device.SummaryTip}" TextWrapping="Wrap" FontSize="12" />
                 <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
@@ -203,7 +203,7 @@
               <Button x:Name="ImportFile" ui:ActionIcon.Kind="Import" Classes="compact" Content="Добавить IPA…" DockPanel.Dock="Right" Margin="8,0,0,0" Command="{CompiledBinding Files.ImportFileCommand}" />
               <Button x:Name="SelectAllFiles" ui:ActionIcon.Kind="Check" DockPanel.Dock="Right" Padding="10,5" Margin="8,0,0,0" ToolTip.Tip="Добавить все IPA текущего фильтра в выбранное снизу. Ранее выбранные файлы сохранятся." IsEnabled="{CompiledBinding Files.SelectAllFilesEnabled}" Content="{CompiledBinding Files.SelectAllFilesLabel}" Command="{CompiledBinding Files.SelectAllFilesCommand}" />
               <TextBlock Text="Apple Account" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
-              <ComboBox x:Name="FileAccount" FontSize="12" DockPanel.Dock="Left" Width="220" MaxDropDownHeight="280" Margin="0,0,12,0" DisplayMemberBinding="{Binding Label}" ToolTip.Tip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу." ItemsSource="{CompiledBinding Files.FileAccount.Items}" IsEnabled="{CompiledBinding Files.FileAccount.IsEnabled}" SelectedItem="{CompiledBinding Files.FileAccount.SelectedItem, Mode=TwoWay}" />
+              <ComboBox x:Name="FileAccount" FontSize="12" DockPanel.Dock="Left" Width="220" MaxDropDownHeight="280" Margin="0,0,12,0" DisplayMemberBinding="{CompiledBinding Label, DataType={x:Type ui:LocalFileAccount}}" ToolTip.Tip="Фильтр по аккаунту из IPA. Не переключает аккаунт входа в программу." ItemsSource="{CompiledBinding Files.FileAccount.Items}" IsEnabled="{CompiledBinding Files.FileAccount.IsEnabled}" SelectedItem="{CompiledBinding Files.FileAccount.SelectedItem, Mode=TwoWay}" />
               <TextBlock x:Name="FilesSummary" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Text="{CompiledBinding Files.FilesSummary}" />
             </DockPanel>
           </StackPanel>
@@ -211,10 +211,10 @@
             <Border x:Name="FilesFrame" Classes="table-frame">
               <DataGrid x:Name="Files" SelectionMode="Extended" ItemsSource="{CompiledBinding Files.Files.Items}" IsEnabled="{CompiledBinding Files.Files.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Files.Files.SelectedItems}" ui:RowClickSelection.Command="{CompiledBinding Files.AddRowCommand}">
                 <DataGrid.Columns>
-                  <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="*" MinWidth="140" />
-                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="90" />
-                  <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="280" />
-                  <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="140" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Приложение" Binding="{CompiledBinding DisplayName}" Width="*" MinWidth="140" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Версия" Binding="{CompiledBinding Version}" Width="90" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Apple Account" Binding="{CompiledBinding AppleAccount}" Width="280" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Размер" Binding="{CompiledBinding Size}" Width="140" />
                 </DataGrid.Columns>
               </DataGrid>
             </Border>
@@ -251,11 +251,11 @@
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="ui:LocalRow">
                       <Border Classes="selection-chip">
                         <StackPanel Orientation="Horizontal">
-                          <TextBlock Text="{Binding DisplayName}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding FileDetails}" />
-                          <Button Content="×" Classes="remove-chip" Tag="{Binding Path}" Background="{DynamicResource RaisedBrush}" ToolTip.Tip="Убрать из выбранного" />
+                          <TextBlock Text="{CompiledBinding DisplayName}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{CompiledBinding FileDetails}" />
+                          <Button Content="×" Classes="remove-chip" Tag="{CompiledBinding Path}" Background="{DynamicResource RaisedBrush}" ToolTip.Tip="Убрать из выбранного" />
                         </StackPanel>
                       </Border>
                     </DataTemplate>
@@ -309,9 +309,9 @@
             <Grid>
               <DataGrid x:Name="OperationQueue" ItemsSource="{CompiledBinding Queue.VisibleItems}" SelectedItem="{CompiledBinding Queue.Selected, Mode=TwoWay}" SelectionMode="Single" RowHeight="56">
                 <DataGrid.Columns>
-                  <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="2*" MinWidth="140" />
-                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="*" MinWidth="90" />
-                  <DataGridTextColumn Header="Операция" Binding="{Binding Kind}" Width="130" />
+                  <DataGridTextColumn x:DataType="ui:QueueItemViewModel" Header="Приложение" Binding="{CompiledBinding Name}" Width="2*" MinWidth="140" />
+                  <DataGridTextColumn x:DataType="ui:QueueItemViewModel" Header="Версия" Binding="{CompiledBinding Version}" Width="*" MinWidth="90" />
+                  <DataGridTextColumn x:DataType="ui:QueueItemViewModel" Header="Операция" Binding="{CompiledBinding Kind}" Width="130" />
                   <DataGridTemplateColumn Header="Прогресс" Width="130">
                     <DataGridTemplateColumn.CellTemplate>
                       <DataTemplate x:DataType="ui:QueueItemViewModel">
@@ -322,7 +322,7 @@
                       </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                   </DataGridTemplateColumn>
-                  <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="190" />
+                  <DataGridTextColumn x:DataType="ui:QueueItemViewModel" Header="Результат" Binding="{CompiledBinding Status}" Width="190" />
                 </DataGrid.Columns>
               </DataGrid>
               <TextBlock Text="{CompiledBinding Queue.EmptyMessage}" IsVisible="{CompiledBinding Queue.IsEmpty}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="440" Margin="24" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource MutedBrush}" />
@@ -352,17 +352,17 @@
                 <TextBlock Text="Отметьте несколько наборов. Приложения объединятся в одной очереди без повторов." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,12" />
                 <ListBox x:Name="AppSets" SelectionMode="Multiple,Toggle" Height="156" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ItemsSource="{CompiledBinding AppSets.AppSets.Items}" IsEnabled="{CompiledBinding AppSets.AppSets.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding AppSets.AppSets.SelectedItems}">
                   <ListBox.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="ui:AppSet">
                       <DockPanel>
-                        <CheckBox IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Mode=OneWay}" IsHitTestVisible="False" Focusable="False" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="13" />
+                        <CheckBox IsChecked="{CompiledBinding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Mode=OneWay}" IsHitTestVisible="False" Focusable="False" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Text="{CompiledBinding Label}" TextWrapping="Wrap" FontSize="13" />
                       </DockPanel>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
                 <TextBlock x:Name="SetPreview" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,12" MaxHeight="85" TextTrimming="CharacterEllipsis" Text="{CompiledBinding AppSets.SetPreview}" />
                 <TextBlock Text="iPhone для установки" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,4" />
-                <ComboBox x:Name="SetDeviceList" DisplayMemberBinding="{Binding DisplayLabel}" PlaceholderText="Выберите iPhone" Margin="0,0,0,8" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
+                <ComboBox x:Name="SetDeviceList" DisplayMemberBinding="{CompiledBinding DisplayLabel, DataType={x:Type ui:DeviceRow}}" PlaceholderText="Выберите iPhone" Margin="0,0,0,8" ItemsSource="{CompiledBinding Files.DeviceList.Items}" IsEnabled="{CompiledBinding Files.DeviceList.IsEnabled}" SelectedItem="{CompiledBinding Files.DeviceList.SelectedItem, Mode=TwoWay}" />
                 <Button x:Name="InstallSet" Content="Подготовить и установить…" ui:ActionIcon.Kind="Phone" Classes="primary" IsEnabled="{CompiledBinding AppSets.InstallSetEnabled}" Command="{CompiledBinding AppSets.InstallSetCommand}" />
                 <Button x:Name="UseSet" ui:ActionIcon.Kind="Download" Classes="primary" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.UseSetEnabled}" Content="{CompiledBinding AppSets.UseSetLabel}" Command="{CompiledBinding AppSets.UseSetCommand}" />
                 <Button x:Name="EditSet" ui:ActionIcon.Kind="Edit" Content="Редактировать набор…" Margin="0,0,0,8" IsEnabled="{CompiledBinding AppSets.EditSetEnabled}" Command="{CompiledBinding AppSets.EditSetCommand}" />
@@ -393,11 +393,11 @@
             <Border x:Name="StorageFrame" Classes="table-frame" Grid.Row="1" Margin="0,8,0,0">
               <DataGrid x:Name="StorageFiles" SelectionMode="Extended" ItemsSource="{CompiledBinding Storage.StorageFiles.Items}" IsEnabled="{CompiledBinding Storage.StorageFiles.IsEnabled}" ui:SelectionBinding.Items="{CompiledBinding Storage.StorageFiles.SelectedItems}">
                 <DataGrid.Columns>
-                  <DataGridTextColumn Header="Приложение" Binding="{Binding DisplayName}" Width="2*" MinWidth="120" />
-                  <DataGridTextColumn Header="Версия" Binding="{Binding Version}" Width="72" />
-                  <DataGridTextColumn Header="Apple Account" Binding="{Binding AppleAccount}" Width="*" MinWidth="100" />
-                  <DataGridTextColumn Header="Размер" Binding="{Binding Size}" Width="84" />
-                  <DataGridTextColumn Header="Состояние" Binding="{Binding StorageStatus}" Width="126" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Приложение" Binding="{CompiledBinding DisplayName}" Width="2*" MinWidth="120" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Версия" Binding="{CompiledBinding Version}" Width="72" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Apple Account" Binding="{CompiledBinding AppleAccount}" Width="*" MinWidth="100" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Размер" Binding="{CompiledBinding Size}" Width="84" />
+                  <DataGridTextColumn x:DataType="ui:LocalRow" Header="Состояние" Binding="{CompiledBinding StorageStatus}" Width="126" />
                 </DataGrid.Columns>
               </DataGrid>
             </Border>

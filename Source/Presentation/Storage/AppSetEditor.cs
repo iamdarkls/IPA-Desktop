@@ -24,7 +24,7 @@ namespace IpaDesktop
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var title = new TextBox { Text = name, MaxLength = 64, Margin = new Thickness(0, 0, 0, 12) };
             title.Name = "DraftName"; grid.Children.Add(title);
-            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = model.Apps.Items, DisplayMemberBinding = Avalonia.Data.CompiledBinding.Create((AppRow row) => row.Name) };
+            var list = new ListBox { SelectionMode = SelectionMode.Multiple, ItemsSource = model.Apps.Items, DisplayMemberBinding = ViewBindings.Create(ViewBindings.Property(nameof(AppRow.Name), (AppRow row) => row.Name)) };
             list.Name = "DraftApps";
             Grid.SetRow(list, 1); grid.Children.Add(list);
             var bottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
@@ -38,8 +38,8 @@ namespace IpaDesktop
             apply.Command = model.SaveCommand;
             var cancel = AppDialogs.Action("Отмена", IconKind.Close); cancel.IsCancel = true; cancel.Command = model.CancelCommand;
             SelectionBinding.SetItems(list, model.Apps.SelectedItems);
-            ViewBindings.Bind(title, TextBox.TextProperty, (AppSetEditorViewModel vm) => vm.Name, true);
-            ViewBindings.Bind(status, TextBlock.TextProperty, (AppSetEditorViewModel vm) => vm.Status);
+            ViewBindings.Bind(title, TextBox.TextProperty, nameof(AppSetEditorViewModel.Name), (AppSetEditorViewModel vm) => vm.Name, (vm, value) => vm.Name = value);
+            ViewBindings.Bind(status, TextBlock.TextProperty, nameof(AppSetEditorViewModel.Status), (AppSetEditorViewModel vm) => vm.Status);
             model.CloseRequested += result => dialog.Close(result);
             buttons.Children.Add(remove); buttons.Children.Add(apply); buttons.Children.Add(cancel);
             bottom.Children.Add(hint); bottom.Children.Add(status); bottom.Children.Add(buttons);

@@ -1,14 +1,28 @@
 using System;
-using System.Linq.Expressions;
 using Avalonia;
 using Avalonia.Data;
+using Avalonia.Data.Core;
+using Avalonia.Markup.Xaml.MarkupExtensions.CompiledBindings;
 
 namespace IpaDesktop;
 
-/// <summary>Binding plumbing for code-created views; application decisions stay in ViewModels.</summary>
+/// <summary>Builds binding paths with direct property accessors that survive trimming.</summary>
 internal static class ViewBindings
 {
+    internal static ClrPropertyInfo Property<TModel, TValue>(string name, Func<TModel, TValue> read, Action<TModel, TValue> write = null) =>
+        new(name, model => read((TModel)model),
+            write == null ? null : (model, value) => write((TModel)model, (TValue)value),
+            typeof(TValue));
+
+    internal static CompiledBinding Create(params ClrPropertyInfo[] path)
+    {
+        var builder = new CompiledBindingPathBuilder();
+        foreach (var property in path)
+            builder.Property(property, PropertyInfoAccessorFactory.CreateInpcPropertyAccessor);
+        return new CompiledBinding(builder.Build()) { Mode = path[^1].CanSet ? BindingMode.TwoWay : BindingMode.OneWay };
+    }
+
     internal static void Bind<TModel, TValue>(AvaloniaObject target, AvaloniaProperty property,
-        Expression<Func<TModel, TValue>> path, bool twoWay = false) =>
-        target.Bind(property, CompiledBinding.Create(path, mode: twoWay ? BindingMode.TwoWay : BindingMode.OneWay));
+        string name, Func<TModel, TValue> read, Action<TModel, TValue> write = null) =>
+        target.Bind(property, Create(Property(name, read, write)));
 }
