@@ -233,7 +233,9 @@ public sealed class UiTests(DesktopUiSession session)
    }
    await AssertNavigationAtFractionalScales(window, tabs);
    desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(30);
-   Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
+   var queueHeader = Find<TabItem>(window, "QueueTab");
+   Assert.Equal("1233", queueHeader.GetVisualDescendants().OfType<IconLabel>().Single().Count);
+   Assert.Equal("1233", queueHeader.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "PART_Count").Text);
   }
   finally{window.Close();}
  });

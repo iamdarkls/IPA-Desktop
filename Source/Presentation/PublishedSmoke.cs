@@ -13,6 +13,16 @@ namespace IpaDesktop;
 /// <summary>Runs the published, trimmed app against an explicitly isolated fixture directory in CI.</summary>
 internal static class PublishedSmoke
 {
+    private static async Task ExpectUi(Func<bool> check, string message)
+    {
+        var timeout = System.Diagnostics.Stopwatch.StartNew();
+        while (!check())
+        {
+            if (timeout.Elapsed >= TimeSpan.FromSeconds(3)) throw new InvalidOperationException(message);
+            await Task.Delay(20);
+        }
+    }
+
     internal static async Task Run(Desktop desktop, Engine engine, string directory)
     {
         var window=desktop.Window;
@@ -48,25 +58,42 @@ internal static class PublishedSmoke
             await Task.Delay(50);
             if(!desktop.C<TextBlock>("PhoneSummary").Text.Contains("iPhone16,2") || desktop.C<TextBlock>("DeviceUpdateStatus").Text!="Fixture: tools verified")
                 throw new Exception("Published phone summary or tool update bindings failed.");
-            // Verify the new compiled bindings and commands in the trimmed shipping binary.
+            // The macOS upgrade test starts with an operation history from the previous release.
             desktop.SetAccountIdentity("smoke@example.com");
+            var operations = desktop.Model.Queue;
+            var previousKeys = operations.Items.Select(item => item.Seed.Key).ToArray();
+            var pendingBefore = operations.PendingCount;
+            var fixtureId = Guid.NewGuid().ToString("N");
+            var completedKey = "smoke-completed-" + fixtureId;
+            var pendingKey = "smoke-pending-" + fixtureId;
+            var pendingName = "Smoke pending " + fixtureId[..8];
             string[] remaining = null;
-            desktop.Model.Queue.Start("Скачивание", new[]{ new QueueSeed("one","Queue one","1.0"), new QueueSeed("two","Queue two","2.0") },
-                null,"Apple Account", keys => remaining = keys.ToArray(),accountKey:desktop.Model.AccountKey);
-            desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);
-            desktop.Model.Queue.Begin(2);desktop.Model.Queue.Measure(35,"fixture transfer");desktop.Model.Queue.Stop("Отменено",true);
-            desktop.C<TabItem>("QueueTab").IsSelected=true;await Task.Delay(100);
-            if(!desktop.C<TabItem>("QueueTab").GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Name=="PART_Count"&&x.Text=="1"))throw new Exception("Published queue counter binding failed.");
-            var queue=desktop.C<DataGrid>("OperationQueue");
-            if(!queue.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Queue two"))throw new Exception("Published queue row binding was trimmed.");
-            desktop.Model.Queue.ResumeCommand.Execute(null);
-            if(remaining == null || !remaining.SequenceEqual(new[]{"two"}))throw new Exception("Published queue resumed a successful item.");
+            operations.Start("Скачивание", new[] { new QueueSeed(completedKey, "Smoke completed", "1.0"),
+                new QueueSeed(pendingKey, pendingName, "2.0") }, null, "Apple Account",
+                keys => remaining = keys.ToArray(), accountKey: desktop.Model.AccountKey);
+            operations.Begin(1); operations.Result(null);
+            operations.Begin(2); operations.Measure(35, "fixture transfer"); operations.Stop("Отменено", true);
+            var queueTab = desktop.C<TabItem>("QueueTab");
+            queueTab.IsSelected = true;
+            var expectedBadge = (pendingBefore + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await ExpectUi(() => queueTab.GetVisualDescendants().OfType<TextBlock>()
+                .Any(text => text.Name == "PART_Count" && text.Text == expectedBadge),
+                "Published queue counter binding failed. Expected " + expectedBadge + " including restored items.");
+            var queue = desktop.C<DataGrid>("OperationQueue");
+            await ExpectUi(() => queue.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == pendingName),
+                "Published queue row binding was trimmed.");
+            queue.SelectedItem = operations.Items.Single(item => item.Seed.Key == pendingKey);
+            operations.ResumeCommand.Execute(null);
+            if (remaining == null || !remaining.SequenceEqual(new[] { pendingKey }))
+                throw new Exception("Published queue resumed a successful item.");
             desktop.Model.AppendJournal("Journal binding fixture");desktop.Model.ShowJournalCommand.Execute(null);await Task.Delay(50);
             var journal=window.OwnedWindows.OfType<JournalWindow>().Single();
             if(!journal.FindControl<TextBox>("JournalText").Text.Contains("Journal binding fixture"))throw new Exception("Published journal binding was trimmed.");
             journal.Close();
             var archive=new QueueArchiveStore(engine.Root).Load();
-            if(archive.Batches.Count==0 || archive.Batches[0].Items.Count!=2)throw new Exception("Published queue persistence failed.");
+            var savedKeys = archive.Batches.SelectMany(batch => batch.Items).Select(item => item.Seed.Key);
+            if (!savedKeys.SequenceEqual(previousKeys.Concat(new[] { completedKey, pendingKey })))
+                throw new Exception("Published queue did not preserve existing and new operations.");
             var library=new AppBrowserWindow(window,desktop.Model,"Library fixture",false,()=>true);library.Show(window);
             library.SetRows(new(){new LibraryApp{Name="Published library",ID="123",BundleID="com.fixture",Version="1.0"}},"fixture");await Task.Delay(50);
             if(!library.GetVisualDescendants().OfType<TextBlock>().Any(x=>x.Text=="Published library"))throw new Exception("Published library binding was trimmed.");
