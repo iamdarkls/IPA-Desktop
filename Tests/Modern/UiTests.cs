@@ -126,50 +126,45 @@ public sealed class UiTests(DesktopUiSession session)
         }
         finally { network.Release.TrySetResult(); await model.ShutdownAsync(); window.Close(); }
     });
- [Fact] public Task NavigationKeepsBadgesAboveIndicatorAtFractionalScales() => session.Run(async () =>
+ static async Task AssertNavigationAtFractionalScales(Window window, TabControl tabs)
  {
-  using var folder=new TempFolder();var desktop=new Desktop(Backend(folder.Path),false);var window=desktop.Window;
-  var content=(Control)window.Content;window.Content=null;var scaled=new LayoutTransformControl { Child=content };window.Content=scaled;window.Show();
-  try
+  var content = (Control)window.Content;
+  window.Content = null;
+  var scaled = new LayoutTransformControl { Child = content };
+  window.Content = scaled;
+  foreach(var scale in new[]{1.0,1.25,1.5,2.0})
   {
-   var tabs=window.GetLogicalDescendants().OfType<TabControl>().Single();
-   desktop.Model.Queue.Start("Скачивание",Enumerable.Range(1,1234).Select(i=>new QueueSeed(i+"@latest","App "+i,"Последняя")),null,"Fixture",_=>{});
-   foreach(var scale in new[]{1.0,1.25,1.5,2.0})
+   scaled.LayoutTransform=new ScaleTransform(scale,scale);window.Width=940*scale;window.Height=720*scale;
+   foreach(var tab in tabs.Items.Cast<TabItem>())
    {
-    scaled.LayoutTransform=new ScaleTransform(scale,scale);window.Width=940*scale;window.Height=720*scale;
-    foreach(var tab in tabs.Items.Cast<TabItem>())
+    tab.IsSelected=true;await Task.Delay(20);
+    var label=tab.GetVisualDescendants().OfType<IconLabel>().Single();
+    var indicator=tab.GetVisualDescendants().OfType<Border>().Single(x=>x.Name=="PART_SelectedPipe");
+    var labelOrigin=label.TranslatePoint(default,tab).Value;
+    var lineOrigin=indicator.TranslatePoint(default,tab).Value;
+    Assert.True(labelOrigin.Y+label.Bounds.Height<=lineOrigin.Y-4,$"Header overlaps underline: {tab.Name}, scale {scale}");
+    var count=label.GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="PART_Count");
+    if(label.HasCount)
     {
-     tab.IsSelected=true;await Task.Delay(20);
-     var label=tab.GetVisualDescendants().OfType<IconLabel>().Single();
-     var indicator=tab.GetVisualDescendants().OfType<Border>().Single(x=>x.Name=="PART_SelectedPipe");
-     var labelOrigin=label.TranslatePoint(default,tab).Value;
-     var lineOrigin=indicator.TranslatePoint(default,tab).Value;
-     Assert.True(labelOrigin.Y+label.Bounds.Height<=lineOrigin.Y-4,$"Header overlaps underline: {tab.Name}, scale {scale}");
-     var count=label.GetVisualDescendants().OfType<TextBlock>().Single(x=>x.Name=="PART_Count");
-     if(label.HasCount)
-     {
-      Assert.Equal("1234",count.Text);
-      var badge=(Border)count.Parent;var badgeOrigin=badge.TranslatePoint(default,tab).Value;
-      Assert.True(badgeOrigin.Y+badge.Bounds.Height<=lineOrigin.Y-4,"Badge overlaps underline");
-      Assert.True(count.Bounds.Width>=count.DesiredSize.Width,"Counter truncated");
-     }
-     var origin=tab.TranslatePoint(default,window).Value;
-     Assert.True(origin.X+tab.Bounds.Width*scale<=window.ClientSize.Width+1,"Navigation clipped");
+     Assert.Equal("1234",count.Text);
+     var badge=(Border)count.Parent;var badgeOrigin=badge.TranslatePoint(default,tab).Value;
+     Assert.True(badgeOrigin.Y+badge.Bounds.Height<=lineOrigin.Y-4,"Badge overlaps underline");
+     Assert.True(count.Bounds.Width>=count.DesiredSize.Width,"Counter truncated");
     }
-    tabs.SelectedIndex=2;await Task.Delay(20);
-    var snapshots=Environment.GetEnvironmentVariable("IPA_UI_SNAPSHOTS");
-    if(!String.IsNullOrEmpty(snapshots))
-    {
-     Directory.CreateDirectory(snapshots);using var frame=window.CaptureRenderedFrame();
-     frame.Save(Path.Combine(snapshots,$"navigation-{scale:0.00}.png"),Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
-    }
+    var origin=tab.TranslatePoint(default,window).Value;
+    Assert.True(origin.X+tab.Bounds.Width*scale<=window.ClientSize.Width+1,"Navigation clipped");
    }
-   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(20);
-   Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
+   var snapshots=Environment.GetEnvironmentVariable("IPA_UI_SNAPSHOTS");
+   if(!String.IsNullOrEmpty(snapshots))
+   {
+    tabs.SelectedIndex=2;await Task.Delay(20);
+    Directory.CreateDirectory(snapshots);using var frame=window.CaptureRenderedFrame();
+    frame.Save(Path.Combine(snapshots,$"navigation-{scale:0.00}.png"),Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+   }
   }
-  finally{window.Close();}
- });
- [Fact] public Task QueueSetsAndMinimumLayoutRemainUsable() => session.Run(async () =>
+ }
+
+ [Fact] public Task QueueSetsAndNavigationRemainUsableAtMinimumSizeAndFractionalScales() => session.Run(async () =>
  {
   using var folder=new TempFolder();var backend=Backend(folder.Path);var desktop=new Desktop(backend,false);var window=desktop.Window;window.Show();
   try
@@ -236,7 +231,9 @@ public sealed class UiTests(DesktopUiSession session)
     var origin=tab.TranslatePoint(default,window).Value;
     Assert.True(origin.X+tab.Bounds.Width<=window.ClientSize.Width,"Tab clipped after count update");
    }
-   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(30);Assert.Equal("1233",count.Text);
+   await AssertNavigationAtFractionalScales(window, tabs);
+   desktop.Model.Queue.Begin(1);desktop.Model.Queue.Result(null);await Task.Delay(30);
+   Assert.Equal("1233",Find<TabItem>(window,"QueueTab").GetVisualDescendants().OfType<IconLabel>().Single().Count);
   }
   finally{window.Close();}
  });

@@ -35,7 +35,7 @@ def tests(rid):
  # Same xUnit suite, direct entry point avoids a second MSBuild/VSTest startup.
  run('dotnet','Tests/Modern/bin/Release/net11.0/IPA-Desktop.Tests.dll','-result-xml',reports/'tests.xml')
 
-def package(rid):
+def package(rid, mac_update_baseline=None):
  import shutil
  shutil.rmtree(ROOT/'artifacts/publish',ignore_errors=True)
  run('dotnet','publish','IPA-Desktop.csproj','-c','Release','-r',rid,'--self-contained','true','-p:PublishSingleFile=true','-o','artifacts/publish')
@@ -47,9 +47,12 @@ def package(rid):
  else:
   run(sys.executable,'Tools/Portable/package.py',rid,'artifacts/publish')
   archive=f'artifacts/release/IPA-Desktop-{version()}-{PLATFORMS[rid]["suffix"]}.zip'
-  command=[sys.executable,'Tools/Portable/verify.py',archive]
-  if rid.startswith('linux'):command=['xvfb-run','-a',*command]
-  run(*command)
+  if mac_update_baseline:
+   run(sys.executable,'Tools/Portable/verify-update.py',mac_update_baseline,archive)
+  else:
+   command=[sys.executable,'Tools/Portable/verify.py',archive]
+   if rid.startswith('linux'):command=['xvfb-run','-a',*command]
+   run(*command)
 
 def publish():
  current=version();tag='v'+current
@@ -64,6 +67,9 @@ def publish():
  run('gh','release','create',tag,*[folder/name for name in sorted(names)],'--target',os.environ['GITHUB_SHA'],'--title',f'IPA Desktop {current} — Windows, macOS, Linux','--notes-file',f'changelogs/{tag}.md','--latest')
 
 if __name__=='__main__':
- parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['metadata','test','package','publish']);parser.add_argument('--rid',choices=PLATFORMS);args=parser.parse_args();os.chdir(ROOT)
+ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['metadata','test','package','publish']);parser.add_argument('--rid',choices=PLATFORMS)
+ parser.add_argument('--mac-update-baseline',type=lambda path:Path(path).resolve(),help='Verify the macOS package by updating an installed release ZIP')
+ args=parser.parse_args();os.chdir(ROOT)
  if args.command in ('test','package') and not args.rid:parser.error('--rid is required')
- {'metadata':metadata,'test':lambda:tests(args.rid),'package':lambda:package(args.rid),'publish':publish}[args.command]()
+ if args.mac_update_baseline and (args.command!='package' or not args.rid.startswith('osx-')):parser.error('--mac-update-baseline requires a macOS package')
+ {'metadata':metadata,'test':lambda:tests(args.rid),'package':lambda:package(args.rid,args.mac_update_baseline),'publish':publish}[args.command]()

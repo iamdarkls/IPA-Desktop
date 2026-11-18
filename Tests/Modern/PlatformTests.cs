@@ -23,6 +23,7 @@ public sealed class PlatformTests
     writer.Write("fixture");
    }
   var stage=Path.Combine(folder.Path,"stage");UnixGuiUpdate.Extract(zip,stage);
+  if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
   Assert.True((File.GetUnixFileMode(Path.Combine(stage,package,"IPA-Desktop"))&UnixFileMode.UserExecute)!=0);
   var bad=Path.Combine(folder.Path,"bad.zip");using(var archive=ZipFile.Open(bad,ZipArchiveMode.Create)){using var writer=new StreamWriter(archive.CreateEntry(package+"IPA-Desktop").Open());writer.Write("fixture");}
   Assert.Throws<InvalidDataException>(()=>UnixGuiUpdate.Extract(bad,Path.Combine(folder.Path,"bad")));
@@ -35,10 +36,15 @@ public sealed class PlatformTests
   var data=Path.Combine(folder.Path,"data.ipa");File.WriteAllText(data,"preserved");
   var script=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../Scripts/Update-App.sh"));
   var info=new ProcessStartInfo("/bin/sh"){UseShellExecute=false};foreach(var arg in new[]{script,stage,target,"99999999"})info.ArgumentList.Add(arg);
-  using var process=Process.Start(info);using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10));await process.WaitForExitAsync(timeout.Token);Assert.Equal(0,process.ExitCode);
+  var cancellation = TestContext.Current.CancellationToken;
+  using var process = Process.Start(info);
+  using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+  timeout.CancelAfter(TimeSpan.FromSeconds(10));
+  await process.WaitForExitAsync(timeout.Token);
+  Assert.Equal(0, process.ExitCode);
   Assert.Equal("new",File.ReadAllText(Path.Combine(target,"version")));Assert.Equal("preserved",File.ReadAllText(data));
   Assert.Equal("old",File.ReadAllText(Path.Combine(Directory.GetDirectories(folder.Path,"old app.backup-*").Single(),"version")));
-  for(int i=0;i<50&&!File.Exists(marker);i++)await Task.Delay(20);Assert.True(File.Exists(marker));
+  for(int i=0;i<50&&!File.Exists(marker);i++)await Task.Delay(20, cancellation);Assert.True(File.Exists(marker));
  }
  [Fact(SkipUnless=nameof(Unix), Skip="Unix paths")]
  public void MacUpdaterFindsBundleAndRejectsTranslocatedInstallation()

@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 
-from verify import extract_package, run_gui_smoke, verify_gui, verify_macos_bundle
+from verify import extract_package, run_gui_smoke, verify_gui, verify_macos_bundle, verify_native_tools
 
 
 def binaries(bundle):
@@ -28,8 +28,8 @@ def running_pid(bundle):
     executable = str(binaries(bundle) / 'IPA-Desktop')
     listing = subprocess.check_output(['/bin/ps', '-axo', 'pid=,command='], text=True, timeout=5)
     for line in listing.splitlines():
-        pid, _, command = line.strip().partition(' ')
-        if command.lstrip() == executable:
+        pid, command = line.split(maxsplit=1)
+        if command == executable or command.startswith(executable + ' '):
             return int(pid)
     return None
 
@@ -56,7 +56,7 @@ def stop(bundle):
             time.sleep(0.2)
 
 
-def replace_bundle(helper_bundle, candidate, installed, workspace, fail_swap=False):
+def replace_bundle(helper_bundle, candidate, installed, workspace, old_pid, fail_swap=False):
     helper = workspace / 'Apply.sh'
     shutil.copy2(binaries(helper_bundle) / 'Scripts' / 'Update-App.sh', helper)
     env = os.environ.copy()
@@ -70,8 +70,6 @@ exec /bin/mv "$@"
         shim.chmod(0o755)
         env['PATH'] = str(workspace) + os.pathsep + env['PATH']
 
-    subprocess.run(['/usr/bin/open', '-n', installed], check=True, timeout=15)
-    old_pid = wait_for_launch(installed)
     with subprocess.Popen(['/bin/sh', helper, candidate, installed, str(old_pid)], env=env) as update:
         try:
             time.sleep(1.2)
@@ -84,9 +82,15 @@ exec /bin/mv "$@"
                 update.kill()
     if status != (1 if fail_swap else 0):
         raise RuntimeError(f'Unexpected updater exit status: {status}.')
-    if wait_for_launch(installed) == old_pid:
+    restarted_pid = wait_for_launch(installed)
+    if restarted_pid == old_pid:
         raise RuntimeError('The previous app process was not replaced.')
     verify_macos_bundle(installed)
+    return restarted_pid
+
+
+def read_saved_json(path):
+    return json.loads(path.read_text(encoding='utf-8-sig'))
 
 
 def verify_update(previous, candidate):
@@ -100,23 +104,24 @@ def verify_update(previous, candidate):
 
         verify_gui(binaries(installed), workspace)
         data = workspace / 'data'
-        persisted = {name: json.loads((data / name).read_text()) for name in ('state.json', 'AppSets.json')}
+        persisted = {name: read_saved_json(data / name) for name in ('state.json', 'AppSets.json')}
 
         try:
-            replace_bundle(staged, staged, installed, workspace, fail_swap=True)
+            subprocess.run(['/usr/bin/open', '-n', installed], check=True, timeout=15)
+            previous_pid = wait_for_launch(installed)
+            restored_pid = replace_bundle(staged, staged, installed, workspace, previous_pid, fail_swap=True)
             if version(installed) != before or list(installed.parent.glob('*.app.update-*')):
                 raise RuntimeError('Failed replacement did not restore the installed bundle cleanly.')
-            stop(installed)
-
-            replace_bundle(installed, staged, installed, workspace)
+            replace_bundle(installed, staged, installed, workspace, restored_pid)
             backups = list(installed.parent.glob('IPA-Desktop.app.backup-*'))
             if version(installed) != after or len(backups) != 1 or version(backups[0]) != before:
                 raise RuntimeError('Update did not install the candidate and retain the previous bundle.')
             stop(installed)
 
+            verify_native_tools(binaries(installed) / 'native')
             run_gui_smoke(binaries(installed), data)
             for name, expected in persisted.items():
-                if json.loads((data / name).read_text()) != expected:
+                if read_saved_json(data / name) != expected:
                     raise RuntimeError(f'User data changed across the update: {name}.')
         finally:
             stop(installed)
