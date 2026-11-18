@@ -119,9 +119,8 @@ namespace IpaDesktop
             locator = new ToolLocator(settings);
             var policy=processRunner==null ? new GuardedEnginePolicy(runner,()=>locator.Find("ipatool*.exe")) : null;
             var rawTools = new AppToolClient(runner, locator, policy);
-            AccountRequests = new AccountRequestGuard(processRunner == null
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "AccountProtection")
-                : Path.Combine(root, "AccountProtection"));
+            var protectionRoot = processRunner == null ? RuntimePlatform.DataRoot : root;
+            AccountRequests = new AccountRequestGuard(Path.Combine(protectionRoot, "AccountProtection"));
             tools = new ProtectedAppToolClient(rawTools, AccountRequests);
             AppleLogin = new AppleLoginService(RuntimePlatform.Windows ? new ConPtyLoginFactory(Network.EnvironmentChanges) : new UnixLoginFactory(Network.EnvironmentChanges), delegate { return locator.Find("ipatool*.exe"); }, Downloads, rawTools, AccountRequests, policy == null ? null : policy.RequireAsync);
             AppVersions = new AppVersions(tools);

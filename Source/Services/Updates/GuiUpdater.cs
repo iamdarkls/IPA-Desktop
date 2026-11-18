@@ -86,7 +86,7 @@ namespace IpaDesktop
         {
             var asset = SelectAsset(release);
             if (!RuntimePlatform.Windows) UnixGuiUpdate.CheckInstallation();
-            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop", "GuiUpdates");
+            string root = Path.Combine(RuntimePlatform.DataRoot, "GuiUpdates");
             Directory.CreateDirectory(root);
             foreach (var dir in Directory.GetDirectories(root, "update-*")) try
             {

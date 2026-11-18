@@ -1,6 +1,12 @@
 """Create self-contained Linux and macOS packages, including the reviewed native tools."""
+import argparse
 from pathlib import Path
-import plistlib,shutil,struct,subprocess,sys,zipfile,xml.etree.ElementTree as ET
+import plistlib
+import shutil
+import struct
+import subprocess
+import xml.etree.ElementTree as ET
+import zipfile
 
 def write_macos_icon(source, destination):
     """Reuse the PNG frames in our Windows icon in the macOS ICNS container."""
@@ -27,29 +33,79 @@ def write_macos_icon(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(struct.pack('>4sI', b'icns', 8 + len(icon)) + icon)
 
-rid=sys.argv[1];publish=Path(sys.argv[2]);version=ET.parse('IPA-Desktop.csproj').findtext('.//Version')
-mac=rid.startswith('osx-');name='IPA-Desktop.app' if mac else 'IPA-Desktop';root=Path('artifacts/portable')/name
-if root.exists():shutil.rmtree(root)
-base=root/'Contents/MacOS' if mac else root
-shutil.copytree(publish,base);shutil.copytree('artifacts/unix/native',base/'native')
-(base/'Scripts').mkdir();shutil.copy2('Scripts/Update-App.sh',base/'Scripts/Update-App.sh')
-shutil.copytree('Docs',base/'Docs')
-for file in ['README.md','LICENSE.txt','DEPENDENCIES.md']:shutil.copy2(file,base/file)
-if mac:
- icon_name = 'App.icns'
- write_macos_icon(Path('Assets/App.ico'), root/'Contents/Resources'/icon_name)
- info={'CFBundleExecutable':'IPA-Desktop','CFBundleIdentifier':'ru.darkls.ipa-desktop','CFBundleName':'IPA Desktop','CFBundleDisplayName':'IPA Desktop','CFBundleVersion':version,'CFBundleShortVersionString':version,'CFBundlePackageType':'APPL','CFBundleIconFile':icon_name,'LSMinimumSystemVersion':'15.0','NSHighResolutionCapable':True}
- (root/'Contents/Info.plist').write_bytes(plistlib.dumps(info))
- subprocess.run(['codesign','--force','--deep','--sign','-',str(root)],check=True)
- subprocess.run(['codesign','--verify','--deep','--strict',str(root)],check=True)
-suffix=('macOS' if mac else 'Linux')+'-'+rid.split('-')[1]
-destination=Path('artifacts/release');destination.mkdir(parents=True,exist_ok=True)
-shutil.copy2('artifacts/unix/native-sources.zip',destination/f'IPA-Desktop-{version}-{rid}-native-sources.zip')
-archive=destination/f'IPA-Desktop-{version}-{suffix}.zip'
-if mac:
- subprocess.run(['/usr/bin/ditto','-c','-k','--sequesterRsrc','--keepParent',str(root),str(archive)],check=True)
-else:
- with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-  for p in sorted(root.rglob('*')):
-   if p.is_file():z.write(p,Path(name)/p.relative_to(root))
-print(archive)
+
+def prepare_bundle(bundle, version):
+    contents = bundle / 'Contents'
+    icon_name = 'App.icns'
+    write_macos_icon(Path('Assets/App.ico'), contents / 'Resources' / icon_name)
+    info = {
+        'CFBundleExecutable': 'IPA-Desktop',
+        'CFBundleIdentifier': 'ru.darkls.ipa-desktop',
+        'CFBundleName': 'IPA Desktop',
+        'CFBundleDisplayName': 'IPA Desktop',
+        'CFBundleVersion': version,
+        'CFBundleShortVersionString': version,
+        'CFBundlePackageType': 'APPL',
+        'CFBundleIconFile': icon_name,
+        'LSMinimumSystemVersion': '15.0',
+        'NSHighResolutionCapable': True,
+    }
+    (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
+    subprocess.run(['codesign', '--force', '--deep', '--sign', '-', bundle], check=True)
+    subprocess.run(['codesign', '--verify', '--deep', '--strict', bundle], check=True)
+
+
+def stage_application(publish, root, macos):
+    if root.exists():
+        shutil.rmtree(root)
+    base = root / 'Contents' / 'MacOS' if macos else root
+    shutil.copytree(publish, base)
+    shutil.copytree('artifacts/unix/native', base / 'native')
+    (base / 'Scripts').mkdir()
+    shutil.copy2('Scripts/Update-App.sh', base / 'Scripts' / 'Update-App.sh')
+    shutil.copytree('Docs', base / 'Docs')
+    for filename in ('README.md', 'LICENSE.txt', 'DEPENDENCIES.md'):
+        shutil.copy2(filename, base / filename)
+
+
+def write_archive(root, archive, macos):
+    if macos:
+        # Keep bundle metadata readable by Archive Utility and the in-app updater.
+        subprocess.run(
+            ['/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', root, archive],
+            check=True,
+        )
+    else:
+        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
+            for path in sorted(root.rglob('*')):
+                if path.is_file():
+                    zipped.write(path, Path(root.name) / path.relative_to(root))
+
+
+def package(rid, publish):
+    version = ET.parse('IPA-Desktop.csproj').findtext('.//Version')
+    macos = rid.startswith('osx-')
+    root = Path('artifacts/portable') / ('IPA-Desktop.app' if macos else 'IPA-Desktop')
+    stage_application(publish, root, macos)
+    if macos:
+        prepare_bundle(root, version)
+
+    platform, architecture = rid.split('-')
+    suffix = f"{'macOS' if platform == 'osx' else 'Linux'}-{architecture}"
+    destination = Path('artifacts/release')
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(
+        'artifacts/unix/native-sources.zip',
+        destination / f'IPA-Desktop-{version}-{rid}-native-sources.zip',
+    )
+    archive = destination / f'IPA-Desktop-{version}-{suffix}.zip'
+    write_archive(root, archive, macos)
+    return archive
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('rid', choices=('linux-x64', 'osx-arm64', 'osx-x64'))
+    parser.add_argument('publish', type=Path)
+    args = parser.parse_args()
+    print(package(args.rid, args.publish))

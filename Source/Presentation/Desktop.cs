@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -18,7 +17,7 @@ public sealed class Desktop
     {
         Window = new MainWindow { Title = "IPA Desktop · " + AppInfo.Version };
         var interaction = new AvaloniaDesktopInteraction(Window);
-        var engine = backend ?? new Engine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA-Desktop"));
+        var engine = backend ?? new Engine(RuntimePlatform.DataRoot);
         Model = new DesktopViewModel(engine.CreateDesktopServices(), interaction);
         Window.DataContext = Model;
         interaction.BindMenus(Model);
