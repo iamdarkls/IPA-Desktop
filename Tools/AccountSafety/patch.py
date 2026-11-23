@@ -86,7 +86,7 @@ def patch_store_adi(store):
     return store
 
 
-def patch_raw_ipa_cache(main, store):
+def patch_raw_ipa_cache(main, store, upstream_tag):
     for_header = '#include "path_utf8.h"'
     main = replace_once(main, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
     store = replace_once(store, for_header, '#include "raw_ipa_cache.h"\n' + for_header)
@@ -95,8 +95,20 @@ def patch_raw_ipa_cache(main, store):
     main = replace_once(main, '  download:             -b/--bundle-id', """  --ipa-desktop-cache   Cache original iOS archives in this local folder.
   --ipa-desktop-cache-gib   Limit in GiB (0–32; default 3).
   download:             -b/--bundle-id""")
-    store = replace_once(store, """    int64_t rangeStart = file_size(tmpDest);
-    m_http.download(downloadURL, tmpDest, rangeStart, progress);
+    transfer = """    int64_t rangeStart = file_size(tmpDest);
+    m_http.download(downloadURL, tmpDest, rangeStart, progress);"""
+    if upstream_tag == '1.3.4':
+        transfer = """    // Large files download over several connections; falls back to the
+    // single-connection resumable path when that isn't possible.
+    if (m_http.download_parallel(downloadURL, tmpDest, progress,
+                                 chunkSize, (int)chunkHashes.size(), chunkVerify)) {
+        parallelChunkVerified = (bool)chunkVerify;   // chunks already verified inline
+    } else {
+        int64_t rangeStart = file_size(tmpDest);
+        m_http.download(downloadURL, tmpDest, rangeStart, progress);
+    }"""
+    cache_miss_transfer = '\n'.join('    ' + line for line in transfer.splitlines())
+    store = replace_once(store, transfer + """
 
     verify_and_report(tmpDest);
 
@@ -114,8 +126,7 @@ def patch_raw_ipa_cache(main, store):
         std::cerr << "IPA_RAW_CACHE_HIT\\n";
     } else {
         std::cerr << "IPA_RAW_CACHE_MISS\\n";
-        int64_t rangeStart = file_size(tmpDest);
-        m_http.download(downloadURL, tmpDest, rangeStart, progress);
+""" + cache_miss_transfer + """
         verify_and_report(tmpDest);
     }
 
@@ -145,7 +156,7 @@ def patch(root, pin_file=None):
     store = replace_once(store, 'acc.password.set(       password);', 'acc.password.set(""); // Never retain the Apple password in the saved session.')
     if native:
         store = patch_store_adi(store)
-        if pins['upstream_tag'] == '1.3.2':
+        if pins['upstream_tag'] in ('1.3.2', '1.3.4'):
             store = replace_once(store, '    m_http.clear_cookies();',
                                  '    // Keep the challenge cookies while submitting the requested 2FA code.\n'
                                  '    if (authCode.empty()) m_http.clear_cookies();')
@@ -154,7 +165,7 @@ def patch(root, pin_file=None):
             retry_handler = '            } catch (const std::exception& e) {\n                if (m_debug) fprintf(stderr, "[DEBUG] kbsync regeneration failed'
             store = replace_once(store, retry_handler,
                                  '            } catch (const PasswordTokenExpired&) {\n                throw;\n' + retry_handler)
-        main, store = patch_raw_ipa_cache(main, store)
+        main, store = patch_raw_ipa_cache(main, store, pins['upstream_tag'])
         (root/'raw_ipa_cache.h').write_bytes(Path(__file__).with_name('raw_ipa_cache.h').read_bytes())
     else:
         store = patch_legacy_store(store)

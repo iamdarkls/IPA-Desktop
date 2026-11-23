@@ -190,12 +190,14 @@ def test_raw_ipa_cache(root):
         return
     start = store.index('    // Only an authorized, personalized App Store response')
     end = store.index('    return {dest, sinfs};', start)
+    transfer = store[start:end]
+    flags = ['-DIPA_TEST_PARALLEL_TRANSFER'] if 'm_http.download_parallel(' in transfer else []
     fixture = Path(__file__).with_name('raw_ipa_cache_fixture.cpp').read_text()
     with tempfile.TemporaryDirectory(prefix='ipa-raw-cache-') as folder:
         folder = Path(folder)
         source, binary = folder/'cache.cpp', folder/'cache.exe'
-        source.write_text(fixture.replace('// ACTUAL_IOS_TRANSFER', store[start:end]), encoding='utf-8')
-        subprocess.run(['g++', '-std=c++20', '-O0', '-I'+str(root), str(source), '-o', str(binary)], check=True)
+        source.write_text(fixture.replace('// ACTUAL_IOS_TRANSFER', transfer), encoding='utf-8')
+        subprocess.run(['g++', '-std=c++20', '-O0', *flags, '-I'+str(root), str(source), '-o', str(binary)], check=True)
         subprocess.run([str(binary), str(folder)], check=True, timeout=15)
 
 

@@ -1,6 +1,7 @@
 #include "raw_ipa_cache.h"
 #include <cassert>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 
@@ -10,6 +11,10 @@ struct Sinf { std::string data; };
 const std::string good(32, 'a'), alternate(32, 'b');
 const std::int64_t songId = 123;
 int requests = 0, reports = 0;
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+int parallelAttempts = 0;
+bool parallelAvailable = true;
+#endif
 void write(const fs::path& path, const std::string& body) { std::ofstream(path, std::ios::binary) << body; }
 std::string read(const fs::path& path) {
     std::ifstream in(path, std::ios::binary);
@@ -19,6 +24,17 @@ std::string md5_file_hex(const std::string& path) { return read(ipt::fs_path(pat
 bool ascii_iequals(const std::string& a, const std::string& b) { return a == b; }
 std::int64_t file_size(const std::string&) { return 0; }
 struct Http {
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+    bool download_parallel(const std::string&, const std::string& path, int, std::int64_t chunkSize,
+                           int count, const std::function<bool(int, const std::uint8_t*, std::size_t)>& check) {
+        ++parallelAttempts;
+        assert(chunkSize == 8 && count == 1 && check);
+        if (!parallelAvailable) return false;
+        ++requests;
+        write(ipt::fs_path(path), "original");
+        return true;
+    }
+#endif
     void download(const std::string&, const std::string& path, std::int64_t, int) {
         ++requests;
         write(ipt::fs_path(path), "original");
@@ -33,8 +49,18 @@ void apply_patches(int, const Account& acc, const std::string& source,
 void download(const fs::path& output, const Account& acc, const std::vector<Sinf>& sinfs, const std::string& md5Expected) {
     const std::string dest = ipt::to_utf8(output), tmpDest = dest + ".tmp", downloadURL = "fixture";
     const int item = 0, progress = 0;
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+    const std::int64_t chunkSize = 8;
+    const std::vector<std::string> chunkHashes{good};
+    const std::function<bool(int, const std::uint8_t*, std::size_t)> chunkVerify =
+        [](int, const std::uint8_t*, std::size_t) { return true; };
+    bool parallelChunkVerified = false;
+#endif
     auto verify_and_report = [&](const std::string& path) {
         assert(md5Expected.empty() || md5_file_hex(path) == md5Expected);
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+        assert(parallelChunkVerified == parallelAvailable);
+#endif
         ++reports;
     };
     // ACTUAL_IOS_TRANSFER
@@ -59,9 +85,17 @@ int main(int argc, char** argv) {
     download(root / "missing-hash.ipa", {"second"}, {{"license-b"}}, "");
     download(root / "missing-license.ipa", {"second"}, {{""}}, good);
     assert(requests == 3 && reports == 3);
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+    assert(parallelAttempts == 3);
+    parallelAvailable = false;
+#endif
     write(cached, "corrupt");
     download(root / "fallback.ipa", {"second"}, {{"license-b"}}, good);
     assert(requests == 4 && reports == 4);
+#ifdef IPA_TEST_PARALLEL_TRANSFER
+    assert(parallelAttempts == 4);
+    std::cout << "PASS: cache misses use verified parallel transfer and fall back to a single stream\n";
+#endif
     assert(read(root / "fallback.ipa") == "original|second|license-b");
     for (std::size_t n = 0; n < raw_ipa_cache::max_entries; ++n)
         write(raw_ipa_cache::entry(1000 + n, good), "original");
